@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateLaticiniosDto } from './dto/create-laticinios.dto';
 import { UpdateLaticiniosDto } from './dto/update-laticinios.dto';

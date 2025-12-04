@@ -13,6 +13,6 @@ import { LactacaoRepository } from './repositories';
   imports: [LoggerModule, AuthModule, AlertasModule, DatabaseModule, RebanhoModule, GestaoPropriedadeModule],
   controllers: [LactacaoController],
   providers: [LactacaoService, LactacaoRepository],
-  exports: [LactacaoService],
+  exports: [LactacaoService, LactacaoRepository],
 })
 export class LactacaoModule {}
