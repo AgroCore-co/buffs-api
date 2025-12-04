@@ -175,7 +175,7 @@ export class OrdenhaService implements ISoftDelete {
       };
     } catch (error) {
       this.customLogger.logError(error, {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAll',
       });
       throw new InternalServerErrorException('Falha ao buscar os dados de lactação.');
@@ -208,7 +208,7 @@ export class OrdenhaService implements ISoftDelete {
       };
     } catch (error) {
       this.customLogger.logError(error, {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAllByPropriedade',
         propriedadeId: id_propriedade,
       });
@@ -218,7 +218,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async findAllByBufala(id_bufala: string, page = 1, limit = 20, user: any) {
     this.customLogger.log('Iniciando busca de registros de lactação por búfala', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'findAllByBufala',
       bufalaId: id_bufala,
       page,
@@ -231,7 +231,7 @@ export class OrdenhaService implements ISoftDelete {
 
     if (!bufalaData) {
       this.customLogger.warn('Búfala não encontrada', {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAllByBufala',
         bufalaId: id_bufala,
       });
@@ -243,7 +243,7 @@ export class OrdenhaService implements ISoftDelete {
 
     if (!idDonoPropriedade || idDonoPropriedade !== idUsuario) {
       this.customLogger.warn('Acesso negado - usuário não tem permissão para acessar dados da búfala', {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAllByBufala',
         bufalaId: id_bufala,
         userId: idUsuario,
@@ -264,7 +264,7 @@ export class OrdenhaService implements ISoftDelete {
       }));
 
       this.customLogger.log(`Busca de registros por búfala concluída - ${registros.length} registros encontrados`, {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAllByBufala',
         bufalaId: id_bufala,
         page,
@@ -281,7 +281,7 @@ export class OrdenhaService implements ISoftDelete {
       };
     } catch (error) {
       this.customLogger.logError(error, {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAllByBufala',
         bufalaId: id_bufala,
         page,
@@ -293,7 +293,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async findOne(id: string, user: any) {
     this.customLogger.log('Iniciando busca de registro de lactação por ID', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'findOne',
       lactacaoId: id,
     });
@@ -304,7 +304,7 @@ export class OrdenhaService implements ISoftDelete {
 
     if (!data || data.idUsuario !== idUsuario) {
       this.customLogger.warn('Registro de lactação não encontrado ou não pertence ao usuário', {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findOne',
         lactacaoId: id,
         userId: idUsuario,
@@ -313,7 +313,7 @@ export class OrdenhaService implements ISoftDelete {
     }
 
     this.customLogger.log('Registro de lactação encontrado com sucesso', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'findOne',
       lactacaoId: id,
       userId: idUsuario,
@@ -323,7 +323,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async update(id: string, updateDto: UpdateDadosLactacaoDto, user: any) {
     this.customLogger.log('Iniciando atualização de registro de lactação', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'update',
       lactacaoId: id,
     });
@@ -334,14 +334,14 @@ export class OrdenhaService implements ISoftDelete {
       const data = await this.controleRepository.atualizar(id, updateDto);
 
       this.customLogger.log('Registro de lactação atualizado com sucesso', {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'update',
         lactacaoId: id,
       });
       return formatDateFields(data);
     } catch (error) {
       this.customLogger.logError(error, {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'update',
         lactacaoId: id,
       });
@@ -355,7 +355,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async softDelete(id: string, user?: any) {
     this.customLogger.log('Iniciando remoção de registro de lactação (soft delete)', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'softDelete',
       lactacaoId: id,
     });
@@ -368,7 +368,7 @@ export class OrdenhaService implements ISoftDelete {
       const data = await this.controleRepository.softDelete(id);
 
       this.customLogger.log('Registro de lactação removido com sucesso (soft delete)', {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'softDelete',
         lactacaoId: id,
       });
@@ -379,7 +379,7 @@ export class OrdenhaService implements ISoftDelete {
       };
     } catch (error) {
       this.customLogger.logError(error, {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'softDelete',
         lactacaoId: id,
       });
@@ -389,7 +389,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async restore(id: string, user?: any) {
     this.customLogger.log('Iniciando restauração de registro de lactação', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'restore',
       lactacaoId: id,
     });
@@ -402,7 +402,7 @@ export class OrdenhaService implements ISoftDelete {
       }
 
       this.customLogger.log('Registro de lactação restaurado com sucesso', {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'restore',
         lactacaoId: id,
       });
@@ -413,7 +413,7 @@ export class OrdenhaService implements ISoftDelete {
       };
     } catch (error) {
       this.customLogger.logError(error, {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'restore',
         lactacaoId: id,
       });
@@ -423,7 +423,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async findAllWithDeleted(user?: any): Promise<any[]> {
     this.customLogger.log('Buscando todos os registros de lactação incluindo deletados', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'findAllWithDeleted',
     });
 
@@ -432,7 +432,7 @@ export class OrdenhaService implements ISoftDelete {
       return formatDateFieldsArray(data || []);
     } catch (error) {
       this.customLogger.logError(error, {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAllWithDeleted',
       });
       throw new InternalServerErrorException('Erro ao buscar registros de lactação (incluindo deletados)');
@@ -441,7 +441,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async findAllByCiclo(id_ciclo_lactacao: string, page = 1, limit = 20, user: any) {
     this.customLogger.log('Iniciando busca de registros de ordenha por ciclo', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'findAllByCiclo',
       cicloId: id_ciclo_lactacao,
       page,
@@ -455,7 +455,7 @@ export class OrdenhaService implements ISoftDelete {
 
     if (!cicloData) {
       this.customLogger.logError(new Error('Ciclo não encontrado'), {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAllByCiclo',
         cicloId: id_ciclo_lactacao,
       });
@@ -471,7 +471,7 @@ export class OrdenhaService implements ISoftDelete {
 
     if (!prop || prop.idDono !== idUsuario) {
       this.customLogger.log('Usuário não autorizado a acessar este ciclo', {
-        module: 'ControleLeiteiroService',
+        module: 'OrdenhaService',
         method: 'findAllByCiclo',
         userId: idUsuario,
         idDonoPropriedade: prop?.idDono,
@@ -494,7 +494,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async findFemeasEmLactacao(id_propriedade: string): Promise<FemeaEmLactacaoDto[]> {
     this.customLogger.log('Buscando fêmeas em lactação', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'findFemeasEmLactacao',
       propriedadeId: id_propriedade,
     });
@@ -589,7 +589,7 @@ export class OrdenhaService implements ISoftDelete {
     });
 
     this.customLogger.log(`${resultado.length} fêmeas em lactação encontradas`, {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'findFemeasEmLactacao',
       mediaRebanho: mediaRebanho.toFixed(2),
     });
@@ -599,7 +599,7 @@ export class OrdenhaService implements ISoftDelete {
 
   async getResumoProducaoBufala(id_bufala: string, user: any): Promise<ResumoProducaoBufalaDto> {
     this.customLogger.log('Buscando resumo de produção da búfala', {
-      module: 'ControleLeiteiroService',
+      module: 'OrdenhaService',
       method: 'getResumoProducaoBufala',
       bufalaId: id_bufala,
     });
