@@ -6,16 +6,20 @@ import { UpdateUsuarioDto } from '../dto/update-usuario.dto';
 import { Cargo } from '../enums/cargo.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
+import { UsuarioRepositoryDrizzle, UsuarioPropriedadeRepositoryDrizzle, PropriedadeRepositoryHelper } from '../repositories';
 
 @Injectable()
 export class UsuarioService {
-  private readonly supabase: SupabaseClient;
+  private readonly adminSupabase: SupabaseClient;
 
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly logger: LoggerService,
+    private readonly usuarioRepository: UsuarioRepositoryDrizzle,
+    private readonly usuarioPropriedadeRepository: UsuarioPropriedadeRepositoryDrizzle,
+    private readonly propriedadeRepository: PropriedadeRepositoryHelper,
   ) {
-    this.supabase = this.supabaseService.getAdminClient();
+    this.adminSupabase = this.supabaseService.getAdminClient();
   }
 
   /**
@@ -28,32 +32,26 @@ export class UsuarioService {
   async create(createUsuarioDto: CreateUsuarioDto, email: string, authId: string) {
     this.logger.log(`[UsuarioService] create chamado`, { email, authId });
 
-    const { data: existingProfile } = await this.supabase.from('usuario').select('id_usuario').or(`email.eq.${email},auth_id.eq.${authId}`).single();
+    const existingProfile = await this.usuarioRepository.existePorEmailOuAuthId(email, authId);
 
     if (existingProfile) {
       this.logger.warn(`[UsuarioService] Tentativa de criar perfil duplicado`, { email });
       throw new ConflictException('Este usuário já possui um perfil cadastrado.');
     }
 
-    const { data, error } = await this.supabase
-      .from('usuario')
-      .insert([
-        {
-          ...createUsuarioDto,
-          email,
-          auth_id: authId,
-          cargo: Cargo.PROPRIETARIO,
-        },
-      ])
-      .select()
-      .single();
+    const novoUsuario = await this.usuarioRepository.criar(createUsuarioDto, email, authId);
 
-    if (error) {
-      this.logger.logError(error, { method: 'create', email });
-      throw new InternalServerErrorException(`Erro ao criar perfil de usuário: ${error.message}`);
-    }
-
-    return formatDateFields(data);
+    return {
+      id_usuario: novoUsuario.idUsuario,
+      auth_id: novoUsuario.authId,
+      nome: novoUsuario.nome,
+      email: novoUsuario.email,
+      telefone: novoUsuario.telefone,
+      cargo: novoUsuario.cargo,
+      id_endereco: novoUsuario.idEndereco,
+      created_at: novoUsuario.createdAt,
+      updated_at: novoUsuario.updatedAt,
+    };
   }
 
   /**
@@ -61,16 +59,32 @@ export class UsuarioService {
    */
   async findAll() {
     this.logger.log(`[UsuarioService] findAll chamado`);
-    const { data, error } = await this.supabase.from('usuario').select(`
-        *,
-        endereco:endereco(*)
-      `);
 
-    if (error) {
-      this.logger.logError(error, { method: 'findAll' });
-      throw new InternalServerErrorException(error.message);
-    }
-    return formatDateFieldsArray(data);
+    const usuarios = await this.usuarioRepository.listarTodos();
+
+    return usuarios.map((usuario) => ({
+      id_usuario: usuario.idUsuario,
+      auth_id: usuario.authId,
+      nome: usuario.nome,
+      email: usuario.email,
+      telefone: usuario.telefone,
+      cargo: usuario.cargo,
+      id_endereco: usuario.idEndereco,
+      created_at: usuario.createdAt,
+      updated_at: usuario.updatedAt,
+      endereco: usuario.endereco
+        ? {
+            id_endereco: usuario.endereco.idEndereco,
+            estado: usuario.endereco.estado,
+            cidade: usuario.endereco.cidade,
+            bairro: usuario.endereco.bairro,
+            rua: usuario.endereco.rua,
+            numero: usuario.endereco.numero,
+            cep: usuario.endereco.cep,
+            ponto_referencia: usuario.endereco.pontoReferencia,
+          }
+        : null,
+    }));
   }
 
   /**
@@ -79,25 +93,36 @@ export class UsuarioService {
    */
   async findOneByEmail(email: string) {
     this.logger.log(`[UsuarioService] findOneByEmail chamado`, { email });
-    const { data, error } = await this.supabase
-      .from('usuario')
-      .select(
-        `
-        *,
-        endereco:endereco(*)
-      `,
-      )
-      .eq('email', email)
-      .single();
 
-    if (error && error.code !== 'PGRST116') {
-      this.logger.logError(error, { method: 'findOneByEmail', email });
-      throw new InternalServerErrorException(error.message);
-    }
-    if (!data) {
+    const usuario = await this.usuarioRepository.buscarPorEmail(email);
+
+    if (!usuario) {
       throw new NotFoundException(`Nenhum perfil de usuário encontrado para o email: ${email}`);
     }
-    return formatDateFields(data);
+
+    return {
+      id_usuario: usuario.idUsuario,
+      auth_id: usuario.authId,
+      nome: usuario.nome,
+      email: usuario.email,
+      telefone: usuario.telefone,
+      cargo: usuario.cargo,
+      id_endereco: usuario.idEndereco,
+      created_at: usuario.createdAt,
+      updated_at: usuario.updatedAt,
+      endereco: usuario.endereco
+        ? {
+            id_endereco: usuario.endereco.idEndereco,
+            estado: usuario.endereco.estado,
+            cidade: usuario.endereco.cidade,
+            bairro: usuario.endereco.bairro,
+            rua: usuario.endereco.rua,
+            numero: usuario.endereco.numero,
+            cep: usuario.endereco.cep,
+            ponto_referencia: usuario.endereco.pontoReferencia,
+          }
+        : null,
+    };
   }
 
   /**
@@ -106,25 +131,36 @@ export class UsuarioService {
    */
   async findOne(id: string) {
     this.logger.log(`[UsuarioService] findOne chamado`, { id });
-    const { data, error } = await this.supabase
-      .from('usuario')
-      .select(
-        `
-        *,
-        endereco:endereco(*)
-      `,
-      )
-      .eq('id_usuario', id)
-      .single();
 
-    if (error && error.code !== 'PGRST116') {
-      this.logger.logError(error, { method: 'findOne', id });
-      throw new InternalServerErrorException(error.message);
-    }
-    if (!data) {
+    const usuario = await this.usuarioRepository.buscarPorId(id);
+
+    if (!usuario) {
       throw new NotFoundException(`Usuário com ID ${id} não encontrado.`);
     }
-    return formatDateFields(data);
+
+    return {
+      id_usuario: usuario.idUsuario,
+      auth_id: usuario.authId,
+      nome: usuario.nome,
+      email: usuario.email,
+      telefone: usuario.telefone,
+      cargo: usuario.cargo,
+      id_endereco: usuario.idEndereco,
+      created_at: usuario.createdAt,
+      updated_at: usuario.updatedAt,
+      endereco: usuario.endereco
+        ? {
+            id_endereco: usuario.endereco.idEndereco,
+            estado: usuario.endereco.estado,
+            cidade: usuario.endereco.cidade,
+            bairro: usuario.endereco.bairro,
+            rua: usuario.endereco.rua,
+            numero: usuario.endereco.numero,
+            cep: usuario.endereco.cep,
+            ponto_referencia: usuario.endereco.pontoReferencia,
+          }
+        : null,
+    };
   }
 
   /**
@@ -134,24 +170,24 @@ export class UsuarioService {
    */
   async update(id: string, updateUsuarioDto: UpdateUsuarioDto) {
     this.logger.log(`[UsuarioService] update chamado`, { id, updateUsuarioDto });
-    const { data, error } = await this.supabase
-      .from('usuario')
-      .update({
-        ...updateUsuarioDto,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id_usuario', id)
-      .select()
-      .single();
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        throw new NotFoundException(`Usuário com ID ${id} não encontrado para atualização.`);
-      }
-      this.logger.logError(error, { method: 'update', id });
-      throw new InternalServerErrorException(error.message);
+    const usuarioAtualizado = await this.usuarioRepository.atualizar(id, updateUsuarioDto);
+
+    if (!usuarioAtualizado) {
+      throw new NotFoundException(`Usuário com ID ${id} não encontrado para atualização.`);
     }
-    return formatDateFields(data);
+
+    return {
+      id_usuario: usuarioAtualizado.idUsuario,
+      auth_id: usuarioAtualizado.authId,
+      nome: usuarioAtualizado.nome,
+      email: usuarioAtualizado.email,
+      telefone: usuarioAtualizado.telefone,
+      cargo: usuarioAtualizado.cargo,
+      id_endereco: usuarioAtualizado.idEndereco,
+      created_at: usuarioAtualizado.createdAt,
+      updated_at: usuarioAtualizado.updatedAt,
+    };
   }
 
   /**
@@ -160,16 +196,13 @@ export class UsuarioService {
    */
   async remove(id: string) {
     this.logger.log(`[UsuarioService] remove chamado`, { id });
-    const { error, count } = await this.supabase.from('usuario').delete({ count: 'exact' }).eq('id_usuario', id);
 
-    if (count === 0) {
+    const removido = await this.usuarioRepository.remover(id);
+
+    if (!removido) {
       throw new NotFoundException(`Usuário com ID ${id} não encontrado para remoção.`);
     }
 
-    if (error) {
-      this.logger.logError(error, { method: 'remove', id });
-      throw new InternalServerErrorException(error.message);
-    }
     return { message: `Usuário com ID ${id} deletado com sucesso.` };
   }
 
@@ -179,19 +212,15 @@ export class UsuarioService {
    */
   async getUserPropriedades(userId: string): Promise<string[]> {
     this.logger.log(`[UsuarioService] getUserPropriedades chamado`, { userId });
-    const { data, error } = await this.supabase.from('propriedade').select('id_propriedade').eq('id_dono', userId);
 
-    if (error) {
-      this.logger.logError(error, { method: 'getUserPropriedades', userId });
-      throw new InternalServerErrorException('Falha ao buscar propriedades do usuário.');
-    }
+    const propriedades = await this.propriedadeRepository.listarPorDono(userId);
 
-    if (!data || data.length === 0) {
+    if (propriedades.length === 0) {
       this.logger.warn(`[UsuarioService] Usuário não possui nenhuma propriedade`, { userId });
       throw new NotFoundException('Usuário não possui nenhuma propriedade cadastrada.');
     }
 
-    return data.map((item) => item.id_propriedade);
+    return propriedades;
   }
 
   /**
@@ -227,15 +256,14 @@ export class UsuarioService {
       throw new ForbiddenException('Não é permitido criar usuário com cargo PROPRIETARIO por este endpoint.');
     }
 
-    const admin = this.supabaseService.getAdminClient();
-
     // 1) Criar o usuário no Auth
-    const { data: created, error: authErr } = await admin.auth.admin.createUser({
+    const { data: created, error: authErr } = await this.adminSupabase.auth.admin.createUser({
       email: dto.email,
       password: dto.password,
       email_confirm: true,
       user_metadata: { nome: dto.nome, telefone: dto.telefone },
     });
+
     if (authErr) {
       this.logger.logError(authErr, { method: 'createFuncionario.auth', email: dto.email });
       throw new InternalServerErrorException(`Erro Auth: ${authErr.message}`);
@@ -244,25 +272,14 @@ export class UsuarioService {
     const authId = created.user?.id as string;
 
     // 2) Inserir o perfil na tabela Usuario
-    const { data: perfil, error: perfilErr } = await admin
-      .from('usuario')
-      .insert([
-        {
-          auth_id: authId,
-          nome: dto.nome,
-          telefone: dto.telefone ?? null,
-          email: dto.email,
-          cargo: dto.cargo,
-          id_endereco: dto.id_endereco ?? null,
-        },
-      ])
-      .select()
-      .single();
-
-    if (perfilErr) {
-      this.logger.logError(perfilErr, { method: 'createFuncionario.perfil', email: dto.email });
-      throw new InternalServerErrorException(`Erro DB: ${perfilErr.message}`);
-    }
+    const perfil = await this.usuarioRepository.criarFuncionario({
+      authId,
+      nome: dto.nome,
+      email: dto.email,
+      telefone: dto.telefone,
+      cargo: dto.cargo,
+      id_endereco: dto.id_endereco,
+    });
 
     // 3) Vincular à propriedade
     const propriedadesParaVincular: string[] = [];
@@ -273,16 +290,18 @@ export class UsuarioService {
       propriedadesParaVincular.push(...doSolicitante);
     }
 
-    const rows = propriedadesParaVincular.map((id_propriedade) => ({
-      id_usuario: perfil.id_usuario,
-      id_propriedade,
-    }));
-    const { error: vincErr } = await admin.from('usuariopropriedade').insert(rows);
-    if (vincErr) {
-      this.logger.logError(vincErr, { method: 'createFuncionario.vincular', perfil: perfil.id_usuario });
-      throw new InternalServerErrorException('Erro ao vincular funcionário à propriedade.');
-    }
+    await this.usuarioPropriedadeRepository.vincular(perfil.idUsuario, propriedadesParaVincular);
 
-    return formatDateFields(perfil);
+    return {
+      id_usuario: perfil.idUsuario,
+      auth_id: perfil.authId,
+      nome: perfil.nome,
+      email: perfil.email,
+      telefone: perfil.telefone,
+      cargo: perfil.cargo,
+      id_endereco: perfil.idEndereco,
+      created_at: perfil.createdAt,
+      updated_at: perfil.updatedAt,
+    };
   }
 }

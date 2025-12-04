@@ -1,4 +1,4 @@
-# BUFFS API - Sistema de Gestão de Rebanhos Bufalinos
+# BUFFS API - Sistema de Gestão de Rebanhos Bubalinos
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white)](https://nestjs.com/)

@@ -1,114 +1,122 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateRegistroAlimentacaoDto } from './dto/create-registro.dto';
 import { UpdateRegistroAlimentacaoDto } from './dto/update-registro.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
+import { RegistrosRepositoryDrizzle } from './repositories/registros.repository.drizzle';
+import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
+import { calculatePaginationParams, createPaginatedResponse } from '../../../core/utils/pagination.utils';
 
 @Injectable()
 export class RegistrosService {
   constructor(
-    private readonly supabase: SupabaseService,
+    private readonly registrosRepo: RegistrosRepositoryDrizzle,
     private readonly logger: LoggerService,
   ) {}
 
-  private readonly tableName = 'alimregistro';
-
   async create(dto: CreateRegistroAlimentacaoDto) {
     // Validar se o grupo pertence à propriedade
-    const { data: grupo, error: grupoError } = await this.supabase
-      .getAdminClient()
-      .from('grupo')
-      .select('id_propriedade')
-      .eq('id_grupo', dto.id_grupo)
-      .single();
+    const { data: grupo, error: grupoError } = await this.registrosRepo.findGrupoById(dto.id_grupo);
 
-    if (grupoError) {
+    if (grupoError || !grupo) {
       this.logger.logError(grupoError, { module: 'RegistrosAlimentacao', method: 'create', step: 'validacao_grupo' });
       throw new NotFoundException('Grupo não encontrado.');
     }
 
-    if (grupo.id_propriedade !== dto.id_propriedade) {
+    if (grupo.idPropriedade !== dto.id_propriedade) {
       throw new BadRequestException('O grupo informado não pertence à propriedade especificada.');
     }
 
     // Validar se a definição de alimentação pertence à propriedade
-    const { data: alimentDef, error: alimentError } = await this.supabase
-      .getAdminClient()
-      .from('alimentacaodef')
-      .select('id_propriedade')
-      .eq('id_aliment_def', dto.id_aliment_def)
-      .single();
+    const { data: alimentDef, error: alimentError } = await this.registrosRepo.findAlimentDefById(dto.id_aliment_def);
 
-    if (alimentError) {
+    if (alimentError || !alimentDef) {
       this.logger.logError(alimentError, { module: 'RegistrosAlimentacao', method: 'create', step: 'validacao_alimentacao_def' });
       throw new NotFoundException('Definição de alimentação não encontrada.');
     }
 
-    if (alimentDef.id_propriedade !== dto.id_propriedade) {
+    if (alimentDef.idPropriedade !== dto.id_propriedade) {
       throw new BadRequestException('A definição de alimentação informada não pertence à propriedade especificada.');
     }
 
     // Criar o registro de alimentação
-    const { data, error } = await this.supabase.getAdminClient().from(this.tableName).insert(dto).select().single();
-    if (error) {
+    const { data, error } = await this.registrosRepo.create(dto);
+    if (error || !data) {
       this.logger.logError(error, { module: 'RegistrosAlimentacao', method: 'create' });
-      throw new InternalServerErrorException(`Falha ao criar registro de alimentação: ${error.message}`);
+      throw new InternalServerErrorException(`Falha ao criar registro de alimentação: ${error?.message}`);
     }
     return formatDateFields(data);
   }
 
-  async findAll() {
-    const { data, error } = await this.supabase.getAdminClient().from(this.tableName).select('*').order('created_at', { ascending: false });
+  async findAll(paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+    const { page = 1, limit = 10 } = paginationDto;
+    const { offset } = calculatePaginationParams(page, limit);
+
+    // Busca total de registros
+    const { count: totalCount, error: countError } = await this.registrosRepo.countAll();
+
+    if (countError) {
+      this.logger.logError(countError, { module: 'RegistrosAlimentacao', method: 'findAll', step: 'count' });
+      throw new InternalServerErrorException('Falha ao contar registros de alimentação.');
+    }
+
+    // Busca registros paginados
+    const { data, error } = await this.registrosRepo.findAll(limit, offset);
+
     if (error) {
-      if ((error as any).code === 'PGRST116') {
-        return [];
-      }
+      this.logger.logError(error, { module: 'RegistrosAlimentacao', method: 'findAll' });
       throw new InternalServerErrorException('Falha ao buscar registros de alimentação.');
     }
-    return formatDateFieldsArray(data ?? []);
+
+    const formattedData = formatDateFieldsArray(data ?? []);
+    return createPaginatedResponse(formattedData, totalCount, page, limit);
   }
 
-  async findByPropriedade(idPropriedade: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select(
-        `
-        *,
-        alimentacao_def:alimentacaodef!id_aliment_def(tipo_alimentacao, descricao),
-        grupo:grupo!id_grupo(nome_grupo),
-        usuario:usuario!id_usuario(nome)
-      `,
-      )
-      .eq('id_propriedade', idPropriedade)
-      .order('dt_registro', { ascending: false })
-      .order('created_at', { ascending: false });
+  async findByPropriedade(idPropriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+    const { page = 1, limit = 10 } = paginationDto;
+    const { offset } = calculatePaginationParams(page, limit);
+
+    // Busca total de registros da propriedade
+    const { count: totalCount, error: countError } = await this.registrosRepo.countByPropriedade(idPropriedade);
+
+    if (countError) {
+      this.logger.logError(countError, {
+        module: 'RegistrosAlimentacao',
+        method: 'findByPropriedade',
+        idPropriedade,
+        step: 'count',
+      });
+      throw new InternalServerErrorException('Falha ao contar registros de alimentação da propriedade.');
+    }
+
+    // Busca registros paginados com relações
+    const { data, error } = await this.registrosRepo.findByPropriedade(idPropriedade, limit, offset);
 
     if (error) {
       this.logger.logError(error, { module: 'RegistrosAlimentacao', method: 'findByPropriedade', idPropriedade });
       throw new InternalServerErrorException('Falha ao buscar registros de alimentação da propriedade.');
     }
 
-    return formatDateFieldsArray(data);
+    const formattedData = formatDateFieldsArray(data);
+    return createPaginatedResponse(formattedData, totalCount, page, limit);
   }
 
   async findOne(id_registro: string) {
-    const { data, error } = await this.supabase.getAdminClient().from(this.tableName).select('*').eq('id_registro', id_registro).single();
-    if (error) throw new NotFoundException('Registro de alimentação não encontrado.');
+    const { data, error } = await this.registrosRepo.findOne(id_registro);
+    if (error || !data) throw new NotFoundException('Registro de alimentação não encontrado.');
     return formatDateFields(data);
   }
 
   async update(id_registro: string, dto: UpdateRegistroAlimentacaoDto) {
     await this.findOne(id_registro);
-    const { data, error } = await this.supabase.getAdminClient().from(this.tableName).update(dto).eq('id_registro', id_registro).select().single();
-    if (error) throw new InternalServerErrorException('Falha ao atualizar registro de alimentação.');
+    const { data, error } = await this.registrosRepo.update(id_registro, dto);
+    if (error || !data) throw new InternalServerErrorException('Falha ao atualizar registro de alimentação.');
     return formatDateFields(data);
   }
 
   async remove(id_registro: string) {
     await this.findOne(id_registro);
-    const { error } = await this.supabase.getAdminClient().from(this.tableName).delete().eq('id_registro', id_registro);
+    const { error } = await this.registrosRepo.remove(id_registro);
     if (error) throw new InternalServerErrorException('Falha ao remover registro de alimentação.');
     return { message: 'Registro removido com sucesso' };
   }

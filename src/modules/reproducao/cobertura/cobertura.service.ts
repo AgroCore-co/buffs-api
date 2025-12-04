@@ -1,17 +1,17 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
+import { DatabaseService } from '../../../core/database/database.service';
 import { CreateCoberturaDto } from './dto/create-cobertura.dto';
 import { UpdateCoberturaDto } from './dto/update-cobertura.dto';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse, calculatePaginationParams } from '../../../core/utils/pagination.utils';
-import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { FemeaDisponivelReproducaoDto } from './dto/femea-disponivel-reproducao.dto';
 import { RegistrarPartoDto } from './dto/registrar-parto.dto';
 import { AlertasService } from '../../alerta/alerta.service';
 import { NichoAlerta, PrioridadeAlerta } from '../../alerta/dto/create-alerta.dto';
 import { RecomendacaoFemeaDto, RecomendacaoMachoDto, MotivoScore } from './dto/recomendacao-acasalamento.dto';
-import { CoberturaValidator } from './validators/cobertura.validator';
+import { CoberturaValidatorDrizzle } from './validators/cobertura.validator.drizzle';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
+import { CacheService } from '../../../core/cache/cache.service';
 import {
   calcularIAR,
   calcularFPProntidao,
@@ -28,21 +28,20 @@ import {
   calcularIEPMedio,
   buscarHistoricoCoberturasTouro,
   estatisticasRebanho,
-} from './utils/reproducao-queries.util';
+} from './utils/reproducao-queries-drizzle.util';
 import { calcularIdadeEmMeses, determinarStatusFemea } from './utils/reproducao-helpers.util';
-import { CoberturaRepository } from './repositories/cobertura.repository';
+import { CoberturaRepositoryDrizzle } from './repositories/cobertura.repository.drizzle';
 import { mapCoberturaResponse, mapCoberturasResponse } from './mappers/cobertura.mapper';
 
 @Injectable()
 export class CoberturaService implements ISoftDelete {
   constructor(
-    private readonly supabase: SupabaseService,
+    private readonly databaseService: DatabaseService,
     private readonly alertasService: AlertasService,
-    private readonly validator: CoberturaValidator,
-    private readonly coberturaRepo: CoberturaRepository,
+    private readonly validator: CoberturaValidatorDrizzle,
+    private readonly coberturaRepo: CoberturaRepositoryDrizzle,
+    private readonly cacheService: CacheService,
   ) {}
-
-  private readonly tableName = 'dadosreproducao';
 
   async create(dto: CreateCoberturaDto, auth_uuid: string) {
     // ============================================================
@@ -100,14 +99,15 @@ export class CoberturaService implements ISoftDelete {
       await this.validator.validarIntervaloUsoMacho(dto.id_bufalo, dto.dt_evento);
 
       // Verificar que é realmente macho
-      const { data: macho, error: erroMacho } = await this.supabase
-        .getAdminClient()
-        .from('bufalo')
-        .select('sexo, nome')
-        .eq('id_bufalo', dto.id_bufalo)
-        .single();
+      const macho = await this.databaseService.db.query.bufalo.findFirst({
+        where: (bufalo, { eq }) => eq(bufalo.idBufalo, dto.id_bufalo),
+        columns: {
+          sexo: true,
+          nome: true,
+        },
+      });
 
-      if (erroMacho || !macho) {
+      if (!macho) {
         throw new BadRequestException(`Reprodutor não encontrado: ${dto.id_bufalo}`);
       }
 
@@ -125,14 +125,15 @@ export class CoberturaService implements ISoftDelete {
       await this.validator.validarIdadeMaximaReproducao(dto.id_doadora, 'F');
 
       // Verificar que é realmente fêmea
-      const { data: doadora, error: erroDoadora } = await this.supabase
-        .getAdminClient()
-        .from('bufalo')
-        .select('sexo, nome')
-        .eq('id_bufalo', dto.id_doadora)
-        .single();
+      const doadora = await this.databaseService.db.query.bufalo.findFirst({
+        where: (bufalo, { eq }) => eq(bufalo.idBufalo, dto.id_doadora),
+        columns: {
+          sexo: true,
+          nome: true,
+        },
+      });
 
-      if (erroDoadora || !doadora) {
+      if (!doadora) {
         throw new BadRequestException(`Doadora não encontrada: ${dto.id_doadora}`);
       }
 
@@ -145,14 +146,16 @@ export class CoberturaService implements ISoftDelete {
     // 5. VALIDAR MATERIAL GENÉTICO (se IA, IATF ou TE)
     // ============================================================
     if (dto.id_semen) {
-      const { data: semen, error: erroSemen } = await this.supabase
-        .getAdminClient()
-        .from('materialgenetico')
-        .select('id_material, tipo, ativo')
-        .eq('id_material', dto.id_semen)
-        .single();
+      const semen = await this.databaseService.db.query.materialgenetico.findFirst({
+        where: (materialgenetico, { eq }) => eq(materialgenetico.idMaterial, dto.id_semen),
+        columns: {
+          idMaterial: true,
+          tipo: true,
+          ativo: true,
+        },
+      });
 
-      if (erroSemen || !semen) {
+      if (!semen) {
         throw new BadRequestException(`Material genético não encontrado: ${dto.id_semen}`);
       }
 
@@ -179,104 +182,85 @@ export class CoberturaService implements ISoftDelete {
       status: dto.status || 'Em andamento',
     };
 
-    const { data, error } = await this.coberturaRepo.create(dtoComStatus);
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao criar dado de reprodução: ${error.message}`);
-    }
+    const data = await this.coberturaRepo.create(dtoComStatus);
 
     // Buscar novamente com joins para retornar dados completos
-    const { data: coberturaCompleta, error: errorBusca } = await this.coberturaRepo.findById(data.id_reproducao);
+    const coberturaCompleta = await this.coberturaRepo.findById(data.idReproducao);
 
-    if (errorBusca || !coberturaCompleta) {
+    if (!coberturaCompleta) {
       // Se falhar ao buscar com joins, retorna o dado básico
-      return formatDateFields(data);
+      return data;
     }
 
     // Mapear dados para incluir informações dos animais
-    const mappedData = mapCoberturaResponse(coberturaCompleta);
-    return formatDateFields(mappedData);
+    return mapCoberturaResponse(coberturaCompleta);
   }
 
   async findAll(paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
     const { page = 1, limit = 10 } = paginationDto;
     const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
-    // Contar total de registros (excluindo deletados)
-    const { count, error: countError } = await this.coberturaRepo.count(false);
-
-    if (countError) {
-      throw new InternalServerErrorException(`Falha ao contar dados de reprodução: ${countError.message}`);
-    }
-
-    // Buscar registros com paginação (excluindo deletados)
-    const { data, error } = await this.coberturaRepo.findAll({ offset, limit: limitValue }, false);
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao buscar dados de reprodução: ${error.message}`);
-    }
+    const result = await this.coberturaRepo.findAll(offset, limitValue);
 
     // Mapear dados para incluir informações dos animais
-    const mappedData = mapCoberturasResponse(data);
-    const formattedData = formatDateFieldsArray(mappedData);
-    return createPaginatedResponse(formattedData, count || 0, page, limitValue);
+    const mappedData = mapCoberturasResponse(result.data);
+    return createPaginatedResponse(mappedData, result.total, page, limitValue);
   }
 
   async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
     const { page = 1, limit = 10 } = paginationDto;
     const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
-    // Contar total de registros da propriedade
-    const { count, error: countError } = await this.coberturaRepo.countByPropriedade(id_propriedade);
-
-    if (countError) {
-      throw new InternalServerErrorException(`Falha ao contar dados de reprodução da propriedade: ${countError.message}`);
-    }
-
-    // Buscar registros da propriedade com paginação
-    const { data, error } = await this.coberturaRepo.findByPropriedade(id_propriedade, { offset, limit: limitValue });
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao buscar dados de reprodução da propriedade: ${error.message}`);
-    }
+    const result = await this.coberturaRepo.findByPropriedade(id_propriedade, offset, limitValue);
 
     // Mapear dados para incluir informações dos animais
-    const mappedData = mapCoberturasResponse(data);
-    const formattedData = formatDateFieldsArray(mappedData);
-    return createPaginatedResponse(formattedData, count || 0, page, limitValue);
+    const mappedData = mapCoberturasResponse(result.data);
+    return createPaginatedResponse(mappedData, result.total, page, limitValue);
   }
 
   async findOne(id_repro: string) {
-    const { data, error } = await this.coberturaRepo.findById(id_repro);
+    const data = await this.coberturaRepo.findById(id_repro);
 
-    if (error || !data) {
+    if (!data) {
       throw new NotFoundException(`Dado de reprodução com ID ${id_repro} não encontrado.`);
     }
 
     // Mapear dados para incluir informações dos animais
-    const mappedData = mapCoberturaResponse(data);
-    return formatDateFields(mappedData);
+    return mapCoberturaResponse(data);
   }
 
   async update(id_repro: string, dto: UpdateCoberturaDto) {
     const cobertura = await this.findOne(id_repro);
 
     // Validar se pode atualizar tipo_parto
-    if (dto.tipo_parto && cobertura.status !== 'Confirmada') {
-      throw new BadRequestException(
-        'Apenas coberturas com status "Confirmada" podem ter tipo_parto atualizado. Use o endpoint de registrar parto para finalizar o processo.',
+    if (dto.tipo_parto) {
+      if (cobertura.status !== 'Confirmada') {
+        throw new BadRequestException(
+          'Apenas coberturas com status "Confirmada" podem ter tipo_parto atualizado. Use o endpoint POST /cobertura/:id/registrar-parto para finalizar o processo.',
+        );
+      }
+
+      // Validar valores permitidos
+      const tiposPartoValidos = ['Normal', 'Cesárea', 'Aborto'];
+      if (!tiposPartoValidos.includes(dto.tipo_parto)) {
+        throw new BadRequestException(`tipo_parto inválido. Valores permitidos: ${tiposPartoValidos.join(', ')}. Recebido: ${dto.tipo_parto}`);
+      }
+
+      // Alertar sobre uso incorreto - deve usar registrarParto
+      console.warn(
+        `⚠️ AVISO: tipo_parto sendo atualizado diretamente via PATCH. Recomenda-se usar POST /cobertura/${id_repro}/registrar-parto para fluxo completo (parto + ciclo de lactação + alertas).`,
       );
     }
 
-    const { data, error } = await this.coberturaRepo.update(id_repro, dto);
+    const data = await this.coberturaRepo.update(id_repro, dto);
 
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao atualizar dado de reprodução: ${error.message}`);
+    if (!data) {
+      throw new InternalServerErrorException('Falha ao atualizar dado de reprodução');
     }
 
-    // Mapear dados para incluir informações dos animais
-    const mappedData = mapCoberturaResponse(data);
-    return formatDateFields(mappedData);
+    // Buscar novamente com joins
+    const coberturaCompleta = await this.coberturaRepo.findById(id_repro);
+    return coberturaCompleta ? mapCoberturaResponse(coberturaCompleta) : data;
   }
 
   async remove(id_repro: string) {
@@ -286,51 +270,38 @@ export class CoberturaService implements ISoftDelete {
   async softDelete(id: string) {
     await this.findOne(id);
 
-    const { data, error } = await this.coberturaRepo.softDelete(id);
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao remover dado de reprodução: ${error.message}`);
-    }
+    const data = await this.coberturaRepo.softDelete(id);
 
     return {
       message: 'Registro removido com sucesso (soft delete)',
-      data: formatDateFields(data),
+      data,
     };
   }
 
   async restore(id: string) {
-    const { data: cobertura } = await this.coberturaRepo.findByIdSimple(id);
+    const cobertura = await this.coberturaRepo.findByIdSimple(id);
 
     if (!cobertura) {
       throw new NotFoundException(`Registro de reprodução com ID ${id} não encontrado`);
     }
 
-    if (!cobertura.deleted_at) {
+    if (!cobertura.deletedAt) {
       throw new BadRequestException('Este registro não está removido');
     }
 
-    const { data, error } = await this.coberturaRepo.restore(id);
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao restaurar dado de reprodução: ${error.message}`);
-    }
+    const data = await this.coberturaRepo.restore(id);
 
     return {
       message: 'Registro restaurado com sucesso',
-      data: formatDateFields(data),
+      data,
     };
   }
 
   async findAllWithDeleted(): Promise<any[]> {
-    const { data, error } = await this.coberturaRepo.findAllWithDeleted();
-
-    if (error) {
-      throw new InternalServerErrorException('Erro ao buscar dados de reprodução (incluindo deletados)');
-    }
+    const data = await this.coberturaRepo.findAllWithDeleted();
 
     // Mapear dados para incluir informações dos animais
-    const mappedData = mapCoberturasResponse(data || []);
-    return formatDateFieldsArray(mappedData);
+    return mapCoberturasResponse(data || []);
   }
 
   /**
@@ -344,18 +315,22 @@ export class CoberturaService implements ISoftDelete {
     const idadeMinimaReproducao = new Date();
     idadeMinimaReproducao.setMonth(idadeMinimaReproducao.getMonth() - 18);
 
-    const { data: femeas, error: femeasError } = await this.supabase
-      .getAdminClient()
-      .from('bufalo')
-      .select('id_bufalo, nome, brinco, dt_nascimento, id_raca')
-      .eq('id_propriedade', id_propriedade)
-      .eq('sexo', 'F')
-      .eq('status', true)
-      .lte('dt_nascimento', idadeMinimaReproducao.toISOString());
-
-    if (femeasError) {
-      throw new InternalServerErrorException(`Erro ao buscar fêmeas: ${femeasError.message}`);
-    }
+    const femeas = await this.databaseService.db.query.bufalo.findMany({
+      where: (bufalo, { eq, and, lte }) =>
+        and(
+          eq(bufalo.idPropriedade, id_propriedade),
+          eq(bufalo.sexo, 'F'),
+          eq(bufalo.status, true),
+          lte(bufalo.dtNascimento, idadeMinimaReproducao.toISOString()),
+        ),
+      columns: {
+        idBufalo: true,
+        nome: true,
+        brinco: true,
+        dtNascimento: true,
+        idRaca: true,
+      },
+    });
 
     if (!femeas || femeas.length === 0) {
       return [];
@@ -365,39 +340,37 @@ export class CoberturaService implements ISoftDelete {
 
     for (const femea of femeas) {
       // 2. Buscar última cobertura
-      const { data: coberturas } = await this.supabase
-        .getAdminClient()
-        .from('dadosreproducao')
-        .select('dt_evento, status')
-        .eq('id_bufala', femea.id_bufalo)
-        .order('dt_evento', { ascending: false })
-        .limit(1);
+      const coberturas = await this.databaseService.db.query.dadosreproducao.findMany({
+        where: (dadosreproducao, { eq }) => eq(dadosreproducao.idBufala, femea.idBufalo),
+        orderBy: (dadosreproducao, { desc }) => [desc(dadosreproducao.dtEvento)],
+        limit: 1,
+        columns: {
+          dtEvento: true,
+          status: true,
+        },
+      });
 
       const ultimaCobertura = coberturas?.[0] || null;
-      const dtUltimaCobertura = ultimaCobertura?.dt_evento || null;
+      const dtUltimaCobertura = ultimaCobertura?.dtEvento || null;
       const diasDesdeCobertura = dtUltimaCobertura
         ? Math.floor((new Date().getTime() - new Date(dtUltimaCobertura).getTime()) / (1000 * 60 * 60 * 24))
         : null;
 
       // 3. Buscar ciclo de lactação ativo
-      const { data: cicloAtivo } = await this.supabase
-        .getAdminClient()
-        .from('ciclolactacao')
-        .select('id_ciclo_lactacao, dt_parto, status')
-        .eq('id_bufala', femea.id_bufalo)
-        .eq('status', 'Em Lactação')
-        .single();
+      const cicloAtivo = await this.databaseService.db.query.ciclolactacao.findFirst({
+        where: (ciclolactacao, { eq, and }) => and(eq(ciclolactacao.idBufala, femea.idBufalo), eq(ciclolactacao.status, 'Em Lactação')),
+        columns: {
+          idCicloLactacao: true,
+          dtParto: true,
+          status: true,
+        },
+      });
 
       let diasEmLactacao = 0;
       let numeroCiclo = 0;
       if (cicloAtivo) {
-        diasEmLactacao = Math.floor((new Date().getTime() - new Date(cicloAtivo.dt_parto).getTime()) / (1000 * 60 * 60 * 24));
-        const { count } = await this.supabase
-          .getAdminClient()
-          .from('ciclolactacao')
-          .select('*', { count: 'exact', head: true })
-          .eq('id_bufala', femea.id_bufalo);
-        numeroCiclo = count || 0;
+        diasEmLactacao = Math.floor((new Date().getTime() - new Date(cicloAtivo.dtParto).getTime()) / (1000 * 60 * 60 * 24));
+        numeroCiclo = await contarCiclosTotais(this.databaseService, femea.idBufalo);
       }
 
       // 4. Determinar status reprodutivo
@@ -427,14 +400,17 @@ export class CoberturaService implements ISoftDelete {
 
       // 5. Buscar raça
       let nomeRaca = 'Sem raça definida';
-      if (femea.id_raca) {
-        const { data: raca } = await this.supabase.getAdminClient().from('raca').select('nome').eq('id_raca', femea.id_raca).single();
+      if (femea.idRaca) {
+        const raca = await this.databaseService.db.query.raca.findFirst({
+          where: (raca, { eq }) => eq(raca.idRaca, femea.idRaca),
+          columns: { nome: true },
+        });
         if (raca) nomeRaca = raca.nome;
       }
 
       // 6. Calcular idade
-      const idadeMeses = femea.dt_nascimento
-        ? Math.floor((new Date().getTime() - new Date(femea.dt_nascimento).getTime()) / (1000 * 60 * 60 * 24 * 30.44))
+      const idadeMeses = femea.dtNascimento
+        ? Math.floor((new Date().getTime() - new Date(femea.dtNascimento).getTime()) / (1000 * 60 * 60 * 24 * 30.44))
         : 0;
 
       // Recomendações adicionais
@@ -448,7 +424,7 @@ export class CoberturaService implements ISoftDelete {
       }
 
       resultado.push({
-        id_bufalo: femea.id_bufalo,
+        id_bufalo: femea.idBufalo,
         nome: femea.nome,
         brinco: femea.brinco || 'Sem brinco',
         idade_meses: idadeMeses,
@@ -460,7 +436,7 @@ export class CoberturaService implements ISoftDelete {
           ? {
               numero_ciclo: numeroCiclo,
               dias_em_lactacao: diasEmLactacao,
-              status: cicloAtivo.status,
+              status: cicloAtivo.status || 'Em Lactação',
             }
           : null,
         recomendacoes,
@@ -482,34 +458,33 @@ export class CoberturaService implements ISoftDelete {
     }
 
     // 2. Atualizar cobertura com dados do parto usando repository
-    const { data: coberturaAtualizada, error: updateError } = await this.coberturaRepo.update(id_repro, {
+    const coberturaAtualizada = await this.coberturaRepo.update(id_repro, {
       tipo_parto: dto.tipo_parto,
       status: 'Concluída',
     });
 
-    if (updateError) {
-      throw new InternalServerErrorException(`Falha ao atualizar cobertura: ${updateError.message}`);
+    if (!coberturaAtualizada) {
+      throw new InternalServerErrorException('Falha ao atualizar cobertura');
     }
 
-    let cicloLactacao = null;
+    let cicloLactacao: any = null;
 
     // 3. Criar ciclo de lactação automaticamente (apenas para partos normais e cesárea)
     if (dto.criar_ciclo_lactacao !== false && (dto.tipo_parto === 'Normal' || dto.tipo_parto === 'Cesárea')) {
-      const { data: ciclo, error: cicloError } = await this.supabase
-        .getAdminClient()
-        .from('ciclolactacao')
-        .insert({
-          id_bufala: cobertura.id_bufala,
-          id_propriedade: cobertura.id_propriedade,
-          dt_parto: dto.dt_parto,
-          padrao_dias: dto.padrao_dias_lactacao || 305,
-          observacao: dto.observacao || `Ciclo criado automaticamente a partir do parto registrado em ${new Date().toLocaleDateString()}`,
-        })
-        .select()
-        .single();
+      const cicloData = {
+        idBufala: cobertura.id_bufala,
+        idPropriedade: cobertura.id_propriedade,
+        dtParto: dto.dt_parto,
+        padraoDias: dto.padrao_dias_lactacao || 305,
+        observacao: dto.observacao || `Ciclo criado automaticamente a partir do parto registrado em ${new Date().toLocaleDateString()}`,
+      };
 
-      if (cicloError) {
-        console.warn('Erro ao criar ciclo de lactação:', cicloError.message);
+      const { ciclolactacao } = await import('../../../database/schema');
+      const ciclos = await this.databaseService.db.insert(ciclolactacao).values(cicloData).returning();
+      const ciclo = ciclos[0];
+
+      if (!ciclo) {
+        console.warn('Erro ao criar ciclo de lactação');
       } else {
         cicloLactacao = ciclo;
 
@@ -525,38 +500,37 @@ export class CoberturaService implements ISoftDelete {
           dtAlertaSecagem.setDate(dtSecagemPrevista.getDate() - 60);
 
           // Buscar informações da búfala para o alerta
-          const { data: bufalaData } = await this.supabase
-            .getAdminClient()
-            .from('bufalo')
-            .select('id_bufalo, nome, id_grupo, id_propriedade')
-            .eq('id_bufalo', cobertura.id_bufala)
-            .single();
+          const bufalaData = await this.databaseService.db.query.bufalo.findFirst({
+            where: (bufalo, { eq }) => eq(bufalo.idBufalo, cobertura.id_bufala),
+            columns: {
+              idBufalo: true,
+              nome: true,
+              idGrupo: true,
+              idPropriedade: true,
+            },
+          });
 
           if (bufalaData) {
             // Buscar nome do grupo
             let grupoNome = 'Não informado';
-            if (bufalaData.id_grupo) {
-              const { data: grupoData } = await this.supabase
-                .getAdminClient()
-                .from('grupo')
-                .select('nome_grupo')
-                .eq('id_grupo', bufalaData.id_grupo)
-                .single();
+            if (bufalaData.idGrupo) {
+              const grupoData = await this.databaseService.db.query.grupo.findFirst({
+                where: (grupo, { eq }) => eq(grupo.idGrupo, bufalaData.idGrupo),
+                columns: { nomeGrupo: true },
+              });
               if (grupoData) {
-                grupoNome = grupoData.nome_grupo;
+                grupoNome = grupoData.nomeGrupo;
               }
             }
 
             // Buscar nome da propriedade
             let propriedadeNome = 'Não informada';
-            const propriedadeId = cobertura.id_propriedade || bufalaData.id_propriedade;
+            const propriedadeId = cobertura.id_propriedade || bufalaData.idPropriedade;
             if (propriedadeId) {
-              const { data: propData } = await this.supabase
-                .getAdminClient()
-                .from('propriedade')
-                .select('nome')
-                .eq('id_propriedade', propriedadeId)
-                .single();
+              const propData = await this.databaseService.db.query.propriedade.findFirst({
+                where: (propriedade, { eq }) => eq(propriedade.idPropriedade, propriedadeId),
+                columns: { nome: true },
+              });
               if (propData) {
                 propriedadeNome = propData.nome;
               }
@@ -564,7 +538,7 @@ export class CoberturaService implements ISoftDelete {
 
             // Criar alerta
             await this.alertasService.createIfNotExists({
-              animal_id: bufalaData.id_bufalo,
+              animal_id: bufalaData.idBufalo,
               grupo: grupoNome,
               localizacao: propriedadeNome,
               id_propriedade: propriedadeId,
@@ -573,7 +547,7 @@ export class CoberturaService implements ISoftDelete {
               data_alerta: dtAlertaSecagem.toISOString().split('T')[0],
               prioridade: PrioridadeAlerta.MEDIA,
               observacao: `Ciclo iniciado em ${dtParto.toLocaleDateString('pt-BR')}. Duração padrão: ${padrãoDias} dias. Iniciar protocolo de secagem 60 dias antes.`,
-              id_evento_origem: ciclo.id_ciclo_lactacao,
+              id_evento_origem: ciclo.idCicloLactacao,
               tipo_evento_origem: 'CICLO_LACTACAO',
             });
 
@@ -610,27 +584,30 @@ export class CoberturaService implements ISoftDelete {
     const idadeMinimaReproducao = new Date();
     idadeMinimaReproducao.setMonth(idadeMinimaReproducao.getMonth() - 18);
 
-    const { data: femeas, error: femeasError } = await this.supabase
-      .getAdminClient()
-      .from('bufalo')
-      .select(
-        `
-        id_bufalo,
-        nome,
-        brinco,
-        dt_nascimento,
-        id_raca,
-        raca:id_raca(nome)
-      `,
-      )
-      .eq('id_propriedade', id_propriedade)
-      .eq('sexo', 'F')
-      .eq('status', true)
-      .lte('dt_nascimento', idadeMinimaReproducao.toISOString());
-
-    if (femeasError) {
-      throw new InternalServerErrorException(`Erro ao buscar fêmeas: ${femeasError.message}`);
-    }
+    const femeas = await this.databaseService.db.query.bufalo.findMany({
+      where: (bufalo, { eq, and, lte, isNull }) =>
+        and(
+          eq(bufalo.idPropriedade, id_propriedade),
+          eq(bufalo.sexo, 'F'),
+          eq(bufalo.status, true),
+          lte(bufalo.dtNascimento, idadeMinimaReproducao.toISOString()),
+          isNull(bufalo.deletedAt),
+        ),
+      columns: {
+        idBufalo: true,
+        nome: true,
+        brinco: true,
+        dtNascimento: true,
+        idRaca: true,
+      },
+      with: {
+        raca: {
+          columns: {
+            nome: true,
+          },
+        },
+      },
+    });
 
     if (!femeas || femeas.length === 0) {
       return [];
@@ -640,13 +617,13 @@ export class CoberturaService implements ISoftDelete {
 
     for (const femea of femeas) {
       // 2. Calcular idade em meses
-      const idadeMeses = calcularIdadeEmMeses(femea.dt_nascimento);
+      const idadeMeses = calcularIdadeEmMeses(femea.dtNascimento);
 
       // 3. Buscar ciclo de lactação ativo (mais recente)
-      const cicloAtivo = await buscarCicloAtivo(this.supabase.getAdminClient(), femea.id_bufalo);
+      const cicloAtivo = await buscarCicloAtivo(this.databaseService, femea.idBufalo);
 
       // 4. Contar total de ciclos (número de partos)
-      const totalCiclos = await contarCiclosTotais(this.supabase.getAdminClient(), femea.id_bufalo);
+      const totalCiclos = await contarCiclosTotais(this.databaseService, femea.idBufalo);
 
       // 5. Calcular dias pós-parto (DPP)
       let diasPosParto: number | null = null;
@@ -654,7 +631,7 @@ export class CoberturaService implements ISoftDelete {
       let statusLactacao = 'Seca';
 
       if (cicloAtivo) {
-        diasPosParto = Math.floor((Date.now() - new Date(cicloAtivo.dt_parto).getTime()) / (1000 * 60 * 60 * 24));
+        diasPosParto = Math.floor((Date.now() - new Date(cicloAtivo.dtParto).getTime()) / (1000 * 60 * 60 * 24));
 
         if (cicloAtivo.status === 'Em Lactação') {
           diasEmLactacao = diasPosParto;
@@ -663,7 +640,7 @@ export class CoberturaService implements ISoftDelete {
       }
 
       // 6. Calcular IEP médio (se >= 2 partos)
-      const iepMedio = await calcularIEPMedio(this.supabase.getAdminClient(), femea.id_bufalo, totalCiclos);
+      const iepMedio = await calcularIEPMedio(this.databaseService, femea.idBufalo, totalCiclos);
 
       // 7. Calcular fatores do IAR
       const fp_prontidao = calcularFPProntidao(totalCiclos, idadeMeses, diasPosParto);
@@ -690,11 +667,11 @@ export class CoberturaService implements ISoftDelete {
 
       // 11. Montar resposta
       const recomendacao: RecomendacaoFemeaDto = {
-        id_bufalo: femea.id_bufalo,
+        id_bufalo: femea.idBufalo,
         nome: femea.nome,
         brinco: femea.brinco || 'S/N',
         idade_meses: idadeMeses,
-        raca: (femea.raca as any)?.nome || 'Não informada',
+        raca: (femea as any).raca?.nome || 'Não informada',
         dados_reprodutivos: {
           status,
           dias_pos_parto: diasPosParto,
@@ -733,35 +710,38 @@ export class CoberturaService implements ISoftDelete {
    */
   async findRecomendacoesMachos(id_propriedade: string, limit?: number): Promise<RecomendacaoMachoDto[]> {
     // 1. Calcular média do rebanho (MR_TC) - estatística global da propriedade
-    const { totalPrenhezes, totalCoberturas } = await estatisticasRebanho(this.supabase.getAdminClient(), id_propriedade);
+    const { totalPrenhezes, totalCoberturas } = await estatisticasRebanho(this.databaseService, id_propriedade);
     const mr_tc = calcularMediaRebanho(totalPrenhezes, totalCoberturas);
 
     // 2. Buscar todos os machos ativos da propriedade com idade mínima reprodutiva (24 meses)
     const idadeMinimaReproducao = new Date();
     idadeMinimaReproducao.setMonth(idadeMinimaReproducao.getMonth() - 24);
 
-    const { data: machos, error: machosError } = await this.supabase
-      .getAdminClient()
-      .from('bufalo')
-      .select(
-        `
-        id_bufalo,
-        nome,
-        brinco,
-        dt_nascimento,
-        categoria,
-        id_raca,
-        raca:id_raca(nome)
-      `,
-      )
-      .eq('id_propriedade', id_propriedade)
-      .eq('sexo', 'M')
-      .eq('status', true)
-      .lte('dt_nascimento', idadeMinimaReproducao.toISOString());
-
-    if (machosError) {
-      throw new InternalServerErrorException(`Erro ao buscar machos: ${machosError.message}`);
-    }
+    const machos = await this.databaseService.db.query.bufalo.findMany({
+      where: (bufalo, { eq, and, lte, isNull }) =>
+        and(
+          eq(bufalo.idPropriedade, id_propriedade),
+          eq(bufalo.sexo, 'M'),
+          eq(bufalo.status, true),
+          lte(bufalo.dtNascimento, idadeMinimaReproducao.toISOString()),
+          isNull(bufalo.deletedAt),
+        ),
+      columns: {
+        idBufalo: true,
+        nome: true,
+        brinco: true,
+        dtNascimento: true,
+        categoria: true,
+        idRaca: true,
+      },
+      with: {
+        raca: {
+          columns: {
+            nome: true,
+          },
+        },
+      },
+    });
 
     if (!machos || machos.length === 0) {
       return [];
@@ -771,10 +751,10 @@ export class CoberturaService implements ISoftDelete {
 
     for (const macho of machos) {
       // 3. Calcular idade em meses
-      const idadeMeses = calcularIdadeEmMeses(macho.dt_nascimento);
+      const idadeMeses = calcularIdadeEmMeses(macho.dtNascimento);
 
       // 4. Buscar histórico de coberturas do touro
-      const historico = await buscarHistoricoCoberturasTouro(this.supabase.getAdminClient(), macho.id_bufalo);
+      const historico = await buscarHistoricoCoberturasTouro(this.databaseService, macho.idBufalo);
 
       const n_touro = historico.total_coberturas;
       const totalPrenhezes = historico.total_prenhezes;
@@ -795,11 +775,11 @@ export class CoberturaService implements ISoftDelete {
 
       // 7. Montar resposta
       const recomendacao: RecomendacaoMachoDto = {
-        id_bufalo: macho.id_bufalo,
+        id_bufalo: macho.idBufalo,
         nome: macho.nome,
         brinco: macho.brinco || 'S/N',
         idade_meses: idadeMeses,
-        raca: (macho.raca as any)?.nome || 'Não informada',
+        raca: (macho as any).raca?.nome || 'Não informada',
         categoria_abcb: macho.categoria || null,
         dados_reprodutivos: {
           total_coberturas: n_touro,

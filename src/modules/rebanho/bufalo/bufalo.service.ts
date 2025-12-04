@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException, Logger } from '@nestjs/common';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
 import { CreateBufaloDto } from './dto/create-bufalo.dto';
 import { UpdateBufaloDto } from './dto/update-bufalo.dto';
 import { UpdateGrupoBufaloDto } from './dto/update-grupo-bufalo.dto';
@@ -7,11 +6,12 @@ import { FiltroBufaloDto } from './dto/filtro-bufalo.dto';
 import { GenealogiaService } from '../../reproducao/genealogia/genealogia.service';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse, calculatePaginationParams } from '../../../core/utils/pagination.utils';
-import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
 import { CacheService } from '../../../core/cache/cache.service';
+import { LoggerService } from '../../../core/logger/logger.service';
 
-import { BufaloRepository } from './repositories/bufalo.repository';
+import { BufaloRepositoryDrizzle } from './repositories/bufalo.repository.drizzle';
+import { UsuarioPropriedadeRepositoryDrizzle } from './repositories/usuario-propriedade.repository.drizzle';
 import { BufaloMaturidadeService } from './services/bufalo-maturidade.service';
 import { BufaloCategoriaService } from './services/bufalo-categoria.service';
 import { BufaloFiltrosService } from './services/bufalo-filtros.service';
@@ -19,16 +19,16 @@ import { BufaloFiltrosService } from './services/bufalo-filtros.service';
 @Injectable()
 export class BufaloService implements ISoftDelete {
   private readonly logger = new Logger(BufaloService.name);
-  private readonly tableName = 'bufalo';
 
   constructor(
-    private readonly supabaseService: SupabaseService,
     private readonly genealogiaService: GenealogiaService,
-    private readonly bufaloRepo: BufaloRepository,
+    private readonly bufaloRepo: BufaloRepositoryDrizzle,
+    private readonly usuarioPropriedadeRepo: UsuarioPropriedadeRepositoryDrizzle,
     private readonly maturidadeService: BufaloMaturidadeService,
     private readonly categoriaService: BufaloCategoriaService,
     private readonly filtrosService: BufaloFiltrosService,
     private readonly cacheService: CacheService,
+    private readonly loggerService: LoggerService,
   ) {}
 
   // ==================== AUTENTICAÇÃO E AUTORIZAÇÃO ====================
@@ -36,21 +36,20 @@ export class BufaloService implements ISoftDelete {
   /**
    * Obtém ID do usuário a partir do email.
    */
-  private async getUserId(user: any): Promise<number> {
-    const supabase = this.supabaseService.getAdminClient();
-    const { data: perfilUsuario, error } = await supabase.from('usuario').select('id_usuario').eq('email', user.email).single();
+  private async getUserId(user: any): Promise<string> {
+    const perfilUsuario = await this.usuarioPropriedadeRepo.buscarUsuarioPorEmail(user.email);
 
-    if (error || !perfilUsuario) {
+    if (!perfilUsuario) {
       throw new NotFoundException('Perfil de usuário não encontrado.');
     }
-    return perfilUsuario.id_usuario;
+    return perfilUsuario.idUsuario;
   }
 
   /**
    * Busca todas as propriedades vinculadas ao usuário (como dono OU funcionário).
    * Com CACHE de 5 minutos.
    */
-  private async getUserPropriedades(userId: number): Promise<string[]> {
+  private async getUserPropriedades(userId: string): Promise<string[]> {
     const cacheKey = `user_props:${userId}`;
 
     // 1. Tenta pegar do cache
@@ -60,41 +59,21 @@ export class BufaloService implements ISoftDelete {
     }
 
     // 2. Se não tiver no cache, busca no banco
-    const supabase = this.supabaseService.getAdminClient();
-
-    // Busca propriedades onde o usuário é DONO
-    const { data: propriedadesComoDono, error: errorDono } = await supabase.from('propriedade').select('id_propriedade').eq('id_dono', userId);
-
-    // Busca propriedades onde o usuário é FUNCIONÁRIO
-    const { data: propriedadesComoFuncionario, error: errorFuncionario } = await supabase
-      .from('usuariopropriedade')
-      .select('id_propriedade')
-      .eq('id_usuario', userId);
-
-    if (errorDono) {
-      this.logger.error('Erro ao buscar propriedades onde o usuário é DONO.', errorDono);
-      throw new InternalServerErrorException(`Falha ao buscar propriedades do usuário (como dono): ${errorDono.message}`);
-    }
-
-    if (errorFuncionario) {
-      this.logger.error('Erro ao buscar propriedades onde o usuário é FUNCIONÁRIO.', errorFuncionario);
-      throw new InternalServerErrorException(`Falha ao buscar propriedades do usuário (como funcionário): ${errorFuncionario.message}`);
-    }
+    const propriedadesComoDono = await this.usuarioPropriedadeRepo.buscarPropriedadesComoDono(userId);
+    const propriedadesComoFuncionario = await this.usuarioPropriedadeRepo.buscarPropriedadesComoFuncionario(userId);
 
     // 3. Combina ambas as listas
-    const todasPropriedades = [...(propriedadesComoDono || []), ...(propriedadesComoFuncionario || [])];
+    const todasPropriedades = [...propriedadesComoDono.map((p) => p.idPropriedade), ...propriedadesComoFuncionario.map((p) => p.idPropriedade)];
 
     // Remove duplicatas
-    const propriedadesUnicas = Array.from(new Set(todasPropriedades.map((p) => p.id_propriedade)));
+    const propriedadesUnicas = Array.from(new Set(todasPropriedades.filter((id): id is string => id !== null)));
 
     if (propriedadesUnicas.length === 0) {
       throw new NotFoundException('Usuário não está associado a nenhuma propriedade.');
     }
 
-    // 4. Salva no cache por 5 minutos (300 segundos)
-    await this.cacheService.set(cacheKey, propriedadesUnicas, 300000); // CacheService usa ms ou s? CacheModule config usa ms (300000). CacheService.set usually takes ms if using cache-manager v5, or seconds/options depending on version.
-    // Looking at CacheService implementation (I read it before but didn't check set method), let's assume it takes TTL.
-    // Wait, I should check CacheService.set signature.
+    // 4. Salva no cache por 5 minutos (300000 ms)
+    await this.cacheService.set(cacheKey, propriedadesUnicas, 300000);
 
     return propriedadesUnicas;
   }
@@ -102,18 +81,12 @@ export class BufaloService implements ISoftDelete {
   /**
    * Valida se o usuário tem acesso ao búfalo através das propriedades vinculadas.
    */
-  private async validateBufaloAccess(bufaloId: string, userId: number): Promise<void> {
+  private async validateBufaloAccess(bufaloId: string, userId: string): Promise<void> {
     const propriedadesUsuario = await this.getUserPropriedades(userId);
-    const supabase = this.supabaseService.getAdminClient();
 
-    const { data: bufalo, error: bufaloError } = await supabase
-      .from(this.tableName)
-      .select('id_propriedade')
-      .eq('id_bufalo', bufaloId)
-      .in('id_propriedade', propriedadesUsuario)
-      .single();
+    const bufalo = await this.bufaloRepo.findById(bufaloId);
 
-    if (bufaloError || !bufalo) {
+    if (!bufalo || !bufalo.idPropriedade || !propriedadesUsuario.includes(bufalo.idPropriedade)) {
       throw new NotFoundException(`Búfalo com ID ${bufaloId} não encontrado nas propriedades vinculadas ao usuário.`);
     }
   }
@@ -121,7 +94,7 @@ export class BufaloService implements ISoftDelete {
   /**
    * Valida se o usuário tem acesso a uma propriedade específica.
    */
-  private async validatePropriedadeAccess(id_propriedade: string, userId: number): Promise<void> {
+  private async validatePropriedadeAccess(id_propriedade: string, userId: string): Promise<void> {
     const propriedadesUsuario = await this.getUserPropriedades(userId);
 
     if (!propriedadesUsuario.includes(id_propriedade)) {
@@ -132,18 +105,12 @@ export class BufaloService implements ISoftDelete {
   /**
    * Valida se o grupo existe e se o usuário tem acesso através das propriedades vinculadas.
    */
-  private async validateGrupoAccess(id_grupo: string, userId: number): Promise<void> {
+  private async validateGrupoAccess(id_grupo: string, userId: string): Promise<void> {
     const propriedadesUsuario = await this.getUserPropriedades(userId);
-    const supabase = this.supabaseService.getAdminClient();
 
-    const { data: grupo, error } = await supabase
-      .from('grupo')
-      .select('id_grupo, id_propriedade')
-      .eq('id_grupo', id_grupo)
-      .in('id_propriedade', propriedadesUsuario)
-      .single();
+    const grupo = await this.usuarioPropriedadeRepo.buscarGrupoPorId(id_grupo, propriedadesUsuario);
 
-    if (error || !grupo) {
+    if (!grupo) {
       throw new NotFoundException(`Grupo com ID ${id_grupo} não encontrado ou você não tem acesso a ele.`);
     }
   }
@@ -179,30 +146,20 @@ export class BufaloService implements ISoftDelete {
 
         if (arvoreGenealogica) {
           // Verifica se propriedade participa ABCB
-          const supabase = this.supabaseService.getAdminClient();
-          const { data: propriedade } = await supabase
-            .from('propriedade')
-            .select('participa_abcb')
-            .eq('id_propriedade', createDto.id_propriedade)
-            .single();
+          const propriedade = await this.usuarioPropriedadeRepo.buscarPropriedadePorId(createDto.id_propriedade);
 
-          const categoria = this.categoriaService.processarCategoriaABCB(arvoreGenealogica, propriedade?.participa_abcb || false);
+          const categoria = this.categoriaService.processarCategoriaABCB(arvoreGenealogica, propriedade?.pAbcb || false);
           dadosFinais = { ...dadosFinais, categoria };
         }
       }
 
       // 3. Cria no banco
+      const novoBufalo = await this.bufaloRepo.create(dadosFinais);
 
-      const response = await this.bufaloRepo.create(dadosFinais);
-
-      if (response.error) {
-        throw new InternalServerErrorException(`Falha ao criar búfalo: ${response.error.message}`);
-      }
-
-      this.logger.log(`✅ Búfalo criado: ${response.data.nome || response.data.brinco}`);
-      return formatDateFields(response.data);
+      this.logger.log(`✅ Búfalo criado: ${novoBufalo.nome || novoBufalo.brinco}`);
+      return novoBufalo;
     } catch (error) {
-      this.logger.error('Erro ao criar búfalo:', error);
+      this.loggerService.logError(error, { service: 'BufaloService', method: 'create' });
       throw error;
     }
   }
@@ -245,13 +202,12 @@ export class BufaloService implements ISoftDelete {
     }
 
     // Filtra búfalos não deletados
-    const bufalosAtivos = dadosFiltrados.filter((b) => !b.deleted_at);
+    const bufalosAtivos = dadosFiltrados.filter((b) => !b.deletedAt);
 
     // Atualiza maturidade automaticamente
     await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalosAtivos);
 
-    const formattedData = formatDateFieldsArray(bufalosAtivos);
-    return createPaginatedResponse(formattedData, bufalosAtivos.length, page, limit);
+    return createPaginatedResponse(bufalosAtivos, bufalosAtivos.length, page, limit);
   }
 
   /**
@@ -273,7 +229,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade automaticamente
     await this.maturidadeService.atualizarMaturidadeSeNecessario([bufalo]);
 
-    return formatDateFields(bufalo);
+    return bufalo;
   }
 
   /**
@@ -294,8 +250,8 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -316,8 +272,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -338,8 +293,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -365,8 +319,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -388,8 +341,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -424,8 +376,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -445,7 +396,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario([bufalo]);
 
-    return formatDateFields(bufalo);
+    return bufalo;
   }
 
   /**
@@ -473,14 +424,10 @@ export class BufaloService implements ISoftDelete {
     }
 
     // Atualiza no banco
-    const response = await this.bufaloRepo.update(id, dadosAtualizados);
-
-    if (response.error) {
-      throw new InternalServerErrorException(`Falha ao atualizar búfalo: ${response.error.message}`);
-    }
+    const bufaloAtualizado = await this.bufaloRepo.update(id, dadosAtualizados);
 
     this.logger.log(`✅ Búfalo atualizado: ${id}`);
-    return formatDateFields(response.data);
+    return bufaloAtualizado;
   }
 
   /**
@@ -508,22 +455,12 @@ export class BufaloService implements ISoftDelete {
     }
 
     // Marca como deletado (soft delete)
-    const supabase = this.supabaseService.getAdminClient();
-    const { data, error } = await supabase
-      .from(this.tableName)
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id_bufalo', id)
-      .select()
-      .single();
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao remover búfalo: ${error.message}`);
-    }
+    const bufaloRemovido = await this.bufaloRepo.softDelete(id);
 
     this.logger.log(`Búfalo removido (soft delete): ${id}`);
     return {
       message: 'Búfalo removido com sucesso (soft delete).',
-      data: formatDateFields(data),
+      data: bufaloRemovido,
     };
   }
 
@@ -537,24 +474,19 @@ export class BufaloService implements ISoftDelete {
     await this.validateBufaloAccess(id, userId);
 
     // Verifica se está deletado
-    const supabase = this.supabaseService.getAdminClient();
-    const { data: bufalo } = await supabase.from(this.tableName).select('deleted_at').eq('id_bufalo', id).single();
+    const bufalo = await this.bufaloRepo.findById(id);
 
-    if (!bufalo?.deleted_at) {
+    if (!bufalo || !bufalo.deletedAt) {
       throw new BadRequestException('Este búfalo não está removido.');
     }
 
-    // Restaura (remove deleted_at)
-    const { data, error } = await supabase.from(this.tableName).update({ deleted_at: null }).eq('id_bufalo', id).select().single();
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao restaurar búfalo: ${error.message}`);
-    }
+    // Restaura (remove deletedAt)
+    const bufaloRestaurado = await this.bufaloRepo.restore(id);
 
     this.logger.log(`Búfalo restaurado: ${id}`);
     return {
       message: 'Búfalo restaurado com sucesso.',
-      data: formatDateFields(data),
+      data: bufaloRestaurado,
     };
   }
 
@@ -565,19 +497,9 @@ export class BufaloService implements ISoftDelete {
     const userId = await this.getUserId(user);
     const propriedadesUsuario = await this.getUserPropriedades(userId);
 
-    const supabase = this.supabaseService.getAdminClient();
-    const { data, error } = await supabase
-      .from(this.tableName)
-      .select('*, raca:id_raca(nome, descricao), grupo:id_grupo(nome_grupo)')
-      .in('id_propriedade', propriedadesUsuario)
-      .order('deleted_at', { ascending: false, nullsFirst: true })
-      .order('dt_nascimento', { ascending: false });
+    const bufalos = await this.bufaloRepo.findAllWithDeleted(propriedadesUsuario);
 
-    if (error) {
-      throw new InternalServerErrorException('Erro ao buscar búfalos (incluindo deletados).');
-    }
-
-    return formatDateFieldsArray(data || []);
+    return bufalos;
   }
 
   /**
@@ -592,16 +514,12 @@ export class BufaloService implements ISoftDelete {
     }
 
     // Atualiza em lote
-    const response = await this.bufaloRepo.updateMany(updateGrupoDto.ids_bufalos, { id_grupo: updateGrupoDto.id_novo_grupo });
-
-    if (response.error) {
-      throw new InternalServerErrorException(`Falha ao atualizar grupo: ${response.error.message}`);
-    }
+    const bufalosAtualizados = await this.bufaloRepo.updateMany(updateGrupoDto.ids_bufalos, { idGrupo: updateGrupoDto.id_novo_grupo });
 
     this.logger.log(`✅ Grupo atualizado para ${updateGrupoDto.ids_bufalos.length} búfalos`);
     return {
       message: `Grupo atualizado com sucesso para ${updateGrupoDto.ids_bufalos.length} búfalos.`,
-      updated: response.data,
+      updated: bufalosAtualizados,
       total_processados: updateGrupoDto.ids_bufalos.length,
     };
   }
@@ -615,35 +533,16 @@ export class BufaloService implements ISoftDelete {
     const userId = await this.getUserId(user);
     const propriedadesUsuario = await this.getUserPropriedades(userId);
 
-    const supabase = this.supabaseService.getAdminClient();
-    const { data, error } = await supabase
-      .from(this.tableName)
-      .select(
-        `
-        *,
-        raca:id_raca(nome),
-        grupo:id_grupo(nome_grupo),
-        propriedade:id_propriedade(nome)
-      `,
-      )
-      .eq('categoria', categoria)
-      .in('id_propriedade', propriedadesUsuario)
-      .eq('status', true)
-      .order('dt_nascimento', { ascending: true });
+    const bufalos = await this.bufaloRepo.findByCategoria(categoria, propriedadesUsuario);
 
-    if (error) {
-      this.logger.error(`Erro ao buscar búfalos por categoria ${categoria}:`, error);
-      throw new InternalServerErrorException(`Falha ao buscar búfalos por categoria: ${error.message}`);
-    }
-
-    if (!data || data.length === 0) {
+    if (!bufalos || bufalos.length === 0) {
       this.logger.log(`Nenhum búfalo encontrado com categoria ${categoria}`);
       return [];
     }
 
-    this.logger.log(`✅ Encontrados ${data.length} búfalos com categoria ${categoria}`);
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(data);
-    return formatDateFieldsArray(data);
+    this.logger.log(`✅ Encontrados ${bufalos.length} búfalos com categoria ${categoria}`);
+    await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
+    return bufalos;
   }
 
   /**
@@ -666,8 +565,8 @@ export class BufaloService implements ISoftDelete {
 
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -690,8 +589,8 @@ export class BufaloService implements ISoftDelete {
 
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -714,8 +613,8 @@ export class BufaloService implements ISoftDelete {
 
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -741,8 +640,8 @@ export class BufaloService implements ISoftDelete {
 
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -768,8 +667,8 @@ export class BufaloService implements ISoftDelete {
 
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -792,8 +691,8 @@ export class BufaloService implements ISoftDelete {
 
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -810,8 +709,8 @@ export class BufaloService implements ISoftDelete {
 
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -834,8 +733,8 @@ export class BufaloService implements ISoftDelete {
 
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const formattedData = formatDateFieldsArray(resultado.data);
-    return createPaginatedResponse(formattedData, resultado.total, page, limit);
+    // Drizzle already returns properly typed data
+    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   // ==================== PROCESSAMENTO DE CATEGORIA ABCB ====================
@@ -844,18 +743,15 @@ export class BufaloService implements ISoftDelete {
    * Processa categoria ABCB de um búfalo específico.
    */
   async processarCategoriaABCB(id_bufalo: string) {
-    const supabase = this.supabaseService.getAdminClient();
-
     // Busca dados do búfalo
-    const { data: bufalo, error } = await supabase
-      .from(this.tableName)
-      .select('*, propriedade:id_propriedade(participa_abcb)')
-      .eq('id_bufalo', id_bufalo)
-      .single();
+    const bufalo = await this.bufaloRepo.findById(id_bufalo);
 
-    if (error || !bufalo) {
+    if (!bufalo) {
       throw new NotFoundException(`Búfalo ${id_bufalo} não encontrado.`);
     }
+
+    // Busca informações da propriedade
+    const propriedade = bufalo.idPropriedade ? await this.usuarioPropriedadeRepo.buscarPropriedadePorId(bufalo.idPropriedade) : null;
 
     // Constrói árvore genealógica
     const arvoreGenealogica = await this.genealogiaService.construirArvoreParaCategoria(id_bufalo, 4);
@@ -865,7 +761,7 @@ export class BufaloService implements ISoftDelete {
     }
 
     // Calcula categoria
-    const categoria = this.categoriaService.processarCategoriaABCB(arvoreGenealogica, bufalo.propriedade?.participa_abcb || false);
+    const categoria = this.categoriaService.processarCategoriaABCB(arvoreGenealogica, propriedade?.pAbcb || false);
 
     // Atualiza no banco
     await this.bufaloRepo.update(id_bufalo, { categoria });
@@ -885,18 +781,9 @@ export class BufaloService implements ISoftDelete {
     const userId = await this.getUserId(user);
     await this.validatePropriedadeAccess(id_propriedade, userId);
 
-    const supabase = this.supabaseService.getAdminClient();
-
     // Busca todos os búfalos ativos da propriedade
-    const { data: bufalos, error } = await supabase
-      .from(this.tableName)
-      .select('id_bufalo, nome, brinco, categoria')
-      .eq('id_propriedade', id_propriedade)
-      .eq('status', true);
-
-    if (error) {
-      throw new InternalServerErrorException('Falha ao buscar búfalos da propriedade.');
-    }
+    const resultado = await this.bufaloRepo.findWithFilters({ id_propriedade, status: true }, { offset: 0, limit: 10000 });
+    const bufalos = resultado.data;
 
     const resultados: any[] = [];
     let atualizados = 0;
@@ -904,7 +791,7 @@ export class BufaloService implements ISoftDelete {
 
     for (const bufalo of bufalos || []) {
       try {
-        const resultado = await this.processarCategoriaABCB(bufalo.id_bufalo);
+        const resultado = await this.processarCategoriaABCB(bufalo.idBufalo);
         resultados.push(resultado);
 
         if (resultado.categoria_antiga !== resultado.categoria_nova) {

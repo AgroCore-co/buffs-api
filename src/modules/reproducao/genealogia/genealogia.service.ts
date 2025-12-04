@@ -1,8 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
-import { SupabaseClient } from '@supabase/supabase-js';
 import { GenealogiaNodeDto } from './dto/genealogia-response.dto';
-import { formatDateFields } from '../../../core/utils/date-formatter.utils';
+import { GenealogiaRepositoryDrizzle } from './repositories/genealogia.repository.drizzle';
 
 export interface ArvoreGenealogicaNode {
   id_bufalo: string;
@@ -16,11 +14,7 @@ export interface ArvoreGenealogicaNode {
 
 @Injectable()
 export class GenealogiaService {
-  private supabase: SupabaseClient;
-
-  constructor(private readonly supabaseService: SupabaseService) {
-    this.supabase = this.supabaseService.getAdminClient();
-  }
+  constructor(private readonly genealogiaRepo: GenealogiaRepositoryDrizzle) {}
 
   public async buildTree(id: string, maxDepth: number, user: any): Promise<GenealogiaNodeDto | null> {
     try {
@@ -47,14 +41,11 @@ export class GenealogiaService {
    */
   private async verificarAcessoBufalo(bufaloId: string, user: any): Promise<void> {
     const userId = await this.getUserId(user);
+    const propriedadesUsuario = await this.getUserPropriedades(userId);
 
-    const { data, error } = await this.supabase.from('bufalo').select('*, Propriedade(id_dono)').eq('id_bufalo', bufaloId).single();
+    const temAcesso = await this.genealogiaRepo.verificarPropriedadeUsuario(bufaloId, propriedadesUsuario);
 
-    if (error || !data) {
-      throw new NotFoundException(`Búfalo com ID ${bufaloId} não encontrado.`);
-    }
-
-    if (data.Propriedade?.id_dono !== userId) {
+    if (!temAcesso) {
       throw new NotFoundException(`Búfalo com ID ${bufaloId} não encontrado ou não pertence a este usuário.`);
     }
   }
@@ -62,13 +53,31 @@ export class GenealogiaService {
   /**
    * Obter ID do usuário baseado no email
    */
-  private async getUserId(user: any): Promise<number> {
-    const { data: perfilUsuario, error } = await this.supabase.from('usuario').select('id_usuario').eq('email', user.email).single();
+  private async getUserId(user: any): Promise<string> {
+    const perfilUsuario = await this.genealogiaRepo.buscarUsuarioPorEmail(user.email);
 
-    if (error || !perfilUsuario) {
+    if (!perfilUsuario) {
       throw new NotFoundException('Perfil de usuário não encontrado.');
     }
-    return perfilUsuario.id_usuario;
+    return perfilUsuario.idUsuario;
+  }
+
+  /**
+   * Busca todas as propriedades vinculadas ao usuário
+   */
+  private async getUserPropriedades(userId: string): Promise<string[]> {
+    const propriedadesComoDono = await this.genealogiaRepo.buscarPropriedadesComoDono(userId);
+    const propriedadesComoFuncionario = await this.genealogiaRepo.buscarPropriedadesComoFuncionario(userId);
+
+    const todasPropriedades = [...propriedadesComoDono.map((p) => p.idPropriedade), ...propriedadesComoFuncionario.map((p) => p.idPropriedade)];
+
+    const propriedadesUnicas = Array.from(new Set(todasPropriedades.filter((id): id is string => id !== null)));
+
+    if (propriedadesUnicas.length === 0) {
+      throw new NotFoundException('Usuário não está associado a nenhuma propriedade.');
+    }
+
+    return propriedadesUnicas;
   }
 
   /**
@@ -76,29 +85,19 @@ export class GenealogiaService {
    * Usado pelo módulo de reprodução para visualização
    */
   async construirArvoreCompleta(bufaloId: string, geracoes: number = 4): Promise<any> {
-    const { data: bufalo, error } = await this.supabase
-      .from('bufalo')
-      .select(
-        `
-        id_bufalo, nome, brinco, sexo, dt_nascimento,
-        id_pai, id_mae, id_raca, categoria,
-        Raca!inner(nome)
-      `,
-      )
-      .eq('id_bufalo', bufaloId)
-      .single();
+    const bufalo = await this.genealogiaRepo.findBufaloById(bufaloId);
 
-    if (error || !bufalo) return null;
+    if (!bufalo) return null;
 
     const arvore = {
-      id_bufalo: bufalo.id_bufalo,
+      id_bufalo: bufalo.idBufalo,
       nome: bufalo.nome,
       brinco: bufalo.brinco,
       sexo: bufalo.sexo,
-      dt_nascimento: bufalo.dt_nascimento,
-      id_raca: bufalo.id_raca,
+      dt_nascimento: bufalo.dtNascimento,
+      id_raca: bufalo.idRaca,
       categoria: bufalo.categoria,
-      raca: (bufalo.Raca as any)?.nome,
+      raca: bufalo.raca?.nome,
       pai: null,
       mae: null,
     };
@@ -106,8 +105,8 @@ export class GenealogiaService {
     // Busca pai e mãe recursivamente em PARALELO se ainda não atingiu o limite
     if (geracoes > 1) {
       const [pai, mae] = await Promise.all([
-        bufalo.id_pai ? this.construirArvoreCompleta(bufalo.id_pai, geracoes - 1) : Promise.resolve(null),
-        bufalo.id_mae ? this.construirArvoreCompleta(bufalo.id_mae, geracoes - 1) : Promise.resolve(null),
+        bufalo.idPai ? this.construirArvoreCompleta(bufalo.idPai, geracoes - 1) : Promise.resolve(null),
+        bufalo.idMae ? this.construirArvoreCompleta(bufalo.idMae, geracoes - 1) : Promise.resolve(null),
       ]);
 
       arvore.pai = pai;
@@ -122,17 +121,13 @@ export class GenealogiaService {
    * Usado pelo módulo de rebanho para categorização
    */
   async construirArvoreParaCategoria(bufaloId: string, geracao: number = 1): Promise<ArvoreGenealogicaNode | null> {
-    const { data: bufalo } = await this.supabase
-      .from('bufalo')
-      .select('id_bufalo, id_pai, id_mae, id_raca, categoria')
-      .eq('id_bufalo', bufaloId)
-      .single();
+    const bufalo = await this.genealogiaRepo.findBufaloWithParents(bufaloId);
 
     if (!bufalo) return null;
 
     const arvore: ArvoreGenealogicaNode = {
-      id_bufalo: bufalo.id_bufalo,
-      id_raca: bufalo.id_raca,
+      id_bufalo: bufalo.idBufalo,
+      id_raca: bufalo.idRaca,
       categoria: bufalo.categoria,
       geracao,
       pai: null,
@@ -142,8 +137,8 @@ export class GenealogiaService {
     // Busca pai e mãe se necessário (até 4 gerações) em PARALELO
     if (geracao <= 4) {
       const [pai, mae] = await Promise.all([
-        bufalo.id_pai ? this.construirArvoreParaCategoria(bufalo.id_pai, geracao + 1) : Promise.resolve(null),
-        bufalo.id_mae ? this.construirArvoreParaCategoria(bufalo.id_mae, geracao + 1) : Promise.resolve(null),
+        bufalo.idPai ? this.construirArvoreParaCategoria(bufalo.idPai, geracao + 1) : Promise.resolve(null),
+        bufalo.idMae ? this.construirArvoreParaCategoria(bufalo.idMae, geracao + 1) : Promise.resolve(null),
       ]);
 
       arvore.pai = pai;
@@ -156,10 +151,8 @@ export class GenealogiaService {
   /**
    * Verifica se um búfalo tem descendentes
    */
-  async verificarSeTemDescendentes(bufaloId: number): Promise<boolean> {
-    const { data, error } = await this.supabase.from('bufalo').select('id_bufalo').or(`id_pai.eq.${bufaloId},id_mae.eq.${bufaloId}`).limit(1);
-
-    return !error && data && data.length > 0;
+  async verificarSeTemDescendentes(bufaloId: string): Promise<boolean> {
+    return await this.genealogiaRepo.verificarDescendentes(bufaloId);
   }
 
   /**
@@ -179,6 +172,6 @@ export class GenealogiaService {
       node.mae = this.converterParaGenealogiaNode(arvore.mae);
     }
 
-    return formatDateFields(node);
+    return node;
   }
 }

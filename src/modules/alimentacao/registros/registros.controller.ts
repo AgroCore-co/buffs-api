@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, ParseUUIDPipe, UseGuards, Query } from '@nestjs/common';
 import { RegistrosService } from './registros.service';
 import { CreateRegistroAlimentacaoDto } from './dto/create-registro.dto';
 import { UpdateRegistroAlimentacaoDto } from './dto/update-registro.dto';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { PaginationDto } from '../../../core/dto/pagination.dto';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -40,9 +41,11 @@ export class RegistrosController {
 
   @Get()
   @ApiOperation({ summary: 'Lista registros de alimentação' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
   @ApiResponse({ status: 200, description: 'Lista retornada.' })
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query() paginationDto: PaginationDto) {
+    return this.service.findAll(paginationDto);
   }
 
   @Get('propriedade/:id_propriedade')
@@ -57,10 +60,13 @@ export class RegistrosController {
     
     **Ordenação:** Por data de criação (mais recentes primeiro).`,
   })
+  @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade', type: 'string' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
   @ApiResponse({ status: 200, description: 'Lista de registros da propriedade retornada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) idPropriedade: string) {
-    return this.service.findByPropriedade(idPropriedade);
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) idPropriedade: string, @Query() paginationDto: PaginationDto) {
+    return this.service.findByPropriedade(idPropriedade, paginationDto);
   }
 
   @Get(':id')

@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AlertasService } from '../alerta.service';
-import { ReproducaoRepository } from '../repositories/reproducao.repository';
-import { ProducaoRepository } from '../repositories/producao.repository';
-import { BufaloRepository } from '../repositories/bufalo.repository';
+import { ReproducaoRepositoryDrizzle } from '../repositories/reproducao.repository.drizzle';
+import { ProducaoRepositoryDrizzle } from '../repositories/producao.repository.drizzle';
+import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
 import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, formatarDataBR } from '../utils/alerta.constants';
 
@@ -19,9 +19,9 @@ export class AlertaManejoService {
 
   constructor(
     private readonly alertasService: AlertasService,
-    private readonly reproducaoRepo: ReproducaoRepository,
-    private readonly producaoRepo: ProducaoRepository,
-    private readonly bufaloRepo: BufaloRepository,
+    private readonly reproducaoRepo: ReproducaoRepositoryDrizzle,
+    private readonly producaoRepo: ProducaoRepositoryDrizzle,
+    private readonly bufaloRepo: BufaloRepositoryDrizzle,
   ) {}
 
   /**
@@ -31,9 +31,9 @@ export class AlertaManejoService {
     this.logger.log(`Verificando secagem pendente${id_propriedade ? ` para propriedade ${id_propriedade}` : ''}...`);
 
     try {
-      const { data: reproducoes, error } = await this.reproducaoRepo.buscarGestacoesConfirmadas(id_propriedade);
+      const reproducoes = await this.reproducaoRepo.buscarGestacoesConfirmadas(id_propriedade);
 
-      if (error || !reproducoes || reproducoes.length === 0) {
+      if (!reproducoes || reproducoes.length === 0) {
         this.logger.log('Nenhuma gestação confirmada encontrada.');
         return 0;
       }
@@ -43,9 +43,9 @@ export class AlertaManejoService {
 
       for (const rep of reproducoes) {
         try {
-          if (!rep.dt_evento) continue;
+          if (!rep.dtEvento) continue;
 
-          const dataEvento = new Date(rep.dt_evento);
+          const dataEvento = new Date(rep.dtEvento);
           const dataPrevistaParto = new Date(dataEvento);
           dataPrevistaParto.setDate(dataEvento.getDate() + AlertaConstants.TEMPO_GESTACAO_DIAS);
 
@@ -54,7 +54,7 @@ export class AlertaManejoService {
 
           // Verifica se está dentro do período de secagem
           if (diasAteParto > 0 && diasAteParto <= AlertaConstants.DIAS_SECAGEM_ANTES_PARTO) {
-            const aindaEmOrdenha = await this.verificarSeAindaEmOrdenha(rep.id_bufala);
+            const aindaEmOrdenha = rep.idBufala ? await this.verificarSeAindaEmOrdenha(rep.idBufala) : false;
 
             if (aindaEmOrdenha) {
               const alertaCriado = await this.criarAlertaSecagem(rep, dataPrevistaParto, diasAteParto);
@@ -62,7 +62,7 @@ export class AlertaManejoService {
             }
           }
         } catch (error) {
-          this.logger.error(`Erro ao processar reprodução ${rep.id_reproducao}:`, error);
+          this.logger.error(`Erro ao processar reprodução ${rep.idReproducao}:`, error);
         }
       }
 
@@ -78,7 +78,7 @@ export class AlertaManejoService {
    * Verifica se búfala ainda está em ordenha (tem registros recentes).
    */
   private async verificarSeAindaEmOrdenha(id_bufala: string): Promise<boolean> {
-    const { data: ordenhas } = await this.producaoRepo.buscarOrdenhasRecentes(id_bufala, AlertaConstants.DIAS_VERIFICACAO_ORDENHA_SECAGEM);
+    const ordenhas = await this.producaoRepo.buscarOrdenhasRecentes(id_bufala, AlertaConstants.DIAS_VERIFICACAO_ORDENHA_SECAGEM);
 
     return !!(ordenhas && ordenhas.length > 0);
   } /**
@@ -86,19 +86,19 @@ export class AlertaManejoService {
    */
   private async criarAlertaSecagem(reproducao: any, dataPrevistaParto: Date, diasAteParto: number): Promise<boolean> {
     try {
-      const { data: bufalaData, error } = await this.bufaloRepo.buscarBufaloSimples(reproducao.id_bufala);
-      if (error || !bufalaData) return false;
+      const bufalaData = await this.bufaloRepo.buscarBufaloSimples(reproducao.idBufala);
+      if (!bufalaData) return false;
 
       let grupoNome = 'Não informado';
-      if (bufalaData.id_grupo) {
-        const { data: nomeGrupo } = await this.bufaloRepo.buscarNomeGrupo(bufalaData.id_grupo);
+      if (bufalaData.idGrupo) {
+        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufalaData.idGrupo);
         if (nomeGrupo) grupoNome = nomeGrupo;
       }
 
       let propriedadeNome = 'Não informada';
-      const propriedadeId = reproducao.id_propriedade || bufalaData.id_propriedade;
+      const propriedadeId = reproducao.idPropriedade || bufalaData.idPropriedade;
       if (propriedadeId) {
-        const { data: nomeProp } = await this.bufaloRepo.buscarNomePropriedade(propriedadeId);
+        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeId);
         if (nomeProp) propriedadeNome = nomeProp;
       }
 
@@ -106,7 +106,7 @@ export class AlertaManejoService {
       const prioridade = diasAteParto <= AlertaConstants.DIAS_SECAGEM_JANELA_FINAL ? PrioridadeAlerta.ALTA : PrioridadeAlerta.MEDIA;
 
       const alertaDto: CreateAlertaDto = {
-        animal_id: bufalaData.id_bufalo,
+        animal_id: bufalaData.idBufalo,
         grupo: grupoNome,
         localizacao: propriedadeNome,
         id_propriedade: propriedadeId,
@@ -115,7 +115,7 @@ export class AlertaManejoService {
         data_alerta: new Date().toISOString().split('T')[0],
         texto_ocorrencia_clinica: `Búfala ${bufalaData.nome} está gestante com parto previsto para ${formatarDataBR(dataPrevistaParto)} (daqui a ${diasAteParto} dias) mas continua em ordenha. Necessário realizar secagem para permitir recuperação da glândula mamária e preparação adequada para próxima lactação. Recomenda-se secar entre 45-60 dias antes do parto através da suspensão gradual da ordenha, evitando mastite e garantindo saúde da vaca e do bezerro.`,
         observacao: `Recomenda-se secar 60 dias antes do parto. Suspender ordenha gradualmente para preparação do animal.`,
-        id_evento_origem: reproducao.id_reproducao,
+        id_evento_origem: reproducao.idReproducao,
         tipo_evento_origem: 'SECAGEM_PENDENTE',
       };
 
