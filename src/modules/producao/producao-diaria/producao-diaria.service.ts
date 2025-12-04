@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
-import { CreateEstoqueLeiteDto } from './dto/create-estoque-leite.dto';
-import { UpdateEstoqueLeiteDto } from './dto/update-estoque-leite.dto';
+import { CreateProducaoDiariaDto } from './dto/create-producao-diaria.dto';
+import { UpdateProducaoDiariaDto } from './dto/update-producao-diaria.dto';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
 import { PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse } from '../../../core/utils/pagination.utils';
@@ -15,7 +15,7 @@ export class ProducaoDiariaService implements ISoftDelete {
     private readonly logger: LoggerService,
   ) {}
 
-  async create(dto: CreateEstoqueLeiteDto) {
+  async create(dto: CreateProducaoDiariaDto) {
     this.logger.log('Iniciando criação de registro de estoque de leite', {
       module: 'ProducaoDiariaService',
       method: 'create',
@@ -179,7 +179,7 @@ export class ProducaoDiariaService implements ISoftDelete {
     }
   }
 
-  async update(id_estoque: string, dto: UpdateEstoqueLeiteDto) {
+  async update(id_estoque: string, dto: UpdateProducaoDiariaDto) {
     this.logger.log('Iniciando atualização de registro de estoque', {
       module: 'ProducaoDiariaService',
       method: 'update',

@@ -2,14 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { estoqueleite } from '../../../../database/schema';
-import { CreateEstoqueLeiteDto, UpdateEstoqueLeiteDto } from '../dto';
+import { CreateProducaoDiariaDto, UpdateProducaoDiariaDto } from '../dto';
 import { PaginationDto } from '../../../../core/dto';
 
 @Injectable()
 export class ProducaoDiariaRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  async criar(createDto: CreateEstoqueLeiteDto) {
+  async criar(createDto: CreateProducaoDiariaDto) {
     const data = {
       idPropriedade: createDto.id_propriedade,
       idUsuario: createDto.id_usuario,
@@ -66,7 +66,7 @@ export class ProducaoDiariaRepository {
     return resultado.length > 0 ? resultado[0] : null;
   }
 
-  async atualizar(idEstoque: string, updateDto: UpdateEstoqueLeiteDto) {
+  async atualizar(idEstoque: string, updateDto: UpdateProducaoDiariaDto) {
     const data: Record<string, any> = {
       updatedAt: sql`now()`,
     };

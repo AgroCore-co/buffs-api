@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { industria } from '../../../../database/schema';
-import { CreateIndustriaDto, UpdateIndustriaDto } from '../dto';
+import { CreateLaticiniosDto, UpdateLaticiniosDto } from '../dto';
 
 @Injectable()
 export class LaticiniosRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  async criar(createDto: CreateIndustriaDto) {
+  async criar(createDto: CreateLaticiniosDto) {
     const data = {
       nome: createDto.nome,
       representante: createDto.representante,
@@ -43,7 +43,7 @@ export class LaticiniosRepository {
     return resultado.length > 0 ? resultado[0] : null;
   }
 
-  async atualizar(idIndustria: string, updateDto: UpdateIndustriaDto) {
+  async atualizar(idIndustria: string, updateDto: UpdateLaticiniosDto) {
     const data: Record<string, any> = {
       updatedAt: sql`now()`,
     };

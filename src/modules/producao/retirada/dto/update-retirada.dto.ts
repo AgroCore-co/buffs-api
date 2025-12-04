@@ -1,4 +1,4 @@
 import { PartialType } from '@nestjs/swagger';
-import { CreateColetaDto } from './create-retirada.dto';
+import { CreateRetiradaDto } from './create-retirada.dto';
 
-export class UpdateColetaDto extends PartialType(CreateColetaDto) {}
+export class UpdateRetiradaDto extends PartialType(CreateRetiradaDto) {}

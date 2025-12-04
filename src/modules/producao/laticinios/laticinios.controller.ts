@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiParam, ApiBody } 
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { LaticiniosService } from './laticinios.service';
-import { CreateIndustriaDto, UpdateIndustriaDto } from './dto';
+import { CreateLaticiniosDto, UpdateLaticiniosDto } from './dto';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -17,10 +17,10 @@ export class LaticiniosController {
 
   @Post()
   @ApiOperation({ summary: 'Cria uma nova indústria' })
-  @ApiBody({ type: CreateIndustriaDto })
-  @ApiResponse({ status: 201, description: 'Indústria criada com sucesso.' })
+  @ApiBody({ type: CreateLaticiniosDto })
+  @ApiResponse({ status: 201, description: 'Laticínio cadastrado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
-  create(@Body() dto: CreateIndustriaDto) {
+  create(@Body() dto: CreateLaticiniosDto) {
     this.logger.logApiRequest('POST', '/laticinios', undefined, { module: 'LaticiniosController', method: 'create', nome: dto.nome });
     return this.service.create(dto);
   }
@@ -60,10 +60,10 @@ export class LaticiniosController {
   @Patch(':id')
   @ApiOperation({ summary: 'Atualiza os dados de uma indústria' })
   @ApiParam({ name: 'id', description: 'ID da indústria a ser atualizada', type: 'string' })
-  @ApiBody({ type: UpdateIndustriaDto })
+  @ApiBody({ type: UpdateLaticiniosDto })
   @ApiResponse({ status: 200, description: 'Indústria atualizada com sucesso.' })
   @ApiResponse({ status: 404, description: 'Indústria não encontrada.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateIndustriaDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateLaticiniosDto) {
     this.logger.logApiRequest('PATCH', `/laticinios/${id}`, undefined, { module: 'LaticiniosController', method: 'update', industriaId: id });
     return this.service.update(id, dto);
   }

@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsUUID, IsNotEmpty, IsOptional, IsDateString, IsBoolean, IsString, IsNumber, MaxLength, IsPositive } from 'class-validator';
 import { IsNotFutureDate } from '../../../../core/validators/date.validators';
 
-export class CreateColetaDto {
+export class CreateRetiradaDto {
   @ApiProperty({ example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', description: 'ID da indústria que realizou a coleta' })
   @IsUUID('4', { message: 'O id_industria deve ser um UUID válido' })
   @IsNotEmpty({ message: 'O id_industria é obrigatório' })

@@ -1,7 +1,7 @@
-import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
-import { CreateIndustriaDto } from './dto/create-laticinios.dto';
-import { UpdateIndustriaDto } from './dto/update-laticinios.dto';
+import { CreateLaticiniosDto } from './dto/create-laticinios.dto';
+import { UpdateLaticiniosDto } from './dto/update-laticinios.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces';
 import { LaticiniosRepository } from './repositories';
@@ -13,7 +13,7 @@ export class LaticiniosService implements ISoftDelete {
     private readonly logger: LoggerService,
   ) {}
 
-  async create(dto: CreateIndustriaDto) {
+  async create(dto: CreateLaticiniosDto) {
     this.logger.log('Iniciando criação de indústria', {
       module: 'LaticiniosService',
       method: 'create',
@@ -170,7 +170,7 @@ export class LaticiniosService implements ISoftDelete {
     }
   }
 
-  async update(id_industria: string, dto: UpdateIndustriaDto) {
+  async update(id_industria: string, dto: UpdateLaticiniosDto) {
     this.logger.log('Iniciando atualização de indústria', {
       module: 'LaticiniosService',
       method: 'update',

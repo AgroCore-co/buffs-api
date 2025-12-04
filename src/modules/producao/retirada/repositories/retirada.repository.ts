@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { coleta, industria } from '../../../../database/schema';
-import { CreateColetaDto, UpdateColetaDto } from '../dto';
+import { CreateRetiradaDto, UpdateRetiradaDto } from '../dto';
 
 @Injectable()
 export class RetiradaRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  async criar(createDto: CreateColetaDto, idFuncionario: string) {
+  async criar(createDto: CreateRetiradaDto, idFuncionario: string) {
     const data = {
       idIndustria: createDto.id_industria,
       idPropriedade: createDto.id_propriedade,
@@ -87,7 +87,7 @@ export class RetiradaRepository {
     return resultado.length > 0 ? resultado[0] : null;
   }
 
-  async atualizar(idColeta: string, updateDto: UpdateColetaDto) {
+  async atualizar(idColeta: string, updateDto: UpdateRetiradaDto) {
     const data: Record<string, any> = {
       updatedAt: sql`now()`,
     };

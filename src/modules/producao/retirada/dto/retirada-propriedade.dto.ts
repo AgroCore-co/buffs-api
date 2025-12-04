@@ -55,7 +55,7 @@ export class ColetaPropriedadeMetaDto {
   totalRejeitadas: number;
 }
 
-export class ColetaPropriedadeResponseDto {
+export class RetiradaPropriedadeResponseDto {
   @ApiProperty({ description: 'Lista de coletas com informações da empresa', type: [ColetaPropriedadeItemDto] })
   data: ColetaPropriedadeItemDto[];
 

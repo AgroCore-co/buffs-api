@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsOptional, MaxLength, IsUUID } from 'class-validator';
 
-export class CreateIndustriaDto {
+export class CreateLaticiniosDto {
   @ApiProperty({ description: 'ID da propriedade à qual esta indústria está vinculada (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
   @IsUUID('4', { message: 'O id_propriedade deve ser um UUID válido' })
   @IsNotEmpty({ message: 'O id_propriedade é obrigatório' })

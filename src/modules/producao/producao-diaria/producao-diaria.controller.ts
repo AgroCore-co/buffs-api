@@ -4,7 +4,7 @@ import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { User } from '../../auth/decorators/user.decorator';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { ProducaoDiariaService } from './producao-diaria.service';
-import { CreateEstoqueLeiteDto, UpdateEstoqueLeiteDto } from './dto';
+import { CreateProducaoDiariaDto, UpdateProducaoDiariaDto } from './dto';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
 
 @ApiBearerAuth('JWT-auth')
@@ -33,10 +33,10 @@ export class ProducaoDiariaController {
 **Próximo passo:** Aguardar coleta do laticínio (\`POST /coletas\`)
     `,
   })
-  @ApiBody({ type: CreateEstoqueLeiteDto })
+  @ApiBody({ type: CreateProducaoDiariaDto })
   @ApiResponse({ status: 201, description: 'Estoque consolidado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
-  create(@Body() dto: CreateEstoqueLeiteDto) {
+  create(@Body() dto: CreateProducaoDiariaDto) {
     this.logger.logApiRequest('POST', '/estoque-leite', undefined, {
       module: 'EstoqueLeiteController',
       method: 'create',
@@ -101,10 +101,10 @@ export class ProducaoDiariaController {
     description: 'Corrige dados de estoque (quantidade, data, etc).',
   })
   @ApiParam({ name: 'id', description: 'ID do registro a ser atualizado', type: 'string' })
-  @ApiBody({ type: UpdateEstoqueLeiteDto })
+  @ApiBody({ type: UpdateProducaoDiariaDto })
   @ApiResponse({ status: 200, description: 'Registro atualizado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Registro não encontrado.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateEstoqueLeiteDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProducaoDiariaDto) {
     this.logger.logApiRequest('PATCH', `/producao-diaria/${id}`, undefined, { module: 'ProducaoDiariaController', method: 'update', estoqueId: id });
     return this.service.update(id, dto);
   }

@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
-import { CreateColetaDto } from './dto/create-retirada.dto';
-import { UpdateColetaDto } from './dto/update-retirada.dto';
+import { CreateRetiradaDto } from './dto/create-retirada.dto';
+import { UpdateRetiradaDto } from './dto/update-retirada.dto';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse } from '../../../core/utils/pagination.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
@@ -14,7 +14,7 @@ export class RetiradaService implements ISoftDelete {
     private readonly logger: LoggerService,
   ) {}
 
-  async create(dto: CreateColetaDto, id_funcionario: string) {
+  async create(dto: CreateRetiradaDto, id_funcionario: string) {
     this.logger.log('Iniciando criação de coleta', {
       module: 'RetiradaService',
       method: 'create',
@@ -209,7 +209,7 @@ export class RetiradaService implements ISoftDelete {
     }
   }
 
-  async update(id_coleta: string, dto: UpdateColetaDto) {
+  async update(id_coleta: string, dto: UpdateRetiradaDto) {
     this.logger.log('Iniciando atualização de coleta', {
       module: 'ColetaService',
       method: 'update',

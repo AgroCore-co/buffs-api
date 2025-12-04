@@ -5,7 +5,7 @@ import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { User } from '../../auth/decorators/user.decorator';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { RetiradaService } from './retirada.service';
-import { CreateColetaDto, UpdateColetaDto, ColetaPropriedadeResponseDto } from './dto';
+import { CreateRetiradaDto, UpdateRetiradaDto, RetiradaPropriedadeResponseDto } from './dto';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
 
 @ApiBearerAuth('JWT-auth')
@@ -36,10 +36,10 @@ export class RetiradaController {
 **Efeito:** Diminui quantidade disponível no estoque
     `,
   })
-  @ApiBody({ type: CreateColetaDto })
+  @ApiBody({ type: CreateRetiradaDto })
   @ApiResponse({ status: 201, description: 'Coleta registrada com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos ou estoque insuficiente.' })
-  create(@Body() dto: CreateColetaDto, @User('sub') id_funcionario: string) {
+  create(@Body() dto: CreateRetiradaDto, @User('sub') id_funcionario: string) {
     this.logger.logApiRequest('POST', '/retiradas', undefined, {
       module: 'RetiradaController',
       method: 'create',
@@ -83,12 +83,12 @@ export class RetiradaController {
   @ApiResponse({
     status: 200,
     description: 'Lista de coletas com estatísticas.',
-    type: ColetaPropriedadeResponseDto,
+    type: RetiradaPropriedadeResponseDto,
   })
   findByPropriedade(
     @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
     @Query() paginationDto: PaginationDto,
-  ): Promise<ColetaPropriedadeResponseDto> {
+  ): Promise<RetiradaPropriedadeResponseDto> {
     this.logger.logApiRequest('GET', `/retiradas/propriedade/${id_propriedade}`, undefined, {
       module: 'RetiradaController',
       method: 'findByPropriedade',
@@ -118,10 +118,10 @@ export class RetiradaController {
     description: 'Corrige dados de uma coleta (quantidade, valor, etc).',
   })
   @ApiParam({ name: 'id', description: 'ID da coleta a ser atualizada', type: 'string' })
-  @ApiBody({ type: UpdateColetaDto })
+  @ApiBody({ type: UpdateRetiradaDto })
   @ApiResponse({ status: 200, description: 'Coleta atualizada com sucesso.' })
   @ApiResponse({ status: 404, description: 'Coleta não encontrada.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateColetaDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRetiradaDto) {
     this.logger.logApiRequest('PATCH', `/retiradas/${id}`, undefined, { module: 'RetiradaController', method: 'update', coletaId: id });
     return this.service.update(id, dto);
   }
