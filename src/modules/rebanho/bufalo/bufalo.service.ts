@@ -3,12 +3,14 @@ import { CreateBufaloDto } from './dto/create-bufalo.dto';
 import { UpdateBufaloDto } from './dto/update-bufalo.dto';
 import { UpdateGrupoBufaloDto } from './dto/update-grupo-bufalo.dto';
 import { FiltroBufaloDto } from './dto/filtro-bufalo.dto';
+import { InativarBufaloDto } from './dto/inativar-bufalo.dto';
 import { GenealogiaService } from '../../reproducao/genealogia/genealogia.service';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse, calculatePaginationParams } from '../../../core/utils/pagination.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
 import { CacheService } from '../../../core/cache/cache.service';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { formatDateFields } from '../../../core/utils/date-formatter.utils';
 
 import { BufaloRepositoryDrizzle } from './repositories/bufalo.repository.drizzle';
 import { UsuarioPropriedadeRepositoryDrizzle } from './repositories/usuario-propriedade.repository.drizzle';
@@ -811,5 +813,184 @@ export class BufaloService implements ISoftDelete {
       total: bufalos?.length || 0,
       sucesso: atualizados,
     };
+  }
+
+  // ==================== INATIVAÇÃO E REATIVAÇÃO ====================
+
+  /**
+   * Inativa búfalo com data e motivo específicos.
+   *
+   * **Diferenças entre inativar e soft delete:**
+   * - **Inativar**: Registra formalmente a baixa com data_baixa e motivo_inativo para rastreabilidade e auditoria
+   * - **Soft Delete**: Apenas marca deleted_at para remoção lógica temporária
+   *
+   * **Validações aplicadas:**
+   * - Búfalo deve existir
+   * - Búfalo deve estar ativo (status = true)
+   * - Usuário deve ter acesso ao búfalo através das propriedades vinculadas
+   * - Data de baixa não pode ser anterior à data de nascimento
+   * - Data de baixa não pode estar no futuro (validado no DTO)
+   *
+   * **Casos de uso:**
+   * - Venda para outra propriedade
+   * - Morte natural ou por doença
+   * - Descarte por baixa produtividade
+   * - Abate para consumo
+   * - Transferência definitiva
+   *
+   * **Rastreabilidade:**
+   * Este método garante registro permanente do motivo e data da baixa,
+   * permitindo auditorias futuras e análises de causas de baixa no rebanho.
+   *
+   * @param id ID do búfalo (UUID)
+   * @param inativarDto DTO com data_baixa e motivo_inativo
+   * @param user Usuário autenticado
+   * @returns Objeto com mensagem de sucesso e dados do búfalo inativado
+   * @throws NotFoundException se búfalo não existir ou usuário não tiver acesso
+   * @throws BadRequestException se búfalo já estiver inativo ou validação de data falhar
+   * @throws InternalServerErrorException em caso de erro no banco de dados
+   */
+  async inativar(id: string, inativarDto: InativarBufaloDto, user: any) {
+    this.loggerService.log(`Iniciando inativação do búfalo ${id}`, {
+      module: 'BufaloService',
+      method: 'inativar',
+    });
+
+    try {
+      const userId = await this.getUserId(user);
+
+      // Valida acesso do usuário ao búfalo
+      await this.validateBufaloAccess(id, userId);
+
+      // Busca o búfalo
+      const bufalo = await this.bufaloRepo.findById(id);
+
+      if (!bufalo) {
+        throw new NotFoundException(`Búfalo com ID ${id} não encontrado.`);
+      }
+
+      if (!bufalo.status) {
+        throw new BadRequestException('Este búfalo já está inativo. Use o endpoint de reativação se deseja reativá-lo.');
+      }
+
+      // Valida se a data de baixa não é anterior à data de nascimento
+      if (bufalo.dtNascimento && inativarDto.data_baixa) {
+        const nascimento = new Date(bufalo.dtNascimento);
+        const baixa = new Date(inativarDto.data_baixa);
+
+        if (baixa < nascimento) {
+          throw new BadRequestException(
+            `A data de baixa (${baixa.toLocaleDateString('pt-BR')}) não pode ser anterior à data de nascimento do animal (${nascimento.toLocaleDateString('pt-BR')}).`,
+          );
+        }
+      }
+
+      // Inativa o búfalo usando o repository Drizzle
+      const bufaloInativado = await this.bufaloRepo.inativar(id, inativarDto.data_baixa, inativarDto.motivo_inativo);
+
+      this.loggerService.log(`Búfalo inativado com sucesso: ${id}`, {
+        module: 'BufaloService',
+        method: 'inativar',
+        bufaloNome: bufalo.nome,
+        motivo: inativarDto.motivo_inativo,
+      });
+
+      return {
+        message: 'Búfalo inativado com sucesso.',
+        data: formatDateFields(bufaloInativado),
+      };
+    } catch (error) {
+      this.loggerService.logError(error, {
+        module: 'BufaloService',
+        method: 'inativar',
+        bufaloId: id,
+      });
+
+      // Re-throw exceções conhecidas para o NestJS tratar com status codes corretos
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Erro ao inativar búfalo. Por favor, tente novamente.');
+    }
+  }
+
+  /**
+   * Reativa búfalo inativado (remove data e motivo de baixa).
+   *
+   * **Propósito:**
+   * Permite reverter uma inativação, útil em casos de:
+   * - Erro no registro de inativação
+   * - Animal devolvido após venda
+   * - Retorno de animal emprestado
+   * - Correção de dados administrativos
+   *
+   * **Validações aplicadas:**
+   * - Búfalo deve existir
+   * - Búfalo deve estar inativo (status = false)
+   * - Usuário deve ter acesso ao búfalo através das propriedades vinculadas
+   *
+   * **Ações executadas:**
+   * - Define status como true
+   * - Remove data_baixa (define como null)
+   * - Remove motivo_inativo (define como null)
+   * - Atualiza timestamp de updated_at
+   *
+   * @param id ID do búfalo (UUID)
+   * @param user Usuário autenticado
+   * @returns Objeto com mensagem de sucesso e dados do búfalo reativado
+   * @throws NotFoundException se búfalo não existir ou usuário não tiver acesso
+   * @throws BadRequestException se búfalo já estiver ativo
+   * @throws InternalServerErrorException em caso de erro no banco de dados
+   */
+  async reativar(id: string, user: any) {
+    this.loggerService.log(`Iniciando reativação do búfalo ${id}`, {
+      module: 'BufaloService',
+      method: 'reativar',
+    });
+
+    try {
+      const userId = await this.getUserId(user);
+
+      // Valida acesso do usuário ao búfalo
+      await this.validateBufaloAccess(id, userId);
+
+      // Busca o búfalo
+      const bufalo = await this.bufaloRepo.findById(id);
+
+      if (!bufalo) {
+        throw new NotFoundException(`Búfalo com ID ${id} não encontrado.`);
+      }
+
+      if (bufalo.status) {
+        throw new BadRequestException('Este búfalo já está ativo.');
+      }
+
+      // Reativa o búfalo usando o repository Drizzle
+      const bufaloReativado = await this.bufaloRepo.reativar(id);
+
+      this.loggerService.log(`Búfalo reativado com sucesso: ${id}`, {
+        module: 'BufaloService',
+        method: 'reativar',
+        bufaloNome: bufalo.nome,
+      });
+
+      return {
+        message: 'Búfalo reativado com sucesso.',
+        data: formatDateFields(bufaloReativado),
+      };
+    } catch (error) {
+      this.loggerService.logError(error, {
+        module: 'BufaloService',
+        method: 'reativar',
+        bufaloId: id,
+      });
+
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Erro ao reativar búfalo. Por favor, tente novamente.');
+    }
   }
 }

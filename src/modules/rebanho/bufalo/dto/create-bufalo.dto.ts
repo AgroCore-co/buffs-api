@@ -159,4 +159,70 @@ export class CreateBufaloDto {
   @IsEnum(CategoriaABCB)
   @IsOptional()
   categoria?: CategoriaABCB;
+
+  @ApiProperty({
+    description: 'Origem do animal (ex: Compra, Nascimento na propriedade, Doação, Transferência). Campo livre para registro histórico.',
+    example: 'Nascimento na propriedade',
+    required: false,
+    maxLength: 100,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  origem?: string;
+
+  @ApiProperty({
+    description: 'Número do brinco original do animal (caso tenha sido substituído ou alterado ao longo do tempo).',
+    example: 'BR12345',
+    required: false,
+    maxLength: 10,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(10)
+  brinco_original?: string;
+
+  @ApiProperty({
+    description: 'Número do registro provisório emitido pela Associação Brasileira de Criadores de Búfalos (ABCB).',
+    example: 'RP123456',
+    required: false,
+    maxLength: 50,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  registro_prov?: string;
+
+  @ApiProperty({
+    description: 'Número do registro definitivo emitido pela Associação Brasileira de Criadores de Búfalos (ABCB).',
+    example: 'RD789012',
+    required: false,
+    maxLength: 50,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  registro_def?: string;
+
+  // ==================== REPRODUÇÃO ASSISTIDA ====================
+
+  @ApiProperty({
+    description: 'ID do material genético (sêmen) usado em caso de inseminação artificial. Referencia o búfalo reprodutor doador do sêmen.',
+    example: 'b8c4a72d-1234-4567-8901-234567890123',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  id_pai_semen?: string;
+
+  @ApiProperty({
+    description: 'ID do material genético (óvulo) usado em caso de fertilização in vitro (FIV). Referencia a búfala doadora do óvulo.',
+    example: 'b8c4a72d-1234-4567-8901-234567890123',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  id_mae_ovulo?: string;
 }

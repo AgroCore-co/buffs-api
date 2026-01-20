@@ -550,4 +550,85 @@ export class BufaloRepositoryDrizzle {
       throw new InternalServerErrorException(`Erro ao buscar búfalos por categoria: ${error.message}`);
     }
   }
+
+  /**
+   * Inativa um búfalo com data e motivo específicos.
+   *
+   * **Responsabilidades:**
+   * - Atualizar status para false
+   * - Registrar data_baixa e motivo_inativo
+   * - Atualizar timestamp de updated_at
+   *
+   * **Validações de negócio (feitas no Service):**
+   * - Búfalo existe
+   * - Búfalo está ativo
+   * - Data de baixa não é anterior à data de nascimento
+   *
+   * @param id_bufalo UUID do búfalo
+   * @param data_baixa Data da baixa/inativação
+   * @param motivo_inativo Motivo da inativação
+   * @returns Búfalo inativado com todos os dados atualizados
+   * @throws InternalServerErrorException se houver erro na query
+   */
+  async inativar(id_bufalo: string, data_baixa: Date, motivo_inativo: string) {
+    try {
+      const [bufaloInativado] = await this.databaseService.db
+        .update(bufalo)
+        .set({
+          status: false,
+          dataBaixa: data_baixa.toISOString(),
+          motivoInativo: motivo_inativo,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(bufalo.idBufalo, id_bufalo))
+        .returning();
+
+      if (!bufaloInativado) {
+        throw new InternalServerErrorException('Búfalo não encontrado após atualização');
+      }
+
+      return bufaloInativado;
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao inativar búfalo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Reativa um búfalo inativado (remove data e motivo de baixa).
+   *
+   * **Responsabilidades:**
+   * - Atualizar status para true
+   * - Limpar data_baixa e motivo_inativo
+   * - Atualizar timestamp de updated_at
+   *
+   * **Validações de negócio (feitas no Service):**
+   * - Búfalo existe
+   * - Búfalo está inativo
+   *
+   * @param id_bufalo UUID do búfalo
+   * @returns Búfalo reativado com todos os dados atualizados
+   * @throws InternalServerErrorException se houver erro na query
+   */
+  async reativar(id_bufalo: string) {
+    try {
+      const [bufaloReativado] = await this.databaseService.db
+        .update(bufalo)
+        .set({
+          status: true,
+          dataBaixa: null,
+          motivoInativo: null,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(bufalo.idBufalo, id_bufalo))
+        .returning();
+
+      if (!bufaloReativado) {
+        throw new InternalServerErrorException('Búfalo não encontrado após atualização');
+      }
+
+      return bufaloReativado;
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao reativar búfalo: ${error.message}`);
+    }
+  }
 }
