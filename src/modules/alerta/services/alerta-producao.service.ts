@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AlertasService } from '../alerta.service';
-import { ProducaoRepository } from '../repositories/producao.repository';
-import { BufaloRepository } from '../repositories/bufalo.repository';
+import { ProducaoRepositoryDrizzle } from '../repositories/producao.repository.drizzle';
+import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
 import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, formatarDataBR } from '../utils/alerta.constants';
 
@@ -18,8 +18,8 @@ export class AlertaProducaoService {
 
   constructor(
     private readonly alertasService: AlertasService,
-    private readonly producaoRepo: ProducaoRepository,
-    private readonly bufaloRepo: BufaloRepository,
+    private readonly producaoRepo: ProducaoRepositoryDrizzle,
+    private readonly bufaloRepo: BufaloRepositoryDrizzle,
   ) {}
 
   /**
@@ -33,8 +33,8 @@ export class AlertaProducaoService {
       // Buscar IDs dos búfalos da propriedade se fornecida
       let ids_bufalos: string[] | undefined;
       if (id_propriedade) {
-        const { data: bufalos } = await this.bufaloRepo.buscarIdsBufalosPorPropriedade(id_propriedade);
-        ids_bufalos = bufalos?.map((b: any) => b.id_bufalo);
+        const bufalos = await this.bufaloRepo.buscarIdsBufalosPorPropriedade(id_propriedade);
+        ids_bufalos = bufalos;
         if (!ids_bufalos || ids_bufalos.length === 0) {
           this.logger.log('Nenhum búfalo encontrado na propriedade.');
           return 0;
@@ -43,15 +43,15 @@ export class AlertaProducaoService {
 
       // Buscar produções dos últimos 37 dias (7 recentes + 30 histórico)
       const diasTotal = AlertaConstants.DIAS_ANALISE_PRODUCAO_RECENTE + AlertaConstants.DIAS_ANALISE_PRODUCAO_HISTORICO;
-      const { data: producoes, error } = await this.producaoRepo.buscarProducoesRecentes(diasTotal);
+      const producoes = await this.producaoRepo.buscarProducoesRecentes(diasTotal);
 
-      if (error || !producoes || producoes.length === 0) {
+      if (!producoes || producoes.length === 0) {
         this.logger.log('Nenhuma produção encontrada.');
         return 0;
       }
 
       // Filtrar por propriedade se necessário
-      const producoesValidas = ids_bufalos ? producoes.filter((p: any) => ids_bufalos!.includes(p.id_bufala)) : producoes;
+      const producoesValidas = ids_bufalos ? producoes.filter((p: any) => ids_bufalos!.includes(p.idBufala)) : producoes;
 
       // Agrupar por búfala
       const producoesPorBufala = this.agruparProducoesPorBufala(producoesValidas);
@@ -87,10 +87,10 @@ export class AlertaProducaoService {
     const agrupado: Record<string, any[]> = {};
 
     for (const prod of producoes) {
-      if (!agrupado[prod.id_bufala]) {
-        agrupado[prod.id_bufala] = [];
+      if (!agrupado[prod.idBufala]) {
+        agrupado[prod.idBufala] = [];
       }
-      agrupado[prod.id_bufala].push(prod);
+      agrupado[prod.idBufala].push(prod);
     }
 
     return agrupado;
@@ -115,8 +115,8 @@ export class AlertaProducaoService {
     limite37dias.setDate(hoje.getDate() - AlertaConstants.DIAS_ANALISE_PRODUCAO_RECENTE - AlertaConstants.DIAS_ANALISE_PRODUCAO_HISTORICO);
 
     // Separar produções em períodos
-    const producoesRecentes = producoes.filter((p) => new Date(p.dt_ordenha) >= limite7dias);
-    const producoesHistoricas = producoes.filter((p) => new Date(p.dt_ordenha) < limite7dias && new Date(p.dt_ordenha) >= limite37dias);
+    const producoesRecentes = producoes.filter((p) => new Date(p.dtOrdenha) >= limite7dias);
+    const producoesHistoricas = producoes.filter((p) => new Date(p.dtOrdenha) < limite7dias && new Date(p.dtOrdenha) >= limite37dias);
 
     // Verificar quantidade mínima de registros
     if (
@@ -157,19 +157,19 @@ export class AlertaProducaoService {
     id_propriedade?: string,
   ): Promise<boolean> {
     try {
-      const { data: bufalaData, error } = await this.bufaloRepo.buscarBufaloSimples(id_bufala);
-      if (error || !bufalaData) return false;
+      const bufalaData = await this.bufaloRepo.buscarBufaloSimples(id_bufala);
+      if (!bufalaData) return false;
 
       let grupoNome = 'Não informado';
-      if (bufalaData.id_grupo) {
-        const { data: nomeGrupo } = await this.bufaloRepo.buscarNomeGrupo(bufalaData.id_grupo);
+      if (bufalaData.idGrupo) {
+        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufalaData.idGrupo);
         if (nomeGrupo) grupoNome = nomeGrupo;
       }
 
       let propriedadeNome = 'Não informada';
-      const propriedadeIdFinal = id_propriedade || bufalaData.id_propriedade;
+      const propriedadeIdFinal = id_propriedade || bufalaData.idPropriedade;
       if (propriedadeIdFinal) {
-        const { data: nomeProp } = await this.bufaloRepo.buscarNomePropriedade(propriedadeIdFinal);
+        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeIdFinal);
         if (nomeProp) propriedadeNome = nomeProp;
       }
 
@@ -177,7 +177,7 @@ export class AlertaProducaoService {
       const prioridade = analise.percentualQueda >= AlertaConstants.QUEDA_PRODUCAO_CRITICA ? PrioridadeAlerta.ALTA : PrioridadeAlerta.MEDIA;
 
       const alertaDto: CreateAlertaDto = {
-        animal_id: bufalaData.id_bufalo,
+        animal_id: bufalaData.idBufalo,
         grupo: grupoNome,
         localizacao: propriedadeNome,
         id_propriedade: propriedadeIdFinal,

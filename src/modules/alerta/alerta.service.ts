@@ -1,12 +1,11 @@
 import { Injectable, InternalServerErrorException, NotFoundException, Logger } from '@nestjs/common';
-import { SupabaseService } from 'src/core/supabase/supabase.service';
 import { GeminiService } from 'src/core/gemini/gemini.service';
 import { CreateAlertaDto } from './dto/create-alerta.dto';
-import { SupabaseClient } from '@supabase/supabase-js';
 import { PaginationDto } from '../../core/dto/pagination.dto';
 import { PaginatedResponse } from '../../core/dto/pagination.dto';
 import { createPaginatedResponse, calculatePaginationParams } from '../../core/utils/pagination.utils';
 import { formatDateFields, formatDateFieldsArray } from '../../core/utils/date-formatter.utils';
+import { AlertaRepositoryDrizzle } from './repositories/alerta.repository.drizzle';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -47,14 +46,11 @@ import { formatDateFields, formatDateFieldsArray } from '../../core/utils/date-f
 @Injectable()
 export class AlertasService {
   private readonly logger = new Logger(AlertasService.name);
-  private supabase: SupabaseClient;
 
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly alertaRepo: AlertaRepositoryDrizzle,
     private readonly geminiService: GeminiService,
-  ) {
-    this.supabase = this.supabaseService.getAdminClient();
-  }
+  ) {}
 
   /**
    * Cria um novo alerta no banco de dados.
@@ -86,11 +82,11 @@ export class AlertasService {
       // Remove texto_ocorrencia_clinica antes de inserir (campo não existe no banco)
       const { texto_ocorrencia_clinica, ...alertaParaInserir } = createAlertaDto;
 
-      const { data, error } = await this.supabase.from('alertas').insert(alertaParaInserir).select().single();
+      const { data, error } = await this.alertaRepo.create(alertaParaInserir);
 
-      if (error) {
-        console.error('Erro ao criar alerta:', error.message);
-        throw new InternalServerErrorException(`Falha ao criar o alerta: ${error.message}`);
+      if (error || !data) {
+        console.error('Erro ao criar alerta:', error?.message);
+        throw new InternalServerErrorException(`Falha ao criar o alerta: ${error?.message}`);
       }
       return formatDateFields(data, ['data_alerta']);
     } catch (error) {
@@ -180,14 +176,12 @@ export class AlertasService {
       // Verifica se já existe um alerta com os mesmos critérios
       if (createAlertaDto.tipo_evento_origem && createAlertaDto.id_evento_origem) {
         // Busca todos os alertas existentes (pode haver duplicatas)
-        const { data: existingAlerts, error: searchError } = await this.supabase
-          .from('alertas')
-          .select('id_alerta, visto, created_at')
-          .eq('tipo_evento_origem', createAlertaDto.tipo_evento_origem)
-          .eq('id_evento_origem', createAlertaDto.id_evento_origem)
-          .eq('animal_id', createAlertaDto.animal_id)
-          .eq('nicho', createAlertaDto.nicho)
-          .order('created_at', { ascending: false });
+        const { data: existingAlerts, error: searchError } = await this.alertaRepo.findExisting(
+          createAlertaDto.tipo_evento_origem,
+          createAlertaDto.id_evento_origem,
+          createAlertaDto.animal_id,
+          createAlertaDto.nicho,
+        );
 
         if (searchError) {
           console.error('Erro ao verificar alerta existente:', searchError.message);
@@ -210,16 +204,14 @@ export class AlertasService {
             // Para tipos recorrentes (FEMEA_VAZIA, COBERTURA_SEM_DIAGNOSTICO),
             // verifica se já existe um alerta NÃO VISTO na mesma data
             if (createAlertaDto.tipo_evento_origem === 'FEMEA_VAZIA' || createAlertaDto.tipo_evento_origem === 'COBERTURA_SEM_DIAGNOSTICO') {
-              const { data: alertaMesmaData } = await this.supabase
-                .from('alertas')
-                .select('id_alerta')
-                .eq('tipo_evento_origem', createAlertaDto.tipo_evento_origem)
-                .eq('id_evento_origem', createAlertaDto.id_evento_origem)
-                .eq('animal_id', createAlertaDto.animal_id)
-                .eq('data_alerta', createAlertaDto.data_alerta)
-                .eq('visto', false)
-                .limit(1)
-                .single();
+              // data_alerta é sempre string no DTO (IsDateString)
+              const dataAlerta = createAlertaDto.data_alerta.split('T')[0];
+              const { data: alertaMesmaData } = await this.alertaRepo.findRecorrenteSameDate(
+                createAlertaDto.tipo_evento_origem,
+                createAlertaDto.id_evento_origem,
+                createAlertaDto.animal_id,
+                dataAlerta,
+              );
 
               if (alertaMesmaData) {
                 // console.log(`Alerta recorrente já existe para hoje e não foi visto. Ignorando.`);
@@ -279,18 +271,18 @@ export class AlertasService {
       const { page = 1, limit = 10 } = paginationDto;
       const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
-      let countQuery = this.supabase.from('alertas').select('*', { count: 'exact', head: true });
-      let dataQuery = this.supabase.from('alertas').select('*');
+      // Preparar filtros
+      const filters: any = {
+        limit: limitValue,
+        offset,
+      };
 
-      // Aplicar os mesmos filtros em ambas as queries
       if (tipo) {
-        countQuery = countQuery.eq('nicho', tipo);
-        dataQuery = dataQuery.eq('nicho', tipo);
+        filters.nicho = tipo;
       }
 
       if (!incluirVistos) {
-        countQuery = countQuery.eq('visto', false);
-        dataQuery = dataQuery.eq('visto', false);
+        filters.visto = false;
       }
 
       if (antecendencia) {
@@ -298,24 +290,18 @@ export class AlertasService {
         const dataLimite = new Date();
         dataLimite.setDate(hoje.getDate() + Number(antecendencia));
 
-        const hojeStr = hoje.toISOString().split('T')[0];
-        const dataLimiteStr = dataLimite.toISOString().split('T')[0];
-
-        countQuery = countQuery.gte('data_alerta', hojeStr).lte('data_alerta', dataLimiteStr);
-        dataQuery = dataQuery.gte('data_alerta', hojeStr).lte('data_alerta', dataLimiteStr);
+        filters.dataInicio = hoje.toISOString().split('T')[0];
+        filters.dataFim = dataLimite.toISOString().split('T')[0];
       }
 
       // Contar total
-      const { count, error: countError } = await countQuery;
+      const { count, error: countError } = await this.alertaRepo.countAll(filters);
       if (countError) {
         throw new InternalServerErrorException(`Falha ao contar alertas: ${countError.message}`);
       }
 
-      // Buscar dados com paginação - sem relacionamentos para evitar erros de FK
-      const { data, error } = await dataQuery
-        .order('data_alerta', { ascending: true })
-        .order('prioridade', { ascending: false })
-        .range(offset, offset + limitValue - 1);
+      // Buscar dados com paginação
+      const { data, error } = await this.alertaRepo.findAll(filters);
 
       if (error) {
         throw new InternalServerErrorException(`Falha ao buscar os alertas: ${error.message}`);
@@ -388,38 +374,33 @@ export class AlertasService {
       const { page = 1, limit = 10 } = paginationDto;
       const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
-      let countQuery = this.supabase.from('alertas').select('*', { count: 'exact', head: true }).eq('id_propriedade', id_propriedade);
-
-      let dataQuery = this.supabase.from('alertas').select('*').eq('id_propriedade', id_propriedade);
+      // Preparar filtros
+      const filters: any = {
+        idPropriedade: id_propriedade,
+        limit: limitValue,
+        offset,
+      };
 
       if (!incluirVistos) {
-        countQuery = countQuery.eq('visto', false);
-        dataQuery = dataQuery.eq('visto', false);
+        filters.visto = false;
       }
 
-      // Filtro por nichos
       if (nichos && nichos.length > 0) {
-        countQuery = countQuery.in('nicho', nichos);
-        dataQuery = dataQuery.in('nicho', nichos);
+        filters.nichos = nichos;
       }
 
-      // Filtro por prioridade
       if (prioridade) {
-        countQuery = countQuery.eq('prioridade', prioridade);
-        dataQuery = dataQuery.eq('prioridade', prioridade);
+        filters.prioridade = prioridade;
       }
 
       // Contar total
-      const { count, error: countError } = await countQuery;
+      const { count, error: countError } = await this.alertaRepo.countByPropriedade(filters);
       if (countError) {
         throw new InternalServerErrorException(`Falha ao contar alertas da propriedade: ${countError.message}`);
       }
 
       // Buscar dados com paginação
-      const { data, error } = await dataQuery
-        .order('data_alerta', { ascending: true })
-        .order('prioridade', { ascending: false })
-        .range(offset, offset + limitValue - 1);
+      const { data, error } = await this.alertaRepo.findByPropriedade(filters);
 
       if (error) {
         throw new InternalServerErrorException(`Falha ao buscar alertas da propriedade: ${error.message}`);
@@ -438,7 +419,7 @@ export class AlertasService {
    * @returns O objeto do alerta correspondente.
    */
   async findOne(id: string) {
-    const { data, error } = await this.supabase.from('alertas').select('*').eq('id_alerta', id).single();
+    const { data, error } = await this.alertaRepo.findOne(id);
 
     if (error) {
       // Erro específico para quando o registro não é encontrado
@@ -447,7 +428,7 @@ export class AlertasService {
       }
       throw new InternalServerErrorException(error.message);
     }
-    return formatDateFields(data, ['data_alerta']);
+    return formatDateFields(data!, ['data_alerta']);
   }
 
   /**
@@ -482,12 +463,7 @@ export class AlertasService {
     // Garante que o alerta existe antes de atualizar
     await this.findOne(id);
 
-    const { data, error } = await this.supabase
-      .from('alertas')
-      .update({ visto: visto, updated_at: new Date().toISOString() })
-      .eq('id_alerta', id)
-      .select()
-      .single();
+    const { data, error } = await this.alertaRepo.update(id, { visto });
 
     if (error) {
       // Pode acontecer se o item for deletado entre a verificação e a atualização
@@ -496,7 +472,7 @@ export class AlertasService {
       }
       throw new InternalServerErrorException(`Falha ao atualizar o status do alerta: ${error.message}`);
     }
-    return formatDateFields(data, ['data_alerta']);
+    return formatDateFields(data!, ['data_alerta']);
   }
 
   /**
@@ -507,7 +483,7 @@ export class AlertasService {
     // Garante que o alerta existe antes de deletar
     await this.findOne(id);
 
-    const { error } = await this.supabase.from('alertas').delete().eq('id_alerta', id);
+    const { error } = await this.alertaRepo.remove(id);
 
     if (error) {
       throw new InternalServerErrorException(`Falha ao remover o alerta: ${error.message}`);

@@ -1,56 +1,54 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateLoteDto } from './dto/create-lote.dto';
 import { UpdateLoteDto } from './dto/update-lote.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
+import { LoteRepositoryDrizzle } from './repositories';
+import { PropriedadeRepositoryDrizzle } from '../propriedade/repositories';
 
 @Injectable()
 export class LoteService {
-  private supabase: SupabaseClient;
-
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly loteRepo: LoteRepositoryDrizzle,
+    private readonly propriedadeRepo: PropriedadeRepositoryDrizzle,
     private readonly logger: LoggerService,
-  ) {
-    this.supabase = this.supabaseService.getAdminClient();
-  }
+  ) {}
 
   private async getUserId(user: any): Promise<string> {
-    const { data: perfilUsuario, error } = await this.supabase.from('usuario').select('id_usuario').eq('email', user.email).single();
+    const perfilUsuario = await this.propriedadeRepo.buscarUsuarioPorEmail(user.email);
 
-    if (error || !perfilUsuario) {
+    if (!perfilUsuario) {
       throw new NotFoundException('Perfil de usuário não encontrado.');
     }
-    return perfilUsuario.id_usuario;
+    return perfilUsuario.idUsuario;
   }
 
-  // Com geo_mapa em JSON no banco, não é necessário parse/stringify
+  /**
+   * Parse do campo geo_mapa (geometry/PostGIS)
+   * Converte string GeoJSON para objeto JavaScript para o frontend usar com mapas
+   */
   private parseGeoMapa(lote: any): any {
+    if (lote && lote.geoMapa && typeof lote.geoMapa === 'string') {
+      try {
+        lote.geoMapa = JSON.parse(lote.geoMapa);
+      } catch (error) {
+        // Se não for JSON válido, mantém como string (pode ser WKT)
+        this.logger.warn(`Formato geo_mapa não é JSON válido para lote ${lote.idLote}`);
+      }
+    }
     return lote;
   }
 
   private async validateOwnership(propriedadeId: string, userId: string) {
     // Verifica se o usuário é dono da propriedade
-    const { data: propriedadeComoDono } = await this.supabase
-      .from('propriedade')
-      .select('id_propriedade')
-      .eq('id_propriedade', propriedadeId)
-      .eq('id_dono', userId)
-      .single();
+    const propriedadeComoDono = await this.propriedadeRepo.buscarPropriedadeComoDono(propriedadeId, userId);
 
     if (propriedadeComoDono) {
       return; // É dono, pode prosseguir
     }
 
     // Se não é dono, verifica se é funcionário vinculado à propriedade
-    const { data: propriedadeComoFuncionario } = await this.supabase
-      .from('usuariopropriedade')
-      .select('id_propriedade')
-      .eq('id_propriedade', propriedadeId)
-      .eq('id_usuario', userId)
-      .single();
+    const propriedadeComoFuncionario = await this.propriedadeRepo.buscarVinculoFuncionario(propriedadeId, userId);
 
     if (!propriedadeComoFuncionario) {
       throw new NotFoundException(`Propriedade com ID ${propriedadeId} não encontrada ou não pertence a este usuário.`);
@@ -63,13 +61,13 @@ export class LoteService {
   private async validateGrupoOwnership(grupoId: string, propriedadeId: string) {
     if (!grupoId) return; // Se não há grupo, não precisa validar
 
-    const { data: grupo, error } = await this.supabase.from('grupo').select('id_grupo, id_propriedade').eq('id_grupo', grupoId).single();
+    const grupo = await this.loteRepo.buscarGrupoPorId(grupoId);
 
-    if (error || !grupo) {
+    if (!grupo) {
       throw new NotFoundException(`Grupo com ID ${grupoId} não encontrado.`);
     }
 
-    if (grupo.id_propriedade !== propriedadeId) {
+    if (grupo.idPropriedade !== propriedadeId) {
       throw new BadRequestException(`O grupo selecionado não pertence à mesma propriedade do lote.`);
     }
   }
@@ -83,131 +81,80 @@ export class LoteService {
       await this.validateGrupoOwnership(createLoteDto.id_grupo, createLoteDto.id_propriedade);
     }
 
-    // Inserção direta; geo_mapa já é objeto JSON
-    const loteToInsert = {
-      ...createLoteDto,
-    };
+    // geo_mapa é string (GeoJSON stringificado), será convertido para objeto no parseGeoMapa
+    const novoLote = await this.loteRepo.criar(createLoteDto);
 
-    const { data, error } = await this.supabase.from('lote').insert(loteToInsert).select().single();
-
-    if (error) {
-      if (error.code === '23503') {
-        // Erro de chave estrangeira
-        throw new BadRequestException(`A propriedade com ID ${createLoteDto.id_propriedade} não existe.`);
-      }
-      throw new InternalServerErrorException('Falha ao criar o lote.');
-    }
-    // Parseia o retorno para o cliente
-    return formatDateFields(this.parseGeoMapa(data));
+    // Parseia o retorno para o cliente (converte string para objeto)
+    return formatDateFields(this.parseGeoMapa(novoLote));
   }
 
   async findAllByPropriedade(id_propriedade: string, user: any) {
     const userId = await this.getUserId(user);
     await this.validateOwnership(id_propriedade, userId);
 
-    const { data, error } = await this.supabase
-      .from('lote')
-      .select(
-        `
-        *,
-        grupo:id_grupo(id_grupo, nome_grupo, color)
-      `,
-      )
-      .eq('id_propriedade', id_propriedade)
-      .order('created_at', { ascending: false });
+    const lotes = await this.loteRepo.buscarPorPropriedade(id_propriedade);
 
-    if (error) {
-      throw new InternalServerErrorException('Falha ao buscar os lotes da propriedade.');
-    }
-    // Parseia cada lote da lista
-    return formatDateFieldsArray(data.map(this.parseGeoMapa));
+    // Parseia cada lote da lista (geo_mapa já vem como objeto do Drizzle)
+    return formatDateFieldsArray(lotes.map(this.parseGeoMapa));
   }
 
   async findOne(id: string, user: any) {
     const userId = await this.getUserId(user);
 
-    const { data, error } = await this.supabase
-      .from('lote')
-      .select(
-        `
-        *,
-        propriedade:id_propriedade(id_dono),
-        grupo:id_grupo(id_grupo, nome_grupo, color)
-      `,
-      )
-      .eq('id_lote', id)
-      .single();
+    const lote = await this.loteRepo.buscarPorId(id);
 
-    if (error || !data) {
+    if (!lote) {
       throw new NotFoundException(`Lote com ID ${id} não encontrado.`);
     }
 
     // Verifica se o usuário é dono da propriedade
-    if (data.propriedade?.id_dono === userId) {
-      delete (data as any).propriedade;
-      return this.parseGeoMapa(data);
+    if (lote.propriedade && !Array.isArray(lote.propriedade) && lote.propriedade.idDono === userId) {
+      delete (lote as any).propriedade;
+      return formatDateFields(this.parseGeoMapa(lote));
     }
 
     // Se não é dono, verifica se é funcionário
-    const { data: funcionarioData } = await this.supabase
-      .from('usuariopropriedade')
-      .select('id_propriedade')
-      .eq('id_propriedade', data.id_propriedade)
-      .eq('id_usuario', userId)
-      .single();
+    if (!lote.idPropriedade) {
+      throw new NotFoundException(`Lote com ID ${id} não encontrado ou não pertence a este usuário.`);
+    }
+
+    const funcionarioData = await this.propriedadeRepo.buscarVinculoFuncionario(lote.idPropriedade, userId);
 
     if (!funcionarioData) {
       throw new NotFoundException(`Lote com ID ${id} não encontrado ou não pertence a este usuário.`);
     }
 
-    delete (data as any).propriedade;
-    return formatDateFields(this.parseGeoMapa(data));
+    delete (lote as any).propriedade;
+    return formatDateFields(this.parseGeoMapa(lote));
   }
 
   async update(id: string, updateLoteDto: UpdateLoteDto, user: any) {
     const loteExistente = await this.findOne(id, user); // Valida a posse do lote que será atualizado
 
-    // Atualização direta; geo_mapa já é objeto JSON
-    const loteToUpdate: any = { ...updateLoteDto };
-
     // Determina a propriedade a ser validada (nova ou existente)
-    const propriedadeParaValidar = loteToUpdate.id_propriedade || loteExistente.id_propriedade;
+    const propriedadeParaValidar = updateLoteDto.id_propriedade || loteExistente.idPropriedade;
 
     // Se a propriedade estiver sendo alterada, valida a posse da nova propriedade
-    if (loteToUpdate.id_propriedade) {
+    if (updateLoteDto.id_propriedade) {
       const userId = await this.getUserId(user);
-      await this.validateOwnership(loteToUpdate.id_propriedade, userId);
+      await this.validateOwnership(updateLoteDto.id_propriedade, userId);
     }
 
     // Valida se o grupo pertence à mesma propriedade (se informado)
-    if (loteToUpdate.id_grupo !== undefined) {
-      await this.validateGrupoOwnership(loteToUpdate.id_grupo, propriedadeParaValidar);
+    if (updateLoteDto.id_grupo !== undefined) {
+      await this.validateGrupoOwnership(updateLoteDto.id_grupo, propriedadeParaValidar);
     }
 
-    const { data, error } = await this.supabase
-      .from('lote')
-      .update({
-        ...loteToUpdate,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id_lote', id)
-      .select()
-      .single();
+    // geo_mapa é atualizado como string (geometry/PostGIS), será convertido para objeto no parseGeoMapa
+    const loteAtualizado = await this.loteRepo.atualizar(id, updateLoteDto);
 
-    if (error) {
-      throw new InternalServerErrorException('Falha ao atualizar o lote.');
-    }
-    return formatDateFields(this.parseGeoMapa(data));
+    return formatDateFields(this.parseGeoMapa(loteAtualizado));
   }
 
   async remove(id: string, user: any) {
     await this.findOne(id, user); // Valida posse
 
-    const { error } = await this.supabase.from('lote').delete().eq('id_lote', id);
-
-    if (error) {
-      throw new InternalServerErrorException('Falha ao deletar o lote.');
-    }
+    await this.loteRepo.remover(id);
     return;
   }
 }

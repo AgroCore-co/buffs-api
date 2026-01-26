@@ -1,6 +1,4 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateGrupoDto } from './dto/create-grupo.dto';
 import { UpdateGrupoDto } from './dto/update-grupo.dto';
@@ -9,41 +7,28 @@ import { PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse, calculatePaginationParams } from '../../../core/utils/pagination.utils';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces';
+import { GrupoRepositoryDrizzle } from './repositories/grupo.repository.drizzle';
 
 @Injectable()
 export class GrupoService implements ISoftDelete {
-  private supabase: SupabaseClient;
-
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly grupoRepository: GrupoRepositoryDrizzle,
     private readonly logger: LoggerService,
-  ) {
-    this.supabase = this.supabaseService.getAdminClient();
-  }
+  ) {}
 
   async create(createGrupoDto: CreateGrupoDto) {
     this.logger.log('Iniciando criação de grupo', { module: 'GrupoService', method: 'create' });
 
-    const { data, error } = await this.supabase.from('grupo').insert(createGrupoDto).select().single();
+    const data = await this.grupoRepository.create(createGrupoDto);
 
-    if (error) {
-      this.logger.logError(error, { module: 'GrupoService', method: 'create' });
-      throw new InternalServerErrorException('Falha ao criar o grupo.');
-    }
-
-    this.logger.log('Grupo criado com sucesso', { module: 'GrupoService', method: 'create', grupoId: data.id_grupo });
+    this.logger.log('Grupo criado com sucesso', { module: 'GrupoService', method: 'create', grupoId: data.idGrupo });
     return formatDateFields(data);
   }
 
   async findAll() {
     this.logger.log('Iniciando busca de todos os grupos', { module: 'GrupoService', method: 'findAll' });
 
-    const { data, error } = await this.supabase.from('grupo').select('*').is('deleted_at', null).order('nome_grupo', { ascending: true });
-
-    if (error) {
-      this.logger.logError(error, { module: 'GrupoService', method: 'findAll' });
-      throw new InternalServerErrorException('Falha ao buscar os grupos.');
-    }
+    const data = await this.grupoRepository.findAll();
 
     this.logger.log(`Busca de grupos concluída - ${data.length} grupos encontrados`, { module: 'GrupoService', method: 'findAll' });
     return formatDateFieldsArray(data);
@@ -57,59 +42,27 @@ export class GrupoService implements ISoftDelete {
     });
 
     const { page = 1, limit = 10 } = paginationDto;
-    const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
+    const { limit: limitValue } = calculatePaginationParams(page, limit);
 
-    const { count, error: countError } = await this.supabase
-      .from('grupo')
-      .select('*', { count: 'exact', head: true })
-      .eq('id_propriedade', id_propriedade)
-      .is('deleted_at', null);
+    const { registros, total } = await this.grupoRepository.findByPropriedade(id_propriedade, page, limitValue);
 
-    if (countError) {
-      this.logger.logError(countError, {
-        module: 'GrupoService',
-        method: 'findByPropriedade',
-      });
-      throw new InternalServerErrorException(`Falha ao contar grupos da propriedade: ${countError.message}`);
-    }
-
-    const { data, error } = await this.supabase
-      .from('grupo')
-      .select('*, id_propriedade:propriedade!inner(nome)')
-      .eq('id_propriedade', id_propriedade)
-      .is('deleted_at', null)
-      .order('nome_grupo', { ascending: true })
-      .range(offset, offset + limitValue - 1);
-
-    if (error) {
-      this.logger.logError(error, {
-        module: 'GrupoService',
-        method: 'findByPropriedade',
-      });
-      throw new InternalServerErrorException(`Falha ao buscar grupos da propriedade: ${error.message}`);
-    }
-
-    this.logger.log(`Busca concluída - ${data.length} grupos encontrados (página ${page})`, {
+    this.logger.log(`Busca concluída - ${registros.length} grupos encontrados (página ${page})`, {
       module: 'GrupoService',
       method: 'findByPropriedade',
     });
 
-    const formattedData = formatDateFieldsArray(data);
-    return createPaginatedResponse(formattedData, count || 0, page, limitValue);
+    const formattedData = formatDateFieldsArray(registros);
+    return createPaginatedResponse(formattedData, total, page, limitValue);
   }
 
   async findOne(id: string) {
     this.logger.log('Iniciando busca de grupo por ID', { module: 'GrupoService', method: 'findOne', grupoId: id });
 
-    const { data, error } = await this.supabase.from('grupo').select('*').eq('id_grupo', id).is('deleted_at', null).single();
+    const data = await this.grupoRepository.findById(id);
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        this.logger.warn('Grupo não encontrado', { module: 'GrupoService', method: 'findOne', grupoId: id });
-        throw new NotFoundException('Grupo não encontrado.');
-      }
-      this.logger.logError(error, { module: 'GrupoService', method: 'findOne', grupoId: id });
-      throw new InternalServerErrorException('Falha ao buscar o grupo.');
+    if (!data) {
+      this.logger.warn('Grupo não encontrado', { module: 'GrupoService', method: 'findOne', grupoId: id });
+      throw new NotFoundException('Grupo não encontrado.');
     }
 
     this.logger.log('Grupo encontrado com sucesso', { module: 'GrupoService', method: 'findOne', grupoId: id });
@@ -122,12 +75,7 @@ export class GrupoService implements ISoftDelete {
     // Primeiro verifica se o grupo existe
     await this.findOne(id);
 
-    const { data, error } = await this.supabase.from('grupo').update(updateGrupoDto).eq('id_grupo', id).select().single();
-
-    if (error) {
-      this.logger.logError(error, { module: 'GrupoService', method: 'update', grupoId: id });
-      throw new InternalServerErrorException('Falha ao atualizar o grupo.');
-    }
+    const data = await this.grupoRepository.update(id, updateGrupoDto);
 
     this.logger.log('Grupo atualizado com sucesso', { module: 'GrupoService', method: 'update', grupoId: id });
     return formatDateFields(data);
@@ -142,12 +90,7 @@ export class GrupoService implements ISoftDelete {
 
     await this.findOne(id);
 
-    const { data, error } = await this.supabase.from('grupo').update({ deleted_at: new Date().toISOString() }).eq('id_grupo', id).select().single();
-
-    if (error) {
-      this.logger.logError(error, { module: 'GrupoService', method: 'softDelete', grupoId: id });
-      throw new InternalServerErrorException('Falha ao remover o grupo.');
-    }
+    const data = await this.grupoRepository.softDelete(id);
 
     this.logger.log('Grupo removido com sucesso (soft delete)', { module: 'GrupoService', method: 'softDelete', grupoId: id });
     return {
@@ -159,22 +102,17 @@ export class GrupoService implements ISoftDelete {
   async restore(id: string) {
     this.logger.log('Iniciando restauração de grupo', { module: 'GrupoService', method: 'restore', grupoId: id });
 
-    const { data: grupo } = await this.supabase.from('grupo').select('deleted_at').eq('id_grupo', id).single();
+    const grupo = await this.grupoRepository.findByIdWithDeleted(id);
 
     if (!grupo) {
       throw new NotFoundException(`Grupo com ID ${id} não encontrado`);
     }
 
-    if (!grupo.deleted_at) {
+    if (!grupo.deletedAt) {
       throw new BadRequestException('Este grupo não está removido');
     }
 
-    const { data, error } = await this.supabase.from('grupo').update({ deleted_at: null }).eq('id_grupo', id).select().single();
-
-    if (error) {
-      this.logger.logError(error, { module: 'GrupoService', method: 'restore', grupoId: id });
-      throw new InternalServerErrorException('Falha ao restaurar o grupo.');
-    }
+    const data = await this.grupoRepository.restore(id);
 
     this.logger.log('Grupo restaurado com sucesso', { module: 'GrupoService', method: 'restore', grupoId: id });
     return {
@@ -186,16 +124,7 @@ export class GrupoService implements ISoftDelete {
   async findAllWithDeleted(): Promise<any[]> {
     this.logger.log('Buscando todos os grupos incluindo deletados', { module: 'GrupoService', method: 'findAllWithDeleted' });
 
-    const { data, error } = await this.supabase
-      .from('grupo')
-      .select('*')
-      .order('deleted_at', { ascending: false, nullsFirst: true })
-      .order('nome_grupo', { ascending: true });
-
-    if (error) {
-      this.logger.logError(error, { module: 'GrupoService', method: 'findAllWithDeleted' });
-      throw new InternalServerErrorException('Erro ao buscar grupos (incluindo deletados)');
-    }
+    const data = await this.grupoRepository.findAllWithDeleted();
 
     return formatDateFieldsArray(data || []);
   }

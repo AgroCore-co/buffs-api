@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ControleLeiteiroModule } from './controle-leiteiro/controle-leiteiro.module';
-import { EstoqueLeiteModule } from './estoque-leite/estoque-leite.module';
-import { ColetaModule } from './coleta/coleta.module';
-import { CicloLactacaoModule } from './ciclo-lactacao/ciclo-lactacao.module';
-import { IndustriaModule } from './industria/industria.module';
+import { OrdenhaModule } from './ordenha/ordenha.module';
+import { ProducaoDiariaModule } from './producao-diaria/producao-diaria.module';
+import { RetiradaModule } from './retirada/retirada.module';
+import { LactacaoModule } from './lactacao/lactacao.module';
+import { LaticiniosModule } from './laticinios/laticinios.module';
 
 @Module({
-  imports: [ControleLeiteiroModule, EstoqueLeiteModule, ColetaModule, CicloLactacaoModule, IndustriaModule],
+  imports: [OrdenhaModule, ProducaoDiariaModule, RetiradaModule, LactacaoModule, LaticiniosModule],
 })
 export class ProducaoModule {}

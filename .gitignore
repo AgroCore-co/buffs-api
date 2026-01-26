@@ -25,3 +25,14 @@ lerna-debug.log*
 # temp directory
 .temp
 .tmp
+
+# Documentation files (generated)
+DRIZZLE_*.md
+DRIZZLE_*.ts
+*_EXAMPLE.ts
+
+# Drizzle migrations (keep only in migration folder)
+/drizzle/*.sql
+/drizzle/meta
+
+prompts

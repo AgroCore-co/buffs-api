@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Body, UseGuards, Param, Patch, Delete, ParseUUIDPipe, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Param, Patch, Delete, ParseUUIDPipe, UseInterceptors, Query } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { AlimentacaoDefService } from './alimentacao-def.service';
 import { CreateAlimentacaoDefDto } from './dto/create-alimentacao-def.dto';
 import { UpdateAlimentacaoDefDto } from './dto/update-alimentacao-def.dto';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
+import { PaginationDto } from '../../../core/dto/pagination.dto';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -20,10 +21,12 @@ export class AlimentacaoDefController {
     summary: 'Lista todas as alimentações definidas',
     description: 'Retorna uma lista de todas as alimentações definidas cadastradas no sistema, ordenadas alfabeticamente.',
   })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
   @ApiResponse({ status: 200, description: 'Lista de alimentações definidas retornada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findAll() {
-    return this.alimentacaoDefService.findAll();
+  findAll(@Query() paginationDto: PaginationDto) {
+    return this.alimentacaoDefService.findAll(paginationDto);
   }
 
   @Get(':id')
@@ -49,10 +52,12 @@ export class AlimentacaoDefController {
     description: 'Retorna uma lista de todas as definições de alimentação cadastradas para uma propriedade específica.',
   })
   @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade', type: 'string' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
   @ApiResponse({ status: 200, description: 'Lista de definições de alimentação da propriedade retornada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) idPropriedade: string) {
-    return this.alimentacaoDefService.findByPropriedade(idPropriedade);
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) idPropriedade: string, @Query() paginationDto: PaginationDto) {
+    return this.alimentacaoDefService.findByPropriedade(idPropriedade, paginationDto);
   }
 
   @Post()

@@ -1,7 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseUUIDPipe, HttpCode, UseInterceptors, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  ParseUUIDPipe,
+  HttpCode,
+  UseInterceptors,
+  Query,
+  HttpStatus,
+} from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { BufaloService } from './bufalo.service';
-import { CreateBufaloDto, UpdateBufaloDto, UpdateGrupoBufaloDto, FiltroAvancadoBufaloDto, CategoriaABCB } from './dto';
+import { CreateBufaloDto, UpdateBufaloDto, UpdateGrupoBufaloDto, FiltroAvancadoBufaloDto, CategoriaABCB, InativarBufaloDto } from './dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { User } from '../../auth/decorators/user.decorator';
@@ -482,6 +496,183 @@ export class BufaloController {
 
     return this.bufaloService.update(id, updateBufaloDto, user);
   }
+
+  // ==================== INATIVAÇÃO E REATIVAÇÃO ====================
+
+  @Post(':id/inativar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Inativa um búfalo com data e motivo',
+    description: `
+      Marca um búfalo como inativo, registrando formalmente a data de baixa e o motivo da inativação.
+      
+      **Diferenças entre inativar e soft delete:**
+      - **Inativar**: Registra \`data_baixa\` e \`motivo_inativo\` para rastreabilidade formal e auditoria
+      - **Soft Delete**: Apenas marca \`deleted_at\` para remoção lógica temporária
+      
+      **Validações aplicadas:**
+      - Búfalo deve existir e estar ativo
+      - Data de baixa não pode ser anterior à data de nascimento
+      - Data de baixa não pode estar no futuro
+      - Usuário deve ter acesso ao búfalo através das propriedades vinculadas
+      
+      **Motivos comuns de inativação:**
+      - Venda para outra propriedade
+      - Morte natural ou por doença
+      - Descarte por baixa produtividade
+      - Abate para consumo
+      - Transferência definitiva
+      
+      **Rastreabilidade:**
+      Este endpoint garante registro permanente do motivo e data da baixa,
+      permitindo auditorias futuras e análises estatísticas de causas de baixa no rebanho.
+    `,
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID do búfalo a ser inativado (UUID)',
+    type: 'string',
+    example: 'b8c4a72d-1234-4567-8901-234567890123',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Búfalo inativado com sucesso.',
+    schema: {
+      example: {
+        message: 'Búfalo inativado com sucesso.',
+        data: {
+          id_bufalo: 'b8c4a72d-1234-4567-8901-234567890123',
+          nome: 'Valente',
+          brinco: 'BR54321',
+          status: false,
+          data_baixa: '20/01/2024',
+          motivo_inativo: 'Venda para outra propriedade',
+          dt_nascimento: '20/05/2023',
+          sexo: 'F',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Búfalo já está inativo ou dados inválidos (ex: data de baixa anterior ao nascimento).',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Este búfalo já está inativo. Use o endpoint de reativação se deseja reativá-lo.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Não autorizado. Token JWT inválido ou ausente.' })
+  @ApiResponse({
+    status: 404,
+    description: 'Búfalo não encontrado ou usuário não tem acesso.',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Búfalo com ID b8c4a72d-1234-4567-8901-234567890123 não encontrado nas propriedades vinculadas ao usuário.',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({ status: 500, description: 'Erro interno no servidor.' })
+  async inativar(@Param('id', ParseUUIDPipe) id: string, @Body() inativarDto: InativarBufaloDto, @User() user: any) {
+    this.logger.logApiRequest('POST', `/bufalos/${id}/inativar`, user?.email, {
+      module: 'BufaloController',
+      method: 'inativar',
+      bufaloId: id,
+      motivo: inativarDto.motivo_inativo,
+    });
+
+    return this.bufaloService.inativar(id, inativarDto, user);
+  }
+
+  @Post(':id/reativar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reativa um búfalo inativado',
+    description: `
+      Remove a marcação de inativo de um búfalo, limpando a data de baixa e o motivo de inativação.
+      
+      **Propósito:**
+      Permite reverter uma inativação, útil em casos de:
+      - Erro no registro de inativação
+      - Animal devolvido após venda cancelada
+      - Retorno de animal emprestado ou transferido temporariamente
+      - Correção de dados administrativos
+      
+      **Ações executadas:**
+      - Define \`status\` como \`true\`
+      - Remove \`data_baixa\` (define como \`null\`)
+      - Remove \`motivo_inativo\` (define como \`null\`)
+      - Atualiza timestamp de \`updated_at\`
+      
+      **Validações aplicadas:**
+      - Búfalo deve existir e estar inativo
+      - Usuário deve ter acesso ao búfalo através das propriedades vinculadas
+    `,
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID do búfalo a ser reativado (UUID)',
+    type: 'string',
+    example: 'b8c4a72d-1234-4567-8901-234567890123',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Búfalo reativado com sucesso.',
+    schema: {
+      example: {
+        message: 'Búfalo reativado com sucesso.',
+        data: {
+          id_bufalo: 'b8c4a72d-1234-4567-8901-234567890123',
+          nome: 'Valente',
+          brinco: 'BR54321',
+          status: true,
+          data_baixa: null,
+          motivo_inativo: null,
+          dt_nascimento: '20/05/2023',
+          sexo: 'F',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Búfalo já está ativo.',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Este búfalo já está ativo.',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Não autorizado. Token JWT inválido ou ausente.' })
+  @ApiResponse({
+    status: 404,
+    description: 'Búfalo não encontrado ou usuário não tem acesso.',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Búfalo com ID b8c4a72d-1234-4567-8901-234567890123 não encontrado nas propriedades vinculadas ao usuário.',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({ status: 500, description: 'Erro interno no servidor.' })
+  async reativar(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    this.logger.logApiRequest('POST', `/bufalos/${id}/reativar`, user?.email, {
+      module: 'BufaloController',
+      method: 'reativar',
+      bufaloId: id,
+    });
+
+    return this.bufaloService.reativar(id, user);
+  }
+
+  // ==================== REMOÇÃO LÓGICA ====================
 
   @Delete(':id')
   @HttpCode(204)

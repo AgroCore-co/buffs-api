@@ -2,14 +2,17 @@ import { Module } from '@nestjs/common';
 import { AlertasService } from './alerta.service';
 import { AlertasController } from './alerta.controller';
 import { AlertasScheduler } from './alerta.scheduler';
-import { SupabaseModule } from 'src/core/supabase/supabase.module';
 import { GeminiModule } from 'src/core/gemini/gemini.module';
+import { DatabaseModule } from 'src/core/database/database.module';
 
-import { BufaloRepository } from './repositories/bufalo.repository';
-import { ReproducaoRepository } from './repositories/reproducao.repository';
-import { SanitarioRepository } from './repositories/sanitario.repository';
-import { ProducaoRepository } from './repositories/producao.repository';
+// Drizzle Repositories
+import { AlertaRepositoryDrizzle } from './repositories/alerta.repository.drizzle';
+import { BufaloRepositoryDrizzle } from './repositories/bufalo.repository.drizzle';
+import { ReproducaoRepositoryDrizzle } from './repositories/reproducao.repository.drizzle';
+import { SanitarioRepositoryDrizzle } from './repositories/sanitario.repository.drizzle';
+import { ProducaoRepositoryDrizzle } from './repositories/producao.repository.drizzle';
 
+// Domain Services
 import { AlertaReproducaoService } from './services/alerta-reproducao.service';
 import { AlertaSanitarioService } from './services/alerta-sanitario.service';
 import { AlertaProducaoService } from './services/alerta-producao.service';
@@ -17,7 +20,7 @@ import { AlertaManejoService } from './services/alerta-manejo.service';
 import { AlertaClinicoService } from './services/alerta-clinico.service';
 
 @Module({
-  imports: [SupabaseModule, GeminiModule],
+  imports: [GeminiModule, DatabaseModule],
   controllers: [AlertasController],
   providers: [
     // Core service
@@ -26,11 +29,12 @@ import { AlertaClinicoService } from './services/alerta-clinico.service';
     // Scheduler
     AlertasScheduler,
 
-    // Repositories
-    BufaloRepository,
-    ReproducaoRepository,
-    SanitarioRepository,
-    ProducaoRepository,
+    // Drizzle Repositories
+    AlertaRepositoryDrizzle,
+    BufaloRepositoryDrizzle,
+    ReproducaoRepositoryDrizzle,
+    SanitarioRepositoryDrizzle,
+    ProducaoRepositoryDrizzle,
 
     // Domain services
     AlertaReproducaoService,

@@ -4,11 +4,13 @@ import { MovLoteController } from './mov-lote.controller';
 import { SupabaseModule } from '../../../core/supabase/supabase.module';
 import { LoggerModule } from '../../../core/logger/logger.module';
 import { AuthModule } from '../../auth/auth.module';
+import { DatabaseModule } from '../../../core/database/database.module';
+import { MovLoteRepositoryDrizzle } from './repositories';
 
 @Module({
-  imports: [SupabaseModule, LoggerModule, AuthModule],
+  imports: [SupabaseModule, LoggerModule, AuthModule, DatabaseModule],
   controllers: [MovLoteController],
-  providers: [MovLoteService],
-  exports: [MovLoteService],
+  providers: [MovLoteService, MovLoteRepositoryDrizzle],
+  exports: [MovLoteService, MovLoteRepositoryDrizzle],
 })
 export class MovLoteModule {}

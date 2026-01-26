@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AlertasService } from '../alerta.service';
-import { SanitarioRepository } from '../repositories/sanitario.repository';
-import { ProducaoRepository } from '../repositories/producao.repository';
-import { BufaloRepository } from '../repositories/bufalo.repository';
+import { SanitarioRepositoryDrizzle } from '../repositories/sanitario.repository.drizzle';
+import { ProducaoRepositoryDrizzle } from '../repositories/producao.repository.drizzle';
+import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
 import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, calcularIdadeEmMeses } from '../utils/alerta.constants';
 
@@ -19,9 +19,9 @@ export class AlertaClinicoService {
 
   constructor(
     private readonly alertasService: AlertasService,
-    private readonly sanitarioRepo: SanitarioRepository,
-    private readonly producaoRepo: ProducaoRepository,
-    private readonly bufaloRepo: BufaloRepository,
+    private readonly sanitarioRepo: SanitarioRepositoryDrizzle,
+    private readonly producaoRepo: ProducaoRepositoryDrizzle,
+    private readonly bufaloRepo: BufaloRepositoryDrizzle,
   ) {}
 
   /**
@@ -37,8 +37,8 @@ export class AlertaClinicoService {
       // Buscar IDs dos búfalos da propriedade
       let ids_bufalos: string[];
       if (id_propriedade) {
-        const { data: bufalos } = await this.bufaloRepo.buscarIdsBufalosPorPropriedade(id_propriedade);
-        ids_bufalos = bufalos?.map((b: any) => b.id_bufalo) || [];
+        const bufalos = await this.bufaloRepo.buscarIdsBufalosPorPropriedade(id_propriedade);
+        ids_bufalos = bufalos ?? [];
       } else {
         // Se não forneceu propriedade, buscar limitado para evitar sobrecarga
         this.logger.warn('Verificação de sinais clínicos sem propriedade específica não é recomendado.');
@@ -82,21 +82,21 @@ export class AlertaClinicoService {
    * Verifica se búfalo teve múltiplos tratamentos recentes.
    */
   private async verificarTratamentosMultiplos(id_bufalo: string): Promise<boolean> {
-    const { data: tratamentos } = await this.sanitarioRepo.buscarTratamentosRecentes(id_bufalo, AlertaConstants.PERIODO_ANALISE_PESO_DIAS);
+    const tratamentos = await this.sanitarioRepo.buscarTratamentosRecentes(id_bufalo, AlertaConstants.PERIODO_ANALISE_PESO_DIAS);
 
     return !!(tratamentos && tratamentos.length >= AlertaConstants.TRATAMENTOS_MULTIPLOS_THRESHOLD);
   } /**
    * Verifica se búfalo teve ganho de peso insuficiente.
    */
   private async verificarGanhoPesoInsuficiente(id_bufalo: string): Promise<boolean> {
-    const { data: pesagens } = await this.producaoRepo.buscarPesagensRecentes(id_bufalo, AlertaConstants.PERIODO_ANALISE_PESO_DIAS);
+    const pesagens = await this.producaoRepo.buscarPesagensRecentes(id_bufalo, AlertaConstants.PERIODO_ANALISE_PESO_DIAS);
 
     if (!pesagens || pesagens.length < AlertaConstants.MIN_PESAGENS_ANALISE) {
       return false; // Dados insuficientes
     }
 
-    const pesoInicial = parseFloat(pesagens[0].peso);
-    const pesoFinal = parseFloat(pesagens[pesagens.length - 1].peso);
+    const pesoInicial = parseFloat(pesagens[0].peso || '0');
+    const pesoFinal = parseFloat(pesagens[pesagens.length - 1].peso || '0');
     const ganho = pesoFinal - pesoInicial;
 
     return ganho < AlertaConstants.GANHO_PESO_MINIMO_60_DIAS;
@@ -113,19 +113,19 @@ export class AlertaClinicoService {
     id_propriedade?: string,
   ): Promise<boolean> {
     try {
-      const { data: bufaloData, error } = await this.bufaloRepo.buscarBufaloSimples(id_bufalo);
-      if (error || !bufaloData) return false;
+      const bufaloData = await this.bufaloRepo.buscarBufaloSimples(id_bufalo);
+      if (!bufaloData) return false;
 
       let grupoNome = 'Não informado';
-      if (bufaloData.id_grupo) {
-        const { data: nomeGrupo } = await this.bufaloRepo.buscarNomeGrupo(bufaloData.id_grupo);
+      if (bufaloData.idGrupo) {
+        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufaloData.idGrupo);
         if (nomeGrupo) grupoNome = nomeGrupo;
       }
 
       let propriedadeNome = 'Não informada';
-      const propriedadeIdFinal = id_propriedade || bufaloData.id_propriedade;
+      const propriedadeIdFinal = id_propriedade || bufaloData.idPropriedade;
       if (propriedadeIdFinal) {
-        const { data: nomeProp } = await this.bufaloRepo.buscarNomePropriedade(propriedadeIdFinal);
+        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeIdFinal);
         if (nomeProp) propriedadeNome = nomeProp;
       }
 
@@ -148,10 +148,10 @@ export class AlertaClinicoService {
 
       motivo += sinais.join(', ') + '.';
 
-      const descricaoClinica = `Búfalo ${bufaloData.nome} com ${calcularIdadeEmMeses(bufaloData.dt_nascimento)} meses de idade ${descricaoClinicaDetalhes.join(' e ')}. Estes sinais clínicos precoces requerem atenção veterinária para avaliação de condição corporal, carga parasitária, qualidade da alimentação, absorção de nutrientes e manejo geral do animal. Intervenção precoce pode prevenir quadros clínicos mais graves.`;
+      const descricaoClinica = `Búfalo ${bufaloData.nome} com ${calcularIdadeEmMeses(bufaloData.dtNascimento)} meses de idade ${descricaoClinicaDetalhes.join(' e ')}. Estes sinais clínicos precoces requerem atenção veterinária para avaliação de condição corporal, carga parasitária, qualidade da alimentação, absorção de nutrientes e manejo geral do animal. Intervenção precoce pode prevenir quadros clínicos mais graves.`;
 
       const alertaDto: CreateAlertaDto = {
-        animal_id: bufaloData.id_bufalo,
+        animal_id: bufaloData.idBufalo,
         grupo: grupoNome,
         localizacao: propriedadeNome,
         id_propriedade: propriedadeIdFinal,
@@ -159,7 +159,7 @@ export class AlertaClinicoService {
         nicho: NichoAlerta.CLINICO,
         data_alerta: hoje.toISOString().split('T')[0],
         texto_ocorrencia_clinica: descricaoClinica,
-        observacao: `Idade: ${calcularIdadeEmMeses(bufaloData.dt_nascimento)} meses. Avaliar condição corporal, parasitas, qualidade da alimentação e manejo geral. Considerar avaliação veterinária detalhada.`,
+        observacao: `Idade: ${calcularIdadeEmMeses(bufaloData.dtNascimento)} meses. Avaliar condição corporal, parasitas, qualidade da alimentação e manejo geral. Considerar avaliação veterinária detalhada.`,
         id_evento_origem: id_bufalo,
         tipo_evento_origem: 'SINAIS_CLINICOS',
       };

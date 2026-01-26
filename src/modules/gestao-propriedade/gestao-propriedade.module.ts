@@ -5,5 +5,6 @@ import { EnderecoModule } from './endereco/endereco.module';
 
 @Module({
   imports: [LoteModule, PropriedadeModule, EnderecoModule],
+  exports: [LoteModule, PropriedadeModule, EnderecoModule],
 })
 export class GestaoPropriedadeModule {}

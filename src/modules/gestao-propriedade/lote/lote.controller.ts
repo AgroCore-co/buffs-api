@@ -17,7 +17,10 @@ export class LoteController {
   constructor(private readonly loteService: LoteService) {}
 
   @Get('propriedade/:id_propriedade')
-  @ApiOperation({ summary: 'Lista todos os lotes de uma propriedade específica' })
+  @ApiOperation({
+    summary: 'Lista todos os lotes de uma propriedade específica',
+    description: 'Retorna lista de lotes com geometria PostGIS. O campo geo_mapa vem como objeto (GeoJSON parseado).',
+  })
   @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade (UUID)', type: 'string' })
   @ApiResponse({ status: 200, description: 'Lista de lotes da propriedade retornada com sucesso.' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada ou não pertence ao usuário.' })
@@ -26,7 +29,10 @@ export class LoteController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Cria um novo lote (piquete) com dados geográficos' })
+  @ApiOperation({
+    summary: 'Cria um novo lote (piquete) com dados geográficos',
+    description: 'Cria lote com geometria PostGIS. Envie geo_mapa como string (JSON.stringify), receba como objeto.',
+  })
   @ApiResponse({ status: 201, description: 'Lote criado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Propriedade não encontrada ou não pertence ao usuário.' })
   create(@Body() createLoteDto: CreateLoteDto, @User() user: any) {
@@ -43,7 +49,10 @@ export class LoteController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Atualiza um lote' })
+  @ApiOperation({
+    summary: 'Atualiza um lote',
+    description: 'Atualiza dados do lote, incluindo geometria. Envie geo_mapa como string, receba como objeto.',
+  })
   @ApiParam({ name: 'id', description: 'ID do lote (UUID)', type: 'string' })
   @ApiResponse({ status: 200, description: 'Lote atualizado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Lote não encontrado ou não pertence ao usuário.' })

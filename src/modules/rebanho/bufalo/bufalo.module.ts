@@ -6,9 +6,12 @@ import { LoggerModule } from '../../../core/logger/logger.module';
 import { AuthModule } from '../../auth/auth.module';
 import { GenealogiaModule } from '../../reproducao/genealogia/genealogia.module';
 import { CoreModule } from '../../../core/core.module';
+import { DatabaseModule } from '../../../core/database/database.module';
 
 // Novos providers da arquitetura limpa
 import { BufaloRepository } from './repositories/bufalo.repository';
+import { BufaloRepositoryDrizzle } from './repositories/bufalo.repository.drizzle';
+import { UsuarioPropriedadeRepositoryDrizzle } from './repositories/usuario-propriedade.repository.drizzle';
 import { BufaloMaturidadeService } from './services/bufalo-maturidade.service';
 import { BufaloCategoriaService } from './services/bufalo-categoria.service';
 import { BufaloFiltrosService } from './services/bufalo-filtros.service';
@@ -19,16 +22,27 @@ import { BufaloScheduler } from './bufalo.scheduler';
  *
  * **Providers registrados:**
  * - BufaloService (orquestrador)
- * - BufaloRepository (acesso a dados)
+ * - BufaloRepository (acesso a dados Supabase - legacy)
+ * - BufaloRepositoryDrizzle (acesso a dados via Drizzle)
+ * - UsuarioPropriedadeRepositoryDrizzle (operações de usuário e propriedade)
  * - BufaloMaturidadeService (lógica de maturidade)
  * - BufaloCategoriaService (lógica de categoria ABCB)
  * - BufaloFiltrosService (lógica de filtros unificados)
  * - BufaloScheduler (tarefas agendadas)
  */
 @Module({
-  imports: [SupabaseModule, LoggerModule, AuthModule, GenealogiaModule, CoreModule],
+  imports: [SupabaseModule, LoggerModule, AuthModule, GenealogiaModule, CoreModule, DatabaseModule],
   controllers: [BufaloController],
-  providers: [BufaloService, BufaloRepository, BufaloMaturidadeService, BufaloCategoriaService, BufaloFiltrosService, BufaloScheduler],
-  exports: [BufaloService],
+  providers: [
+    BufaloService,
+    BufaloRepository,
+    BufaloRepositoryDrizzle,
+    UsuarioPropriedadeRepositoryDrizzle,
+    BufaloMaturidadeService,
+    BufaloCategoriaService,
+    BufaloFiltrosService,
+    BufaloScheduler,
+  ],
+  exports: [BufaloService, BufaloRepositoryDrizzle],
 })
 export class BufaloModule {}

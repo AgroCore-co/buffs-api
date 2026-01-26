@@ -1,97 +1,58 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateRacaDto } from './dto/create-raca.dto';
 import { UpdateRacaDto } from './dto/update-raca.dto';
-import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
+import { RacaRepositoryDrizzle } from './repositories/raca.repository.drizzle';
 
 @Injectable()
 export class RacaService {
-  private supabase: SupabaseClient;
-
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly racaRepository: RacaRepositoryDrizzle,
     private readonly logger: LoggerService,
-  ) {
-    this.supabase = this.supabaseService.getAdminClient();
-  }
+  ) {}
 
   async create(createRacaDto: CreateRacaDto) {
     this.logger.log('Iniciando criação de raça', { module: 'RacaService', method: 'create' });
-
-    const { data, error } = await this.supabase.from('raca').insert(createRacaDto).select().single();
-
-    if (error) {
-      this.logger.logError(error, { module: 'RacaService', method: 'create' });
-      throw new InternalServerErrorException('Falha ao criar a raça.');
-    }
-
-    this.logger.log('Raça criada com sucesso', { module: 'RacaService', method: 'create', racaId: data.id_raca });
-    return formatDateFields(data);
+    const raca = await this.racaRepository.create(createRacaDto);
+    this.logger.log('Raça criada com sucesso', { module: 'RacaService', method: 'create', racaId: raca.idRaca });
+    return raca;
   }
 
   async findAll() {
     this.logger.log('Iniciando busca de todas as raças', { module: 'RacaService', method: 'findAll' });
-
-    const { data, error } = await this.supabase.from('raca').select('*').order('nome', { ascending: true });
-
-    if (error) {
-      this.logger.logError(error, { module: 'RacaService', method: 'findAll' });
-      throw new InternalServerErrorException('Falha ao buscar as raças.');
-    }
-
-    this.logger.log(`Busca de raças concluída - ${data.length} raças encontradas`, { module: 'RacaService', method: 'findAll' });
-    return formatDateFieldsArray(data);
+    const racas = await this.racaRepository.findAll();
+    this.logger.log(`Busca de raças concluída - ${racas.length} raças encontradas`, { module: 'RacaService', method: 'findAll' });
+    return racas;
   }
 
   async findOne(id: string) {
     this.logger.log('Iniciando busca de raça por ID', { module: 'RacaService', method: 'findOne', racaId: id });
+    const raca = await this.racaRepository.findById(id);
 
-    const { data, error } = await this.supabase.from('raca').select('*').eq('id_raca', id).single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        this.logger.warn('Raça não encontrada', { module: 'RacaService', method: 'findOne', racaId: id });
-        throw new NotFoundException('Raça não encontrada.');
-      }
-      this.logger.logError(error, { module: 'RacaService', method: 'findOne', racaId: id });
-      throw new InternalServerErrorException('Falha ao buscar a raça.');
+    if (!raca) {
+      this.logger.warn('Raça não encontrada', { module: 'RacaService', method: 'findOne', racaId: id });
+      throw new NotFoundException('Raça não encontrada.');
     }
 
     this.logger.log('Raça encontrada com sucesso', { module: 'RacaService', method: 'findOne', racaId: id });
-    return formatDateFields(data);
+    return raca;
   }
 
   async update(id: string, updateRacaDto: UpdateRacaDto) {
     this.logger.log('Iniciando atualização de raça', { module: 'RacaService', method: 'update', racaId: id });
 
-    // Primeiro verifica se a raça existe
     await this.findOne(id);
-
-    const { data, error } = await this.supabase.from('raca').update(updateRacaDto).eq('id_raca', id).select().single();
-
-    if (error) {
-      this.logger.logError(error, { module: 'RacaService', method: 'update', racaId: id });
-      throw new InternalServerErrorException('Falha ao atualizar a raça.');
-    }
+    const racaAtualizada = await this.racaRepository.update(id, updateRacaDto);
 
     this.logger.log('Raça atualizada com sucesso', { module: 'RacaService', method: 'update', racaId: id });
-    return formatDateFields(data);
+    return racaAtualizada;
   }
 
   async remove(id: string) {
     this.logger.log('Iniciando remoção de raça', { module: 'RacaService', method: 'remove', racaId: id });
 
-    // Primeiro verifica se a raça existe
     await this.findOne(id);
-
-    const { error } = await this.supabase.from('raca').delete().eq('id_raca', id);
-
-    if (error) {
-      this.logger.logError(error, { module: 'RacaService', method: 'remove', racaId: id });
-      throw new InternalServerErrorException('Falha ao deletar a raça.');
-    }
+    await this.racaRepository.softDelete(id);
 
     this.logger.log('Raça removida com sucesso', { module: 'RacaService', method: 'remove', racaId: id });
     return { message: 'Raça deletada com sucesso.' };

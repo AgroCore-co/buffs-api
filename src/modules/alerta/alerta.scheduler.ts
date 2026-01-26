@@ -5,8 +5,9 @@ import { AlertaSanitarioService } from './services/alerta-sanitario.service';
 import { AlertaProducaoService } from './services/alerta-producao.service';
 import { AlertaManejoService } from './services/alerta-manejo.service';
 import { AlertaClinicoService } from './services/alerta-clinico.service';
-import { SupabaseService } from '../../core/supabase/supabase.service';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { DatabaseService } from '../../core/database/database.service';
+import { isNull } from 'drizzle-orm';
+import { propriedade } from '../../database/schema';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -29,7 +30,6 @@ import { SupabaseClient } from '@supabase/supabase-js';
 @Injectable()
 export class AlertasScheduler implements OnModuleInit {
   private readonly logger = new Logger(AlertasScheduler.name);
-  private supabase: SupabaseClient;
 
   constructor(
     private readonly reproducaoService: AlertaReproducaoService,
@@ -37,10 +37,8 @@ export class AlertasScheduler implements OnModuleInit {
     private readonly producaoService: AlertaProducaoService,
     private readonly manejoService: AlertaManejoService,
     private readonly clinicoService: AlertaClinicoService,
-    private readonly supabaseService: SupabaseService,
-  ) {
-    this.supabase = this.supabaseService.getAdminClient();
-  }
+    private readonly databaseService: DatabaseService,
+  ) {}
 
   /**
    * Hook executado quando o módulo é inicializado.
@@ -384,14 +382,18 @@ export class AlertasScheduler implements OnModuleInit {
    */
   private async getPropriedadesAtivas(): Promise<Array<{ id_propriedade: string; nome: string }>> {
     try {
-      const { data, error } = await this.supabase.from('propriedade').select('id_propriedade, nome').is('deleted_at', null);
+      const propriedades = await this.databaseService.db.query.propriedade.findMany({
+        where: isNull(propriedade.deletedAt),
+        columns: {
+          idPropriedade: true,
+          nome: true,
+        },
+      });
 
-      if (error) {
-        this.logger.error('❌ Erro ao buscar propriedades ativas:', error);
-        return [];
-      }
-
-      return data || [];
+      return propriedades.map((p) => ({
+        id_propriedade: p.idPropriedade,
+        nome: p.nome,
+      }));
     } catch (error) {
       this.logger.error('❌ Erro crítico ao buscar propriedades:', error);
       return [];

@@ -1,53 +1,44 @@
 import { Injectable, NotFoundException, InternalServerErrorException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreatePropriedadeDto } from './dto/create-propriedade.dto';
 import { UpdatePropriedadeDto } from './dto/update-propriedade.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
+import { PropriedadeRepositoryDrizzle } from './repositories';
 
 @Injectable()
 export class PropriedadeService {
-  private supabase: SupabaseClient;
-
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly propriedadeRepo: PropriedadeRepositoryDrizzle,
     private readonly logger: LoggerService,
-  ) {
-    this.supabase = this.supabaseService.getAdminClient();
-  }
+  ) {}
 
   /**
    * Método privado para obter o ID UUID do usuário a partir do token.
    * Reutilizado em vários métodos para evitar repetição de código.
    */
   private async getUserId(user: any): Promise<string> {
-    const { data: perfilUsuario, error } = await this.supabase.from('usuario').select('id_usuario').eq('email', user.email).single();
+    const perfilUsuario = await this.propriedadeRepo.buscarUsuarioPorEmail(user.email);
 
-    if (error || !perfilUsuario) {
+    if (!perfilUsuario) {
       throw new NotFoundException('Perfil de usuário não encontrado.');
     }
-    return perfilUsuario.id_usuario;
+    return perfilUsuario.idUsuario;
   }
 
   async create(createPropriedadeDto: CreatePropriedadeDto, user: any) {
     const idDono = await this.getUserId(user);
 
-    const { data: novaPropriedade, error: propriedadeError } = await this.supabase
-      .from('propriedade')
-      .insert([{ ...createPropriedadeDto, id_dono: idDono }])
-      .select()
-      .single();
-
-    if (propriedadeError) {
-      if (propriedadeError.code === '23503') {
+    try {
+      const novaPropriedade = await this.propriedadeRepo.criar(createPropriedadeDto, idDono);
+      return formatDateFields(novaPropriedade);
+    } catch (error) {
+      // Verifica erro de chave estrangeira (endereço não existe)
+      if (error.message && error.message.includes('foreign key')) {
         throw new BadRequestException(`O endereço com id ${createPropriedadeDto.id_endereco} não foi encontrado.`);
       }
-      console.error('Erro ao criar propriedade:', propriedadeError);
+      console.error('Erro ao criar propriedade:', error);
       throw new InternalServerErrorException('Falha ao criar a propriedade.');
     }
-
-    return formatDateFields(novaPropriedade);
   }
 
   /**
@@ -59,30 +50,17 @@ export class PropriedadeService {
 
     try {
       // 1. Busca propriedades onde o usuário é DONO
-      const { data: propriedadesComoDono, error: errorDono } = await this.supabase.from('propriedade').select('*').eq('id_dono', userId);
-
-      if (errorDono) {
-        this.logger.error(`[ERRO] Falha na consulta propriedades como dono: ${errorDono.message}`);
-        throw new InternalServerErrorException(`Erro ao buscar propriedades: ${errorDono.message}`);
-      }
+      const propriedadesComoDono = await this.propriedadeRepo.buscarPropriedadesComoDono(userId);
 
       // 2. Busca propriedades onde o usuário é FUNCIONÁRIO
-      const { data: propriedadesComoFuncionario, error: errorFuncionario } = await this.supabase
-        .from('usuariopropriedade')
-        .select('id_propriedade, propriedade(*)')
-        .eq('id_usuario', userId);
-
-      if (errorFuncionario) {
-        this.logger.error(`[ERRO] Falha na consulta propriedades como funcionário: ${errorFuncionario.message}`);
-        throw new InternalServerErrorException(`Erro ao buscar propriedades vinculadas: ${errorFuncionario.message}`);
-      }
+      const propriedadesComoFuncionario = await this.propriedadeRepo.buscarPropriedadesComoFuncionario(userId);
 
       // 3. Combina as propriedades (removendo duplicatas)
       const propriedadesFuncionario = propriedadesComoFuncionario?.map((item: any) => item.propriedade) || [];
       const todasPropriedades = [...(propriedadesComoDono || []), ...propriedadesFuncionario];
 
-      // Remove duplicatas pelo id_propriedade
-      const propriedadesUnicas = Array.from(new Map(todasPropriedades.map((p) => [p.id_propriedade, p])).values());
+      // Remove duplicatas pelo idPropriedade
+      const propriedadesUnicas = Array.from(new Map(todasPropriedades.map((p) => [p.idPropriedade, p])).values());
 
       this.logger.log(`[SUCESSO] ${propriedadesUnicas.length} propriedades encontradas para o usuário ${userId}`);
 
@@ -105,26 +83,16 @@ export class PropriedadeService {
     const userId = await this.getUserId(user);
 
     // 1. Verifica se o usuário é dono da propriedade
-    const { data: propriedadeComoDono, error: erroDono } = await this.supabase
-      .from('propriedade')
-      .select('*')
-      .eq('id_propriedade', id)
-      .eq('id_dono', userId)
-      .single();
+    const propriedadeComoDono = await this.propriedadeRepo.buscarPropriedadeComoDono(id, userId);
 
-    if (propriedadeComoDono && !erroDono) {
+    if (propriedadeComoDono) {
       return formatDateFields(propriedadeComoDono);
     }
 
     // 2. Verifica se o usuário é funcionário vinculado à propriedade
-    const { data: vinculo, error: erroVinculo } = await this.supabase
-      .from('usuariopropriedade')
-      .select('propriedade(*)')
-      .eq('id_usuario', userId)
-      .eq('id_propriedade', id)
-      .single();
+    const vinculo = await this.propriedadeRepo.buscarVinculoFuncionario(id, userId);
 
-    if (vinculo && !erroVinculo) {
+    if (vinculo && vinculo.propriedade) {
       return formatDateFields(vinculo.propriedade);
     }
 
@@ -139,32 +107,14 @@ export class PropriedadeService {
     const userId = await this.getUserId(user);
 
     // Verifica se o usuário é DONO da propriedade (apenas donos podem atualizar)
-    const { data: propriedade, error } = await this.supabase
-      .from('propriedade')
-      .select('id_propriedade')
-      .eq('id_propriedade', id)
-      .eq('id_dono', userId)
-      .single();
+    const propriedade = await this.propriedadeRepo.buscarPropriedadeComoDono(id, userId);
 
-    if (error || !propriedade) {
+    if (!propriedade) {
       throw new NotFoundException(`Propriedade com ID ${id} não encontrada ou você não tem permissão para atualizá-la.`);
     }
 
-    const { data, error: updateError } = await this.supabase
-      .from('propriedade')
-      .update({
-        ...updatePropriedadeDto,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id_propriedade', id)
-      .select()
-      .single();
-
-    if (updateError) {
-      throw new InternalServerErrorException('Falha ao atualizar a propriedade.');
-    }
-
-    return formatDateFields(data);
+    const propriedadeAtualizada = await this.propriedadeRepo.atualizar(id, updatePropriedadeDto);
+    return formatDateFields(propriedadeAtualizada);
   }
 
   /**
@@ -175,22 +125,13 @@ export class PropriedadeService {
     const userId = await this.getUserId(user);
 
     // Verifica se o usuário é DONO da propriedade (apenas donos podem deletar)
-    const { data: propriedade, error } = await this.supabase
-      .from('propriedade')
-      .select('id_propriedade')
-      .eq('id_propriedade', id)
-      .eq('id_dono', userId)
-      .single();
+    const propriedade = await this.propriedadeRepo.buscarPropriedadeComoDono(id, userId);
 
-    if (error || !propriedade) {
+    if (!propriedade) {
       throw new NotFoundException(`Propriedade com ID ${id} não encontrada ou você não tem permissão para removê-la.`);
     }
 
-    const { error: deleteError } = await this.supabase.from('propriedade').delete().eq('id_propriedade', id);
-
-    if (deleteError) {
-      throw new InternalServerErrorException('Falha ao remover a propriedade.');
-    }
+    await this.propriedadeRepo.remover(id);
 
     // Retornar void é a prática padrão para DELETE, resultando em status 204 No Content.
     return;

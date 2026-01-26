@@ -75,22 +75,11 @@ export class CreateLoteDto {
   area_m2?: number;
 
   @ApiProperty({
-    description: 'Objeto GeoJSON contendo a geometria do polígono.',
-    example: {
-      type: 'Polygon',
-      coordinates: [
-        [
-          [-47.5, -24.5],
-          [-47.4, -24.5],
-          [-47.4, -24.4],
-          [-47.5, -24.4],
-          [-47.5, -24.5],
-        ],
-      ],
-    },
+    description: `String GeoJSON contendo a geometria do polígono. O frontend envia como string JSON.stringify(geoJson) e recebe como objeto parseado pronto para usar com Leaflet.`,
+    example: '{"type":"Polygon","coordinates":[[[-47.5,-24.5],[-47.4,-24.5],[-47.4,-24.4],[-47.5,-24.4],[-47.5,-24.5]]]}',
     required: false,
   })
-  @IsObject()
+  @IsString()
   @IsOptional()
-  geo_mapa?: object;
+  geo_mapa?: string;
 }

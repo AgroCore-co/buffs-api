@@ -11,18 +11,20 @@ import { LoggerService } from 'src/core/logger/logger.service';
 import { CreateFuncionarioDto } from '../dto/create-funcionario.dto';
 import { Cargo } from '../enums/cargo.enum';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
+import { formatDateFields } from '../../../core/utils/date-formatter.utils';
+import { UsuarioRepositoryDrizzle, UsuarioPropriedadeRepositoryDrizzle, PropriedadeRepositoryHelper } from '../repositories';
 
 @Injectable()
 export class FuncionarioService {
-  private readonly supabase: SupabaseClient;
   private readonly adminSupabase: SupabaseClient;
 
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly logger: LoggerService,
+    private readonly usuarioRepository: UsuarioRepositoryDrizzle,
+    private readonly usuarioPropriedadeRepository: UsuarioPropriedadeRepositoryDrizzle,
+    private readonly propriedadeRepository: PropriedadeRepositoryHelper,
   ) {
-    this.supabase = this.supabaseService.getAdminClient();
     this.adminSupabase = this.supabaseService.getAdminClient();
   }
 
@@ -30,16 +32,14 @@ export class FuncionarioService {
    * Busca o usuário completo pelo auth_id
    */
   private async getUserByAuthId(authId: string) {
-    const { data, error } = await this.supabase.from('usuario').select('*').eq('auth_id', authId).single();
+    const usuario = await this.usuarioRepository.buscarPorAuthId(authId);
 
-    if (error || !data) {
-      if (error) {
-        this.logger.logError(error as Error, { method: 'getUserByAuthId', authId });
-      }
+    if (!usuario) {
+      this.logger.warn(`[FuncionarioService] Usuário não encontrado`, { authId });
       throw new NotFoundException('Usuário não encontrado no sistema.');
     }
 
-    return formatDateFields(data);
+    return formatDateFields(usuario);
   }
 
   /**
@@ -47,19 +47,15 @@ export class FuncionarioService {
    */
   private async getUserPropriedades(userId: string): Promise<string[]> {
     this.logger.log(`[FuncionarioService] getUserPropriedades chamado`, { userId });
-    const { data, error } = await this.supabase.from('propriedade').select('id_propriedade').eq('id_dono', userId);
 
-    if (error) {
-      this.logger.logError(error, { method: 'getUserPropriedades', userId });
-      throw new InternalServerErrorException('Falha ao buscar propriedades do usuário.');
-    }
+    const propriedades = await this.propriedadeRepository.listarPorDono(userId);
 
-    if (!data || data.length === 0) {
+    if (propriedades.length === 0) {
       this.logger.warn(`[FuncionarioService] Usuário não possui nenhuma propriedade`, { userId });
       throw new NotFoundException('Usuário não possui nenhuma propriedade cadastrada.');
     }
 
-    return data.map((item) => item.id_propriedade);
+    return propriedades;
   }
 
   /**
@@ -75,7 +71,7 @@ export class FuncionarioService {
     }
 
     const proprietario = await this.getUserByAuthId(authId);
-    const propriedadesDoProprietario = await this.getUserPropriedades(proprietario.id_usuario);
+    const propriedadesDoProprietario = await this.getUserPropriedades(proprietario.idUsuario);
 
     if (createFuncionarioDto.id_propriedade && !propriedadesDoProprietario.includes(createFuncionarioDto.id_propriedade)) {
       throw new ForbiddenException('Você só pode criar funcionários para suas próprias propriedades.');
@@ -100,46 +96,35 @@ export class FuncionarioService {
     }
 
     try {
-      const { data: existingUser } = await this.supabase.from('usuario').select('id_usuario').eq('email', createFuncionarioDto.email).single();
+      const existingUser = await this.usuarioRepository.existePorEmail(createFuncionarioDto.email);
 
       if (existingUser) {
         throw new ConflictException('Já existe um perfil de usuário com este email.');
       }
 
-      const { data: novoFuncionario, error: insertError } = await this.adminSupabase
-        .from('usuario')
-        .insert([
-          {
-            auth_id: authUser.user.id,
-            nome: createFuncionarioDto.nome,
-            email: createFuncionarioDto.email,
-            telefone: createFuncionarioDto.telefone,
-            cargo: createFuncionarioDto.cargo,
-            id_endereco: createFuncionarioDto.id_endereco,
-          },
-        ])
-        .select()
-        .single();
-
-      if (insertError) {
-        throw new InternalServerErrorException(`Falha ao criar perfil do funcionário: ${insertError.message}`);
-      }
+      const novoFuncionario = await this.usuarioRepository.criarFuncionario({
+        authId: authUser.user.id,
+        nome: createFuncionarioDto.nome,
+        email: createFuncionarioDto.email,
+        telefone: createFuncionarioDto.telefone,
+        cargo: createFuncionarioDto.cargo,
+        id_endereco: createFuncionarioDto.id_endereco,
+      });
 
       const propriedadesParaVincular = createFuncionarioDto.id_propriedade ? [createFuncionarioDto.id_propriedade] : propriedadesDoProprietario;
 
-      const vinculos = propriedadesParaVincular.map((idPropriedade) => ({
-        id_usuario: novoFuncionario.id_usuario,
-        id_propriedade: idPropriedade,
-      }));
-
-      const { error: vinculoError } = await this.adminSupabase.from('usuariopropriedade').insert(vinculos);
-
-      if (vinculoError) {
-        throw new InternalServerErrorException(`Falha ao vincular funcionário às propriedades: ${vinculoError.message}`);
-      }
+      await this.usuarioPropriedadeRepository.vincular(novoFuncionario.idUsuario, propriedadesParaVincular);
 
       return {
-        ...novoFuncionario,
+        id_usuario: novoFuncionario.idUsuario,
+        auth_id: novoFuncionario.authId,
+        nome: novoFuncionario.nome,
+        email: novoFuncionario.email,
+        telefone: novoFuncionario.telefone,
+        cargo: novoFuncionario.cargo,
+        id_endereco: novoFuncionario.idEndereco,
+        created_at: novoFuncionario.createdAt,
+        updated_at: novoFuncionario.updatedAt,
         propriedades_vinculadas: propriedadesParaVincular,
         auth_credentials: {
           email: createFuncionarioDto.email,
@@ -163,14 +148,9 @@ export class FuncionarioService {
     });
 
     const proprietario = await this.getUserByAuthId(authId);
-    const { data: propriedade, error: propError } = await this.supabase
-      .from('propriedade')
-      .select('id_dono')
-      .eq('id_propriedade', idPropriedade)
-      .eq('id_dono', proprietario.id_usuario)
-      .single();
+    const propriedade = await this.propriedadeRepository.pertenceAoDono(idPropriedade, proprietario.idUsuario);
 
-    if (propError || !propriedade) {
+    if (!propriedade) {
       this.logger.warn(`[FuncionarioService] Acesso negado: não é proprietário desta propriedade`, {
         authId,
         idPropriedade,
@@ -178,27 +158,16 @@ export class FuncionarioService {
       throw new ForbiddenException('Acesso negado: você não é proprietário desta propriedade.');
     }
 
-    const { data, error: funcionariosError } = await this.adminSupabase
-      .from('usuariopropriedade')
-      .select(
-        `
-        id_usuario:usuario!inner (
-          id_usuario,
-          nome,
-          email,
-          telefone,
-          cargo,
-          created_at
-        )
-      `,
-      )
-      .eq('id_propriedade', idPropriedade);
+    const funcionarios = await this.usuarioPropriedadeRepository.listarUsuariosPorPropriedade(idPropriedade);
 
-    if (funcionariosError) {
-      this.logger.logError(funcionariosError, { method: 'listarFuncionariosPorPropriedade', idPropriedade });
-      throw new InternalServerErrorException('Erro ao buscar funcionários.');
-    }
-    return data?.map((item) => item.id_usuario) || [];
+    return funcionarios.map((func) => ({
+      id_usuario: func.idUsuario,
+      nome: func.nome,
+      email: func.email,
+      telefone: func.telefone,
+      cargo: func.cargo,
+      created_at: func.createdAt,
+    }));
   }
 
   /**
@@ -208,40 +177,20 @@ export class FuncionarioService {
     this.logger.log(`[FuncionarioService] listarMeusFuncionarios chamado`, { authId });
 
     const proprietario = await this.getUserByAuthId(authId);
-    const propriedadesProprietario = await this.getUserPropriedades(proprietario.id_usuario);
+    const propriedadesProprietario = await this.getUserPropriedades(proprietario.idUsuario);
 
-    const { data, error } = await this.adminSupabase
-      .from('usuariopropriedade')
-      .select(
-        `
-        id_propriedade,
-        id_usuario:usuario!inner (
-          id_usuario,
-          nome,
-          email,
-          telefone,
-          cargo,
-          created_at
-        ),
-        id_propriedade:propriedade!inner (
-          nome
-        )
-      `,
-      )
-      .in('id_propriedade', propriedadesProprietario);
+    const funcionarios = await this.usuarioPropriedadeRepository.listarUsuariosPorPropriedades(propriedadesProprietario);
 
-    if (error) {
-      this.logger.logError(error, { method: 'listarMeusFuncionarios', authId });
-      throw new InternalServerErrorException('Erro ao buscar funcionários.');
-    }
-
-    return (
-      data?.map((item) => ({
-        ...(item.id_usuario as any),
-        propriedade: (item.id_propriedade as any)?.nome,
-        id_propriedade: item.id_propriedade,
-      })) || []
-    );
+    return funcionarios.map((func) => ({
+      id_usuario: func.idUsuario,
+      nome: func.nome,
+      email: func.email,
+      telefone: func.telefone,
+      cargo: func.cargo,
+      created_at: func.createdAt,
+      propriedade: func.propriedade?.nome,
+      id_propriedade: func.propriedade?.id_propriedade,
+    }));
   }
 
   /**
@@ -255,14 +204,9 @@ export class FuncionarioService {
     });
 
     const proprietario = await this.getUserByAuthId(authId);
-    const { data: propriedade, error: propError } = await this.supabase
-      .from('propriedade')
-      .select('id_dono')
-      .eq('id_propriedade', idPropriedade)
-      .eq('id_dono', proprietario.id_usuario)
-      .single();
+    const propriedade = await this.propriedadeRepository.pertenceAoDono(idPropriedade, proprietario.idUsuario);
 
-    if (propError || !propriedade) {
+    if (!propriedade) {
       this.logger.warn(`[FuncionarioService] Acesso negado para desvincular: não é proprietário`, {
         authId,
         idPropriedade,
@@ -270,16 +214,12 @@ export class FuncionarioService {
       throw new ForbiddenException('Acesso negado: você não é proprietário desta propriedade.');
     }
 
-    const { error: desvincularError } = await this.supabase
-      .from('usuariopropriedade')
-      .delete()
-      .eq('id_usuario', idUsuario)
-      .eq('id_propriedade', idPropriedade);
+    const desvinculado = await this.usuarioPropriedadeRepository.desvincular(idUsuario, idPropriedade);
 
-    if (desvincularError) {
-      this.logger.logError(desvincularError, { method: 'desvincularFuncionario', idUsuario, idPropriedade });
-      throw new InternalServerErrorException('Erro ao desvincular funcionário.');
+    if (!desvinculado) {
+      throw new NotFoundException('Vínculo não encontrado.');
     }
+
     return { message: 'Funcionário desvinculado com sucesso.' };
   }
 }

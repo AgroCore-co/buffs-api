@@ -124,29 +124,29 @@ async function bootstrap() {
   2. Ordenha individual das búfalas → POST /lactacao (Controle Leiteiro)
   
   FIM DO DIA:
-  3. Consolidar produção do dia → POST /estoque-leite
+  3. Consolidar produção do dia → POST /producao-diaria
   
   QUANDO O LATICÍNIO CHEGAR:
-  4. Registrar coleta → POST /coletas
+  4. Registrar retirada → POST /retiradas
   \`\`\`
 
   ### **Endpoints Organizados por Ordem de Uso:**
 
-  **1. Gestão de Ciclos (Após Parto)**
-  - \`POST /ciclos-lactacao\` - Iniciar novo ciclo após parto
-  - \`GET /ciclos-lactacao/propriedade/:id\` - Ver ciclos ativos
+  **1. Gestão de Lactação (Após Parto)**
+  - \`POST /lactacao\` - Iniciar novo período de lactação após parto
+  - \`GET /lactacao/propriedade/:id\` - Ver períodos ativos
 
   **2. Ordenha Diária (2-3x por dia)**
-  - \`POST /lactacao\` - Registrar cada ordenha individual
-  - \`GET /lactacao/femeas/em-lactacao/:id_propriedade\` - Ver búfalas em lactação
+  - \`POST /ordenhas\` - Registrar cada ordenha individual
+  - \`GET /ordenhas/femeas/em-lactacao/:id_propriedade\` - Ver búfalas em lactação
 
   **3. Consolidação Diária (Fim do dia)**
-  - \`POST /estoque-leite\` - Consolidar produção do dia
-  - \`GET /estoque-leite/propriedade/:id\` - Ver estoque disponível
+  - \`POST /producao-diaria\` - Consolidar produção do dia
+  - \`GET /producao-diaria/propriedade/:id\` - Ver produção disponível
 
-  **4. Coleta pelo Laticínio (Conforme agendamento)**
-  - \`POST /coletas\` - Registrar coleta do laticínio
-  - \`GET /coletas/propriedade/:id\` - Histórico de coletas
+  **4. Retirada pelo Laticínio (Conforme agendamento)**
+  - \`POST /retiradas\` - Registrar retirada pelo laticínio
+  - \`GET /retiradas/propriedade/:id\` - Histórico de retiradas
 
   ---
 
@@ -176,10 +176,11 @@ async function bootstrap() {
     .addTag('Gestão de Propriedade - Lotes (Piquetes)', '🌾 Gerenciamento de lotes (PROPRIETARIO apenas)')
     .addTag('Gestão de Propriedade - Endereços', '📍 Gerenciamento de endereços (PROPRIETARIO apenas)')
     .addTag('Rebanho - Búfalos', '🐃 Gerenciamento de búfalos (todos os cargos)')
-    .addTag('Produção 1️⃣ - Ciclos de Lactação', '🔄 Gerencia ciclos de produção (início: parto | fim: secagem)')
-    .addTag('Produção 2️⃣ - Controle Leiteiro (Ordenhas)', '🥛 Registra cada ordenha individual por búfala')
-    .addTag('Produção 3️⃣ - Estoque de Leite', '📦 Consolida produção diária da propriedade')
-    .addTag('Produção 4️⃣ - Coletas de Leite', '🚚 Registra coletas realizadas pelo laticínio')
+    .addTag('Produção - Lactação', '🔄 Gestão de lactação (início: parto | fim: secagem)')
+    .addTag('Produção - Ordenha', '🥛 Registro de ordenhas individuais')
+    .addTag('Produção - Produção Diária', '📊 Total produzido no dia')
+    .addTag('Produção - Retirada', '🚚 Retirada pelo laticínio')
+    .addTag('Produção - Laticínios', '🏭 Cadastro de compradores')
     .addBearerAuth(
       {
         type: 'http',

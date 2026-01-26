@@ -13,6 +13,17 @@ import { Cargo } from '../../usuario/enums/cargo.enum';
 @Roles(Cargo.PROPRIETARIO)
 @ApiTags('Gestão de Propriedade - Endereços')
 @Controller('enderecos')
+/**
+ * Controller de Endereços
+ *
+ * Gerencia endereços das propriedades. Os endereços são vinculados às propriedades
+ * e devem ser criados ANTES de criar uma propriedade.
+ *
+ * Fluxo típico:
+ * 1. POST /enderecos - Criar endereço
+ * 2. POST /propriedades - Criar propriedade (usando idEndereco)
+ * 3. POST /lotes - Criar lotes com geometria (usando idPropriedade)
+ */
 export class EnderecoController {
   constructor(private readonly enderecoService: EnderecoService) {}
 
