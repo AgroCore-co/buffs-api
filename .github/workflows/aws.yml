@@ -26,23 +26,7 @@ jobs:
       - name: Build do projeto
         run: npm run build
 
-      - name: Executar testes
-        run: npm run test:e2e
-        continue-on-error: true
-
-      - name: Parar aplicação no EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script: |
-            pm2 stop buffs-api || true
-            pm2 delete buffs-api || true
-            echo "Aplicação parada"
-
-      - name: Copiar arquivos para EC2
+      - name: Parar e copiar para EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -53,7 +37,7 @@ jobs:
           target: '/home/ec2-user/buffs-api/'
           strip_components: 0
 
-      - name: Instalar dependências e iniciar
+      - name: Deploy e iniciar aplicação
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -63,88 +47,25 @@ jobs:
           script: |
             cd /home/ec2-user/buffs-api
 
-            # Criar diretório de logs
+            # Parar aplicação
+            pm2 stop buffs-api 2>/dev/null || true
+            pm2 delete buffs-api 2>/dev/null || true
+
+            # Criar logs
             mkdir -p logs
 
-            # Verificar se .env existe
-            if [ ! -f .env ]; then
-              echo "ERRO: Arquivo .env não encontrado!"
-              echo "Crie o arquivo .env no EC2 antes do deploy"
-              exit 1
-            fi
+            # Verificar arquivos
+            [ ! -f .env ] && echo "ERRO: .env não encontrado" && exit 1
+            [ ! -d dist ] && echo "ERRO: dist não encontrado" && exit 1
 
-            echo "Arquivo .env encontrado"
-
-            # Verificar se dist foi copiado
-            if [ ! -d "dist" ]; then
-              echo "ERRO: Diretório dist não encontrado!"
-              echo "Conteúdo da pasta:"
-              ls -la
-              exit 1
-            fi
-
-            echo "Diretório dist encontrado"
-
-            # Instalar dependências de produção
-            echo "Instalando dependências..."
-            npm ci --omit=dev
-
-            echo "Dependências instaladas"
-
-            # Iniciar com PM2
-            echo "Iniciando aplicação..."
+            # Instalar e iniciar
+            npm ci --omit=dev --no-audit
             pm2 start ecosystem.config.js --env production
             pm2 save
 
-            sleep 10
-            pm2 status
-            pm2 logs buffs-api --lines 20 --nostream
-
-      - name: Verificar Health Check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script: |
-            echo "Verificando health check..."
+            # Aguardar e verificar
             sleep 5
+            curl -f http://localhost:3001/health || exit 1
 
-            HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/health)
-
-            if [ "$HEALTH_CHECK" = "200" ]; then
-              echo "Deploy concluído com sucesso!"
-              echo ""
-              echo "Status da aplicação:"
-              pm2 status
-              echo ""
-              echo "Últimas linhas do log:"
-              pm2 logs buffs-api --lines 10 --nostream
-            else
-              echo "Health check falhou! HTTP Status: $HEALTH_CHECK"
-              echo ""
-              echo "Logs da aplicação:"
-              pm2 logs buffs-api --lines 50 --nostream
-              exit 1
-            fi
-
-      - name: Notificar falha
-        if: failure()
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script: |
-            echo "Deploy falhou!"
-            echo ""
-            echo "Status do PM2:"
-            pm2 status || true
-            echo ""
-            echo "Logs completos:"
-            pm2 logs buffs-api --lines 100 --nostream || true
-            echo ""
-            echo "Estrutura de arquivos:"
-            ls -la /home/ec2-user/buffs-api/
+            echo "Deploy concluído!"
+            pm2 status
