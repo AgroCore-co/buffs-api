@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, count, sql } from 'drizzle-orm';
+import { eq, count, isNull, and, asc, desc } from 'drizzle-orm';
 import { alimentacaodef } from 'src/database/schema';
 
 /**
@@ -12,10 +12,17 @@ export class AlimentacaoDefRepositoryDrizzle {
 
   /**
    * Cria nova definição de alimentação
+   * Mapeia snake_case (DTO) para camelCase (schema)
    */
   async create(data: any) {
     try {
-      const result = await this.databaseService.db.insert(alimentacaodef).values(data).returning();
+      const mappedData = {
+        idPropriedade: data.id_propriedade,
+        tipoAlimentacao: data.tipo_alimentacao,
+        descricao: data.descricao,
+      };
+
+      const result = await this.databaseService.db.insert(alimentacaodef).values(mappedData).returning();
 
       return { data: result[0], error: null };
     } catch (error) {
@@ -29,7 +36,8 @@ export class AlimentacaoDefRepositoryDrizzle {
   async findAll(limit: number, offset: number) {
     try {
       const result = await this.databaseService.db.query.alimentacaodef.findMany({
-        orderBy: (alimentacaodef, { asc }) => [asc(alimentacaodef.idAlimentDef)],
+        where: isNull(alimentacaodef.deletedAt),
+        orderBy: [asc(alimentacaodef.tipoAlimentacao)],
         limit,
         offset,
       });
@@ -45,7 +53,7 @@ export class AlimentacaoDefRepositoryDrizzle {
    */
   async countAll() {
     try {
-      const result = await this.databaseService.db.select({ count: count() }).from(alimentacaodef);
+      const result = await this.databaseService.db.select({ count: count() }).from(alimentacaodef).where(isNull(alimentacaodef.deletedAt));
 
       return { count: result[0]?.count || 0, error: null };
     } catch (error) {
@@ -59,8 +67,8 @@ export class AlimentacaoDefRepositoryDrizzle {
   async findByPropriedade(idPropriedade: string, limit: number, offset: number) {
     try {
       const result = await this.databaseService.db.query.alimentacaodef.findMany({
-        where: eq(alimentacaodef.idPropriedade, idPropriedade),
-        orderBy: (alimentacaodef, { asc, desc }) => [asc(alimentacaodef.tipoAlimentacao), desc(alimentacaodef.createdAt)],
+        where: and(eq(alimentacaodef.idPropriedade, idPropriedade), isNull(alimentacaodef.deletedAt)),
+        orderBy: [asc(alimentacaodef.tipoAlimentacao), desc(alimentacaodef.createdAt)],
         limit,
         offset,
       });
@@ -79,7 +87,7 @@ export class AlimentacaoDefRepositoryDrizzle {
       const result = await this.databaseService.db
         .select({ count: count() })
         .from(alimentacaodef)
-        .where(eq(alimentacaodef.idPropriedade, idPropriedade));
+        .where(and(eq(alimentacaodef.idPropriedade, idPropriedade), isNull(alimentacaodef.deletedAt)));
 
       return { count: result[0]?.count || 0, error: null };
     } catch (error) {
@@ -93,7 +101,7 @@ export class AlimentacaoDefRepositoryDrizzle {
   async findOne(idAlimentDef: string) {
     try {
       const result = await this.databaseService.db.query.alimentacaodef.findFirst({
-        where: eq(alimentacaodef.idAlimentDef, idAlimentDef),
+        where: and(eq(alimentacaodef.idAlimentDef, idAlimentDef), isNull(alimentacaodef.deletedAt)),
       });
 
       if (!result) {
@@ -108,10 +116,23 @@ export class AlimentacaoDefRepositoryDrizzle {
 
   /**
    * Atualiza definição de alimentação
+   * Mapeia snake_case (DTO) para camelCase (schema)
    */
   async update(idAlimentDef: string, data: any) {
     try {
-      const result = await this.databaseService.db.update(alimentacaodef).set(data).where(eq(alimentacaodef.idAlimentDef, idAlimentDef)).returning();
+      const updateData: any = {
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Mapeia snake_case para camelCase
+      if (data.tipo_alimentacao) updateData.tipoAlimentacao = data.tipo_alimentacao;
+      if (data.descricao !== undefined) updateData.descricao = data.descricao;
+
+      const result = await this.databaseService.db
+        .update(alimentacaodef)
+        .set(updateData)
+        .where(and(eq(alimentacaodef.idAlimentDef, idAlimentDef), isNull(alimentacaodef.deletedAt)))
+        .returning();
 
       if (!result || result.length === 0) {
         return { data: null, error: { message: 'Definição de alimentação não encontrada' } };
@@ -124,11 +145,19 @@ export class AlimentacaoDefRepositoryDrizzle {
   }
 
   /**
-   * Remove definição de alimentação
+   * Remove definição de alimentação (soft delete)
    */
   async remove(idAlimentDef: string) {
     try {
-      await this.databaseService.db.delete(alimentacaodef).where(eq(alimentacaodef.idAlimentDef, idAlimentDef));
+      const result = await this.databaseService.db
+        .update(alimentacaodef)
+        .set({ deletedAt: new Date().toISOString() })
+        .where(and(eq(alimentacaodef.idAlimentDef, idAlimentDef), isNull(alimentacaodef.deletedAt)))
+        .returning();
+
+      if (!result || result.length === 0) {
+        return { data: null, error: { message: 'Definição de alimentação não encontrada' } };
+      }
 
       return { data: null, error: null };
     } catch (error) {
