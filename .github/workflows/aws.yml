@@ -26,16 +26,25 @@ jobs:
       - name: Build do projeto
         run: npm run build
 
-      - name: Parar e copiar para EC2
+      - name: Criar pacote para deploy
+        run: |
+          mkdir -p deploy-package
+          cp -r dist deploy-package/
+          cp -r drizzle deploy-package/
+          cp package.json deploy-package/
+          cp package-lock.json deploy-package/
+          cp ecosystem.config.js deploy-package/
+          tar -czf deploy.tar.gz -C deploy-package .
+
+      - name: Copiar e extrair no EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: 'dist/,package.json,package-lock.json,ecosystem.config.js,drizzle/'
-          target: '/home/ec2-user/buffs-api/'
-          strip_components: 0
+          source: 'deploy.tar.gz'
+          target: '/home/ec2-user/'
 
       - name: Deploy e iniciar aplicação
         uses: appleboy/ssh-action@v1.0.3
@@ -45,21 +54,51 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            cd /home/ec2-user/buffs-api
+            cd /home/ec2-user
 
             # Parar aplicação
             pm2 stop buffs-api 2>/dev/null || true
             pm2 delete buffs-api 2>/dev/null || true
 
+            # Backup do .env
+            if [ -f buffs-api/.env ]; then
+              cp buffs-api/.env /tmp/.env.backup
+            fi
+
+            # Limpar e recriar diretório
+            rm -rf buffs-api
+            mkdir -p buffs-api
+
+            # Extrair arquivos
+            tar -xzf deploy.tar.gz -C buffs-api/
+            rm deploy.tar.gz
+
+            # Restaurar .env
+            if [ -f /tmp/.env.backup ]; then
+              mv /tmp/.env.backup buffs-api/.env
+            fi
+
+            cd buffs-api
+
+            # Verificar estrutura
+            echo "Verificando arquivos extraídos:"
+            ls -la
+            echo ""
+            echo "Conteúdo de dist/:"
+            ls -la dist/ || echo "ERRO: dist/ não existe!"
+
+            # Verificar arquivos necessários
+            [ ! -f .env ] && echo "ERRO: .env não encontrado" && exit 1
+            [ ! -d dist ] && echo "ERRO: dist não encontrado" && exit 1
+            [ ! -f dist/main.js ] && echo "ERRO: dist/main.js não encontrado" && exit 1
+
             # Criar logs
             mkdir -p logs
 
-            # Verificar arquivos
-            [ ! -f .env ] && echo "ERRO: .env não encontrado" && exit 1
-            [ ! -d dist ] && echo "ERRO: dist não encontrado" && exit 1
-
-            # Instalar e iniciar
+            # Instalar dependências
             npm ci --omit=dev --no-audit
+
+            # Iniciar aplicação
             pm2 start ecosystem.config.js --env production
             pm2 save
 
@@ -67,5 +106,5 @@ jobs:
             sleep 5
             curl -f http://localhost:3001/health || exit 1
 
-            echo "Deploy concluído!"
+            echo "Deploy concluído com sucesso!"
             pm2 status
