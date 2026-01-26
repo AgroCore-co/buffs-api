@@ -38,7 +38,7 @@ export class AlertaClinicoService {
       let ids_bufalos: string[];
       if (id_propriedade) {
         const bufalos = await this.bufaloRepo.buscarIdsBufalosPorPropriedade(id_propriedade);
-        ids_bufalos = bufalos?.map((b: any) => b.idBufalo) || [];
+        ids_bufalos = bufalos ?? [];
       } else {
         // Se não forneceu propriedade, buscar limitado para evitar sobrecarga
         this.logger.warn('Verificação de sinais clínicos sem propriedade específica não é recomendado.');

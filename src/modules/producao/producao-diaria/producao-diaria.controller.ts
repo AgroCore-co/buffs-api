@@ -37,8 +37,8 @@ export class ProducaoDiariaController {
   @ApiResponse({ status: 201, description: 'Estoque consolidado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
   create(@Body() dto: CreateProducaoDiariaDto) {
-    this.logger.logApiRequest('POST', '/estoque-leite', undefined, {
-      module: 'EstoqueLeiteController',
+    this.logger.logApiRequest('POST', '/producao-diaria', undefined, {
+      module: 'ProducaoDiariaController',
       method: 'create',
       usuarioId: dto.id_usuario,
       propriedadeId: dto.id_propriedade,
@@ -74,8 +74,8 @@ export class ProducaoDiariaController {
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista de registros retornada com sucesso.' })
   findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
-    this.logger.logApiRequest('GET', `/estoque-leite/propriedade/${id_propriedade}`, undefined, {
-      module: 'EstoqueLeiteController',
+    this.logger.logApiRequest('GET', `/producao-diaria/propriedade/${id_propriedade}`, undefined, {
+      module: 'ProducaoDiariaController',
       method: 'findByPropriedade',
       propriedadeId: id_propriedade,
     });
@@ -132,8 +132,8 @@ export class ProducaoDiariaController {
   @ApiResponse({ status: 404, description: 'Registro não encontrado.' })
   @ApiResponse({ status: 400, description: 'Registro não está removido.' })
   restore(@Param('id', ParseUUIDPipe) id: string) {
-    this.logger.logApiRequest('POST', `/estoque-leite/${id}/restore`, undefined, {
-      module: 'EstoqueLeiteController',
+    this.logger.logApiRequest('POST', `/producao-diaria/${id}/restore`, undefined, {
+      module: 'ProducaoDiariaController',
       method: 'restore',
       estoqueId: id,
     });
