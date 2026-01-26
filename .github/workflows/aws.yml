@@ -80,17 +80,10 @@ jobs:
 
             cd buffs-api
 
-            # Verificar estrutura
-            echo "Verificando arquivos extraídos:"
-            ls -la
-            echo ""
-            echo "Conteúdo de dist/:"
-            ls -la dist/ || echo "ERRO: dist/ não existe!"
-
             # Verificar arquivos necessários
             [ ! -f .env ] && echo "ERRO: .env não encontrado" && exit 1
             [ ! -d dist ] && echo "ERRO: dist não encontrado" && exit 1
-            [ ! -f dist/main.js ] && echo "ERRO: dist/main.js não encontrado" && exit 1
+            [ ! -f dist/src/main.js ] && echo "ERRO: dist/src/main.js não encontrado" && exit 1
 
             # Criar logs
             mkdir -p logs
