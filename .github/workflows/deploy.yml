@@ -1,32 +1,36 @@
-name: Deploy API BUFFS
+name: Deploy BUFFS API to AWS EC2
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch: # Permite deploy manual
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout código
+      - name: 📦 Checkout código
         uses: actions/checkout@v4
 
-      # --- BUILD LOCAL ---
-      - name: Configurar Node.js
+      - name: 🔧 Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Instalar dependências
+      - name: 📥 Instalar dependências
         run: npm ci
 
-      - name: Build do projeto
+      - name: 🏗️ Build do projeto
         run: npm run build
 
-      # --- DEPLOY ---
-      - name: Parar aplicação no EC2
+      - name: 🧪 Executar testes
+        run: npm run test:e2e
+        continue-on-error: true # Não falha o deploy se os testes falharem
+
+      - name: 🛑 Parar aplicação no EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -34,20 +38,22 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            pm2 stop dsm5-buffs-api || true
+            pm2 stop buffs-api || true
+            pm2 delete buffs-api || true
 
-      - name: Copiar arquivos buildados
+      - name: 📤 Copiar arquivos para EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: 'dist/*,package.json,package-lock.json,ecosystem.config.js'
-          target: '/home/ec2-user/dsm5-buffs-api/'
+          source: 'dist/,package.json,package-lock.json,ecosystem.config.js,healthcheck.js'
+          target: '/home/ec2-user/buffs-api/'
           strip_components: 0
+          rm: true
 
-      - name: Instalar dependências e reiniciar
+      - name: 🔄 Instalar dependências e reiniciar
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -55,16 +61,56 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           script: |
-            cd /home/ec2-user/dsm5-buffs-api
+            cd /home/ec2-user/buffs-api
+
+            # Criar diretório de logs
+            mkdir -p logs
 
             # Instalar apenas dependências de produção
-            npm ci --omit=dev
+            npm ci --omit=dev --prefer-offline
 
-            # Iniciar/reiniciar com o ecosystem config
-            pm2 startOrRestart ecosystem.config.js --update-env
+            # Iniciar aplicação com PM2
+            pm2 start ecosystem.config.js --env production
 
             # Salvar configuração do PM2
             pm2 save
 
-            # Mostrar status
+            # Configurar PM2 para iniciar no boot
+            pm2 startup systemd -u ec2-user --hp /home/ec2-user
+
+            # Aguardar inicialização
+            sleep 5
+
+            # Verificar status
             pm2 status
+            pm2 logs buffs-api --lines 20 --nostream
+
+      - name: ✅ Verificar Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            # Aguardar a API iniciar completamente
+            sleep 10
+
+            # Testar health check
+            curl -f http://localhost:3001/health || exit 1
+
+            echo "✅ Deploy concluído com sucesso!"
+            echo "📊 Status da aplicação:"
+            pm2 status
+
+      - name: 🔔 Notificar falha
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            echo "❌ Deploy falhou! Verificando logs..."
+            pm2 logs buffs-api --lines 50 --nostream || true
