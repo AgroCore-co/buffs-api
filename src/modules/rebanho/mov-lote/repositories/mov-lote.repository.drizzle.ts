@@ -143,9 +143,18 @@ export class MovLoteRepositoryDrizzle {
   async checkIfExists(tableName: 'grupo' | 'lote', columnName: string, id: string) {
     try {
       const table = tableName === 'grupo' ? grupo : lote;
-      const column = tableName === 'grupo' ? grupo.idGrupo : lote.idLote;
+      const defaultColumn = tableName === 'grupo' ? grupo.idGrupo : lote.idLote;
+      const dynamicColumn =
+        tableName === 'grupo'
+          ? (grupo as any)[columnName]
+          : (lote as any)[columnName];
+      const column = dynamicColumn ?? defaultColumn;
 
-      const result = await this.databaseService.db.select({ id: column }).from(table).where(eq(column, id)).limit(1);
+      const result = await this.databaseService.db
+        .select({ id: column })
+        .from(table)
+        .where(eq(column, id))
+        .limit(1);
 
       return result.length > 0;
     } catch (error) {

@@ -34,7 +34,7 @@ export class AlertaProducaoService {
       let ids_bufalos: string[] | undefined;
       if (id_propriedade) {
         const bufalos = await this.bufaloRepo.buscarIdsBufalosPorPropriedade(id_propriedade);
-        ids_bufalos = bufalos?.map((b: any) => b.idBufalo);
+        ids_bufalos = bufalos;
         if (!ids_bufalos || ids_bufalos.length === 0) {
           this.logger.log('Nenhum búfalo encontrado na propriedade.');
           return 0;
