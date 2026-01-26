@@ -1,0 +1,155 @@
+name: Deploy BUFFS API to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Build do projeto
+        run: npm run build
+
+      - name: Executar testes
+        run: npm run test:e2e
+        continue-on-error: true
+
+      - name: Parar aplicação no EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            cd /home/ec2-user/buffs-api
+            pm2 stop buffs-api || true
+            pm2 delete buffs-api || true
+            echo "Aplicação parada"
+
+      - name: Copiar arquivos para EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          source: 'dist/,package.json,package-lock.json,ecosystem.config.js,drizzle/'
+          target: '/home/ec2-user/buffs-api/'
+          strip_components: 0
+          rm: false
+
+      - name: Instalar dependências e iniciar
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            cd /home/ec2-user/buffs-api
+
+            # Criar diretório de logs
+            mkdir -p logs
+
+            # Verificar se .env existe
+            if [ ! -f .env ]; then
+              echo "ERRO: Arquivo .env não encontrado!"
+              echo "Por favor, crie o arquivo .env no EC2 antes do deploy"
+              exit 1
+            fi
+
+            echo "Arquivo .env encontrado"
+
+            # Verificar se dist existe
+            if [ ! -d "dist" ]; then
+              echo "ERRO: Diretório dist não encontrado!"
+              exit 1
+            fi
+
+            echo "Diretório dist encontrado"
+
+            # Instalar dependências de produção
+            echo "Instalando dependências..."
+            npm ci --omit=dev --prefer-offline
+
+            echo "Dependências instaladas"
+
+            # Iniciar com PM2
+            echo "Iniciando aplicação..."
+            pm2 start ecosystem.config.js --env production
+
+            # Salvar configuração
+            pm2 save
+
+            echo "Aguardando inicialização..."
+            sleep 10
+
+            # Mostrar status
+            pm2 status
+            pm2 logs buffs-api --lines 20 --nostream
+
+      - name: Verificar Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            echo "Verificando health check..."
+            sleep 5
+
+            HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/health)
+
+            if [ "$HEALTH_CHECK" = "200" ]; then
+              echo "Deploy concluído com sucesso!"
+              echo ""
+              echo "Status da aplicação:"
+              pm2 status
+              echo ""
+              echo "Últimas linhas do log:"
+              pm2 logs buffs-api --lines 10 --nostream
+            else
+              echo "Health check falhou! HTTP Status: $HEALTH_CHECK"
+              echo ""
+              echo "Logs da aplicação:"
+              pm2 logs buffs-api --lines 50 --nostream
+              exit 1
+            fi
+
+      - name: Notificar falha
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            echo "Deploy falhou!"
+            echo ""
+            echo "Status do PM2:"
+            pm2 status || true
+            echo ""
+            echo "Logs completos:"
+            pm2 logs buffs-api --lines 100 --nostream || true
+            echo ""
+            echo "Estrutura de arquivos:"
+            ls -la /home/ec2-user/buffs-api/
