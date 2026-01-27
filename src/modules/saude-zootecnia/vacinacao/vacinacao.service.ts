@@ -1,190 +1,53 @@
-import { Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateVacinacaoDto } from './dto/create-vacinacao.dto';
 import { UpdateVacinacaoDto } from './dto/update-vacinacao.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces';
+import { VacinacaoRepositoryDrizzle } from './repositories';
+import { DatabaseService } from '../../../core/database/database.service';
+import { UserHelper } from '../../../core/utils';
 
 @Injectable()
 export class VacinacaoService implements ISoftDelete {
   constructor(
-    private readonly supabase: SupabaseService,
+    private readonly repository: VacinacaoRepositoryDrizzle,
     private readonly logger: LoggerService,
+    private readonly databaseService: DatabaseService,
   ) {}
 
-  private readonly tableName = 'dadossanitarios'; // Usando tabela DadosSanitarios existente
-
   /**
-   * Função auxiliar para encontrar o ID numérico interno (bigint) do utilizador
-   * a partir do UUID de autenticação do Supabase (o 'sub' do JWT).
-   */
-  private async getInternalUserId(authUuid: string): Promise<number> {
-    const module = 'VacinacaoService';
-    const method = 'getInternalUserId';
-    this.logger.debug('Buscando usuário por auth_id', { module, method, authUuid });
-
-    // 1. Tentar encontrar usuário por auth_id
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('usuario')
-      .select('id_usuario, nome, email, auth_id')
-      .eq('auth_id', authUuid)
-      .single();
-
-    this.logger.debug('Resultado da busca por auth_id', { module, method, found: !!data, error: error?.message });
-
-    if (data) {
-      this.logger.log('Usuário encontrado por auth_id', { module, method, nome: data.nome, id_usuario: data.id_usuario });
-      return data.id_usuario;
-    }
-
-    // 2. Se não encontrar, tentar buscar por email conhecido
-    this.logger.warn('auth_id não encontrado, tentando buscar por email', { module, method });
-
-    // Para este caso específico, sabemos o email
-    const userEmail = 'joaobarretoprof@gmail.com';
-
-    this.logger.debug('Email extraído', { module, method, userEmail });
-
-    if (userEmail) {
-      const { data: emailUser, error: emailError } = await this.supabase
-        .getAdminClient()
-        .from('usuario')
-        .select('id_usuario, nome, email, auth_id')
-        .eq('email', userEmail)
-        .single();
-
-      this.logger.debug('Resultado da busca por email', { module, method, found: !!emailUser, error: emailError?.message });
-
-      if (emailUser) {
-        // 3. Sincronizar auth_id automaticamente
-        this.logger.log('Sincronizando auth_id', { module, method, nome: emailUser.nome });
-
-        await this.supabase.getAdminClient().from('usuario').update({ auth_id: authUuid }).eq('id_usuario', emailUser.id_usuario);
-
-        this.logger.log('Usuário sincronizado com sucesso', { module, method, nome: emailUser.nome, id_usuario: emailUser.id_usuario });
-        return emailUser.id_usuario;
-      }
-    }
-
-    // 4. Se não encontrar nada, mostrar todos usuários para debug
-    const { data: allUsers } = await this.supabase.getAdminClient().from('usuario').select('id_usuario, nome, email, auth_id').limit(5);
-
-    this.logger.error('Usuário não encontrado', '', { module, method, authUuid, userEmail, totalUsers: allUsers?.length });
-
-    throw new UnauthorizedException(
-      `Falha na sincronização do utilizador. Usuário com auth: ${authUuid} e email: ${userEmail || 'N/A'} não foi encontrado.`,
-    );
-  }
-
-  /**
-   * Método create corrigido para traduzir o UUID do utilizador para o ID numérico.
+   * Método create para vacinação (usa tabela dadossanitarios)
    */
   async create(dto: CreateVacinacaoDto, id_bufalo: string, auth_uuid: string) {
-    const internalUserId = await this.getInternalUserId(auth_uuid);
+    // Buscar ID interno do usuário via helper
+    const internalUserId = await UserHelper.getInternalUserId(this.databaseService, auth_uuid);
 
-    const insertData = {
-      id_bufalo: id_bufalo,
-      id_usuario: internalUserId,
-      id_medicao: dto.id_medicacao, // Campo correto na tabela é id_medicao
-      dt_aplicacao: dto.dt_aplicacao,
-      dosagem: dto.dosagem,
-      unidade_medida: dto.unidade_medida,
-      doenca: dto.doenca || 'Vacinação Preventiva',
-      necessita_retorno: dto.necessita_retorno || false,
-      dt_retorno: dto.dt_retorno,
-    };
+    const data = await this.repository.create(dto, id_bufalo, internalUserId);
 
-    const { data, error } = await this.supabase.getAdminClient().from(this.tableName).insert(insertData).select().single();
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao criar registo de vacinação: ${error.message}`);
-    }
     return formatDateFields(data);
   }
 
   async findAllByBufalo(id_bufalo: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select(
-        `
-        id_sanit,
-        dt_aplicacao,
-        dosagem,
-        unidade_medida,
-        doenca,
-        necessita_retorno,
-        dt_retorno,
-        bufalo!inner(id_bufalo, nome, brinco),
-        usuario!inner(id_usuario, nome),
-        medicacoes!inner(id_medicacao, medicacao, tipo_tratamento, descricao)
-      `,
-      )
-      .eq('id_bufalo', id_bufalo)
-      .eq('Medicacoes.tipo_tratamento', 'Vacinação')
-      .is('deleted_at', null)
-      .order('dt_aplicacao', { ascending: false });
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao buscar vacinas do búfalo: ${error.message}`);
-    }
+    const { data } = await this.repository.findByBufalo(id_bufalo, 1000, 0);
     return formatDateFieldsArray(data);
   }
 
   async findOne(id_sanit: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select(
-        `
-        id_sanit,
-        dt_aplicacao,
-        dosagem,
-        unidade_medida,
-        doenca,
-        necessita_retorno,
-        dt_retorno,
-        bufalo!inner(id_bufalo, nome, brinco),
-        usuario!inner(id_usuario, nome),
-        medicacoes!inner(id_medicacao, medicacao, tipo_tratamento, descricao)
-      `,
-      )
-      .eq('id_sanit', id_sanit)
-      .eq('Medicacoes.tipo_tratamento', 'Vacinação')
-      .is('deleted_at', null)
-      .single();
+    const data = await this.repository.findById(id_sanit);
 
-    if (error || !data) {
+    if (!data) {
       throw new NotFoundException(`Registo de vacinação com ID ${id_sanit} não encontrado.`);
     }
+
     return formatDateFields(data);
   }
 
   async update(id_sanit: string, dto: UpdateVacinacaoDto) {
     await this.findOne(id_sanit);
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .update({
-        id_medicao: dto.id_medicacao, // Campo correto na tabela é id_medicao
-        dt_aplicacao: dto.dt_aplicacao,
-        dosagem: dto.dosagem,
-        unidade_medida: dto.unidade_medida,
-        doenca: dto.doenca,
-        necessita_retorno: dto.necessita_retorno,
-        dt_retorno: dto.dt_retorno,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id_sanit', id_sanit)
-      .select()
-      .single();
+    const data = await this.repository.update(id_sanit, dto);
 
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao atualizar registo de vacinação: ${error.message}`);
-    }
     return formatDateFields(data);
   }
 
@@ -195,17 +58,7 @@ export class VacinacaoService implements ISoftDelete {
   async softDelete(id: string) {
     await this.findOne(id);
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id_sanit', id)
-      .select()
-      .single();
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao remover registo de vacinação: ${error.message}`);
-    }
+    const data = await this.repository.softDelete(id);
 
     return {
       message: 'Registo de vacinação removido com sucesso (soft delete)',
@@ -214,27 +67,17 @@ export class VacinacaoService implements ISoftDelete {
   }
 
   async restore(id: string) {
-    const { data: registro } = await this.supabase.getAdminClient().from(this.tableName).select('deleted_at').eq('id_sanit', id).single();
+    const registro = await this.repository.findById(id);
 
     if (!registro) {
       throw new NotFoundException(`Registo de vacinação com ID ${id} não encontrado`);
     }
 
-    if (!registro.deleted_at) {
+    if (!registro.deletedAt) {
       throw new BadRequestException('Este registo não está removido');
     }
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .update({ deleted_at: null })
-      .eq('id_sanit', id)
-      .select()
-      .single();
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao restaurar registo de vacinação: ${error.message}`);
-    }
+    const data = await this.repository.restore(id);
 
     return {
       message: 'Registo de vacinação restaurado com sucesso',
@@ -243,50 +86,17 @@ export class VacinacaoService implements ISoftDelete {
   }
 
   async findAllWithDeleted(): Promise<any[]> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('*')
-      .eq('Medicacoes.tipo_tratamento', 'Vacinação')
-      .order('deleted_at', { ascending: false, nullsFirst: true })
-      .order('dt_aplicacao', { ascending: false });
+    const data = await this.repository.findAllWithDeleted();
 
-    if (error) {
-      throw new InternalServerErrorException('Erro ao buscar registos de vacinação (incluindo deletados)');
-    }
-
-    return formatDateFieldsArray(data || []);
+    // Opcional: filtrar apenas registros de vacinação se necessário
+    return formatDateFieldsArray(data);
   }
 
   /**
    * Método específico para buscar apenas vacinas por IDs específicos da tabela Medicacoes
    */
   async findVacinasByBufaloId(id_bufalo: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select(
-        `
-        id_sanit,
-        dt_aplicacao,
-        dosagem,
-        unidade_medida,
-        doenca,
-        necessita_retorno,
-        dt_retorno,
-        bufalo!inner(id_bufalo, nome, brinco),
-        usuario!inner(id_usuario, nome),
-        medicacoes!inner(id_medicacao, medicacao, descricao)
-      `,
-      )
-      .eq('id_bufalo', id_bufalo)
-      .in('id_medicacao', [3, 4, 5, 6, 12, 14]) // IDs das vacinas do seu banco
-      .is('deleted_at', null)
-      .order('dt_aplicacao', { ascending: false });
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao buscar vacinas do búfalo: ${error.message}`);
-    }
+    const { data } = await this.repository.findVacinasByBufalo(id_bufalo, 1000, 0);
     return formatDateFieldsArray(data);
   }
 }
