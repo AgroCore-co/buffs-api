@@ -17,11 +17,23 @@ export class MaterialGeneticoRepositoryDrizzle {
 
   /**
    * Cria novo material genético
+   * Mapeia snake_case (DTO) → camelCase (schema)
    */
   async create(data: any) {
     try {
       const db = this.databaseService.db;
-      const result = await db.insert(materialgenetico).values(data).returning();
+
+      // Mapeia snake_case (DTO) → camelCase (schema)
+      const mappedData = {
+        tipo: data.tipo,
+        origem: data.origem,
+        idBufaloOrigem: data.id_bufalo_origem,
+        fornecedor: data.fornecedor,
+        dataColeta: data.data_coleta,
+        idPropriedade: data.id_propriedade,
+      };
+
+      const result = await db.insert(materialgenetico).values(mappedData).returning();
       return result[0];
     } catch (error) {
       throw new InternalServerErrorException(`Erro ao criar material genético: ${error.message}`);
@@ -100,17 +112,25 @@ export class MaterialGeneticoRepositoryDrizzle {
 
   /**
    * Atualiza material genético
+   * Mapeia snake_case (DTO) → camelCase (schema)
    */
   async update(idMaterial: string, data: any) {
     try {
       const db = this.databaseService.db;
 
-      const updateData = {
-        ...data,
-        updatedAt: new Date().toISOString(),
-      };
+      // Mapeia snake_case (DTO) → camelCase (schema), apenas campos fornecidos
+      const mappedData: any = {};
 
-      const result = await db.update(materialgenetico).set(updateData).where(eq(materialgenetico.idMaterial, idMaterial)).returning();
+      if (data.tipo !== undefined) mappedData.tipo = data.tipo;
+      if (data.origem !== undefined) mappedData.origem = data.origem;
+      if (data.id_bufalo_origem !== undefined) mappedData.idBufaloOrigem = data.id_bufalo_origem;
+      if (data.fornecedor !== undefined) mappedData.fornecedor = data.fornecedor;
+      if (data.data_coleta !== undefined) mappedData.dataColeta = data.data_coleta;
+      if (data.id_propriedade !== undefined) mappedData.idPropriedade = data.id_propriedade;
+
+      mappedData.updatedAt = new Date().toISOString();
+
+      const result = await db.update(materialgenetico).set(mappedData).where(eq(materialgenetico.idMaterial, idMaterial)).returning();
 
       return result[0] || null;
     } catch (error) {
