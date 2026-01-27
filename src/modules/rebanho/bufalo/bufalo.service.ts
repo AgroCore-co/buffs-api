@@ -103,7 +103,89 @@ export class BufaloService implements ISoftDelete {
       throw new NotFoundException(`Propriedade com ID ${id_propriedade} não encontrada ou você não tem acesso a ela.`);
     }
   }
+  // ==================== CAMPOS DERIVADOS (ISSUE #6) ====================
 
+  /**
+   * Enriquece o objeto búfalo com campos derivados de genealogia e raça.
+   *
+   * **Campos expostos:**
+   * - nomeRaca: Nome da raça (direto do join)
+   * - brincoPai: Brinco do pai (prioridade: animal interno → animal origem do material genético → identificador do material)
+   * - brincoMae: Brinco da mãe (mesma lógica do pai)
+   * - materialGeneticoMachoNome: Nome/identificador do material genético masculino (apenas se não houver pai interno)
+   * - materialGeneticoFemeaNome: Nome/identificador do material genético feminino (apenas se não houver mãe interna)
+   *
+   * @param bufalo Objeto búfalo com relacionamentos carregados
+   * @returns Objeto búfalo enriquecido com campos derivados
+   */
+  private enrichBufaloWithDerivedFields(bufalo: any): any {
+    if (!bufalo) return null;
+
+    // nomeRaca - direto do join
+    const nomeRaca = bufalo.raca?.nome || null;
+
+    // brincoPai - Prioridade: pai interno → animal origem do sêmen → identificador do material
+    let brincoPai = null;
+    if (bufalo.bufalo_idPai) {
+      brincoPai = bufalo.bufalo_idPai.brinco;
+    } else if (bufalo.materialgenetico_idPaiSemen) {
+      if (bufalo.materialgenetico_idPaiSemen.bufalo) {
+        brincoPai = bufalo.materialgenetico_idPaiSemen.bufalo.brinco;
+      } else {
+        brincoPai = bufalo.materialgenetico_idPaiSemen.identificador;
+      }
+    }
+
+    // brincoMae - Prioridade: mãe interna → animal origem do óvulo → identificador do material
+    let brincoMae = null;
+    if (bufalo.bufalo_idMae) {
+      brincoMae = bufalo.bufalo_idMae.brinco;
+    } else if (bufalo.materialgenetico_idMaeOvulo) {
+      if (bufalo.materialgenetico_idMaeOvulo.bufalo) {
+        brincoMae = bufalo.materialgenetico_idMaeOvulo.bufalo.brinco;
+      } else {
+        brincoMae = bufalo.materialgenetico_idMaeOvulo.identificador;
+      }
+    }
+
+    // materialGeneticoMachoNome - Apenas se não houver pai interno
+    let materialGeneticoMachoNome = null;
+    if (!bufalo.bufalo_idPai && bufalo.materialgenetico_idPaiSemen) {
+      materialGeneticoMachoNome = bufalo.materialgenetico_idPaiSemen.identificador;
+    }
+
+    // materialGeneticoFemeaNome - Apenas se não houver mãe interna
+    let materialGeneticoFemeaNome = null;
+    if (!bufalo.bufalo_idMae && bufalo.materialgenetico_idMaeOvulo) {
+      materialGeneticoFemeaNome = bufalo.materialgenetico_idMaeOvulo.identificador;
+    }
+
+    // Retorna objeto enriquecido (remove objetos de relacionamento para limpar resposta)
+    const { bufalo_idPai, bufalo_idMae, materialgenetico_idPaiSemen, materialgenetico_idMaeOvulo, ...bufaloLimpo } = bufalo;
+
+    return {
+      ...bufaloLimpo,
+      nomeRaca,
+      brincoPai,
+      brincoMae,
+      materialGeneticoMachoNome,
+      materialGeneticoFemeaNome,
+    };
+  }
+
+  /**
+   * Enriquece um array de búfalos com campos derivados.
+   * Aplica enrichBufaloWithDerivedFields() para cada item.
+   *
+   * @param bufalos Array de búfalos
+   * @returns Array de búfalos enriquecidos
+   */
+  private enrichBufalosWithDerivedFields(bufalos: any[]): any[] {
+    if (!bufalos || bufalos.length === 0) return [];
+    return bufalos.map((bufalo) => this.enrichBufaloWithDerivedFields(bufalo));
+  }
+
+  // ==================== CRUD OPERATIONS ====================
   /**
    * Valida se o grupo existe e se o usuário tem acesso através das propriedades vinculadas.
    */
@@ -177,39 +259,30 @@ export class BufaloService implements ISoftDelete {
     const userId = await this.getUserId(user);
     const propriedadesUsuario = await this.getUserPropriedades(userId);
 
-    // Delega para service de filtros (propriedades é array, repo aceita)
-    const resultado = await this.filtrosService.filtrarBufalos(
+    // Busca diretamente do repository Drizzle com joins genealógicos
+    const resultado = await this.bufaloRepo.findWithFilters(
       {
-        id_propriedade: propriedadesUsuario.length === 1 ? propriedadesUsuario[0] : undefined,
+        id_propriedade: propriedadesUsuario,
         status: true,
       },
       { offset, limit },
     );
 
-    // Se tem múltiplas propriedades, filtra manualmente
-    let dadosFiltrados = resultado.data;
-    let totalFiltrado = resultado.total;
+    const totalResponse = await this.bufaloRepo.countWithFilters({
+      id_propriedade: propriedadesUsuario,
+      status: true,
+    });
 
-    if (propriedadesUsuario.length > 1) {
-      // Busca de todas as propriedades
-      const todasPromises = propriedadesUsuario.map((id_prop) =>
-        this.filtrosService.filtrarBufalos({ id_propriedade: id_prop, status: true }, { offset: 0, limit: 10000 }),
-      );
-      const todosResultados = await Promise.all(todasPromises);
-      const todosBufalos = todosResultados.flatMap((r) => r.data);
-
-      // Pagina manualmente
-      dadosFiltrados = todosBufalos.slice(offset, offset + limit);
-      totalFiltrado = todosBufalos.length;
-    }
-
-    // Filtra búfalos não deletados
-    const bufalosAtivos = dadosFiltrados.filter((b) => !b.deletedAt);
+    const bufalos = resultado.data || [];
+    const total = totalResponse.count || 0;
 
     // Atualiza maturidade automaticamente
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalosAtivos);
+    await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
 
-    return createPaginatedResponse(bufalosAtivos, bufalosAtivos.length, page, limit);
+    // Enriquece com campos derivados (Issue #6)
+    const bufalosEnriquecidos = this.enrichBufalosWithDerivedFields(bufalos);
+
+    return createPaginatedResponse(bufalosEnriquecidos, total, page, limit);
   }
 
   /**
@@ -221,8 +294,8 @@ export class BufaloService implements ISoftDelete {
     // Valida acesso
     await this.validateBufaloAccess(id, userId);
 
-    // Busca dados
-    const bufalo = await this.filtrosService.buscarPorId(id);
+    // Busca dados com joins (já inclui relacionamentos genealógicos)
+    const bufalo = await this.bufaloRepo.findById(id);
 
     if (!bufalo) {
       throw new NotFoundException(`Búfalo com ID ${id} não encontrado.`);
@@ -231,7 +304,8 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade automaticamente
     await this.maturidadeService.atualizarMaturidadeSeNecessario([bufalo]);
 
-    return bufalo;
+    // Enriquece com campos derivados (Issue #6)
+    return this.enrichBufaloWithDerivedFields(bufalo);
   }
 
   /**
@@ -246,14 +320,30 @@ export class BufaloService implements ISoftDelete {
     // Valida acesso à propriedade
     await this.validatePropriedadeAccess(id_propriedade, userId);
 
-    // Delega para service de filtros
-    const resultado = await this.filtrosService.buscarPorPropriedade(id_propriedade, { offset, limit });
+    // Busca diretamente do repository Drizzle com joins genealógicos
+    const resultado = await this.bufaloRepo.findWithFilters(
+      {
+        id_propriedade,
+        status: true,
+      },
+      { offset, limit },
+    );
+
+    const totalResponse = await this.bufaloRepo.countWithFilters({
+      id_propriedade,
+      status: true,
+    });
+
+    const bufalos = resultado.data || [];
+    const total = totalResponse.count || 0;
 
     // Atualiza maturidade
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
+    await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
 
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    // Enriquece com campos derivados (Issue #6)
+    const bufalosEnriquecidos = this.enrichBufalosWithDerivedFields(bufalos);
+
+    return createPaginatedResponse(bufalosEnriquecidos, total, page, limit);
   }
 
   /**

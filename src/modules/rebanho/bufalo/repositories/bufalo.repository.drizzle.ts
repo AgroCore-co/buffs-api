@@ -24,6 +24,13 @@ export class BufaloRepositoryDrizzle {
   /**
    * Busca búfalo completo por ID com todos os relacionamentos.
    * Equivalente ao método original findById().
+   *
+   * **Campos derivados expostos:**
+   * - nomeRaca (via join com raca)
+   * - brincoPai (via join com bufalo pai)
+   * - brincoMae (via join com bufalo mae)
+   * - materialGeneticoMachoNome (via join com material genético)
+   * - materialGeneticoFemeaNome (via join com material genético)
    */
   async findById(id_bufalo: string) {
     try {
@@ -44,6 +51,44 @@ export class BufaloRepositoryDrizzle {
             columns: {
               nome: true,
               idDono: true,
+            },
+          },
+          bufalo_idPai: {
+            columns: {
+              brinco: true,
+              nome: true,
+            },
+          },
+          bufalo_idMae: {
+            columns: {
+              brinco: true,
+              nome: true,
+            },
+          },
+          materialgenetico_idPaiSemen: {
+            columns: {
+              identificador: true,
+              idBufaloOrigem: true,
+            },
+            with: {
+              bufalo: {
+                columns: {
+                  brinco: true,
+                },
+              },
+            },
+          },
+          materialgenetico_idMaeOvulo: {
+            columns: {
+              identificador: true,
+              idBufaloOrigem: true,
+            },
+            with: {
+              bufalo: {
+                columns: {
+                  brinco: true,
+                },
+              },
             },
           },
         },
@@ -158,6 +203,44 @@ export class BufaloRepositoryDrizzle {
           propriedade: {
             columns: {
               nome: true,
+            },
+          },
+          bufalo_idPai: {
+            columns: {
+              brinco: true,
+              nome: true,
+            },
+          },
+          bufalo_idMae: {
+            columns: {
+              brinco: true,
+              nome: true,
+            },
+          },
+          materialgenetico_idPaiSemen: {
+            columns: {
+              identificador: true,
+              idBufaloOrigem: true,
+            },
+            with: {
+              bufalo: {
+                columns: {
+                  brinco: true,
+                },
+              },
+            },
+          },
+          materialgenetico_idMaeOvulo: {
+            columns: {
+              identificador: true,
+              idBufaloOrigem: true,
+            },
+            with: {
+              bufalo: {
+                columns: {
+                  brinco: true,
+                },
+              },
             },
           },
         },
