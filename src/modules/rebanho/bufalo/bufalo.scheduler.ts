@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { BufaloRepository } from './repositories/bufalo.repository';
+import { BufaloRepositoryDrizzle } from './repositories/bufalo.repository.drizzle';
 import { BufaloMaturidadeService } from './services/bufalo-maturidade.service';
 
 @Injectable()
@@ -8,7 +8,7 @@ export class BufaloScheduler {
   private readonly logger = new Logger(BufaloScheduler.name);
 
   constructor(
-    private readonly bufaloRepo: BufaloRepository,
+    private readonly bufaloRepo: BufaloRepositoryDrizzle,
     private readonly maturidadeService: BufaloMaturidadeService,
   ) {}
 

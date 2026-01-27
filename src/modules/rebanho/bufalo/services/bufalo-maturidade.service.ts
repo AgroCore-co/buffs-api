@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BufaloMaturityUtils } from '../utils/maturity.utils';
-import { BufaloRepository } from '../repositories/bufalo.repository';
+import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
 import { NivelMaturidade, SexoBufalo } from '../dto/create-bufalo.dto';
 
 /**
@@ -15,7 +15,7 @@ import { NivelMaturidade, SexoBufalo } from '../dto/create-bufalo.dto';
 export class BufaloMaturidadeService {
   private readonly logger = new Logger(BufaloMaturidadeService.name);
 
-  constructor(private readonly bufaloRepo: BufaloRepository) {}
+  constructor(private readonly bufaloRepo: BufaloRepositoryDrizzle) {}
 
   /**
    * Processa dados de maturidade antes de criar/atualizar búfalo.
