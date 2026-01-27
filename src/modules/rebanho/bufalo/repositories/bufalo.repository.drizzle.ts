@@ -308,12 +308,39 @@ export class BufaloRepositoryDrizzle {
   /**
    * Cria novo búfalo.
    * Equivalente ao método original create().
+   *
+   * **Mapeamento explícito snake_case → camelCase** (Issue #7)
    */
   async create(data: any) {
     try {
       const db = this.databaseService.db;
 
-      const result = await db.insert(bufalo).values(data).returning();
+      // Mapeia snake_case (DTO) → camelCase (schema)
+      const mappedData = {
+        nome: data.nome,
+        brinco: data.brinco,
+        microchip: data.microchip,
+        dtNascimento: data.dt_nascimento,
+        nivelMaturidade: data.nivel_maturidade,
+        sexo: data.sexo,
+        dataBaixa: data.data_baixa,
+        status: data.status,
+        motivoInativo: data.motivo_inativo,
+        idRaca: data.id_raca,
+        idPropriedade: data.id_propriedade,
+        idGrupo: data.id_grupo,
+        origem: data.origem,
+        brincoOriginal: data.brinco_original,
+        registroProv: data.registro_prov,
+        registroDef: data.registro_def,
+        categoria: data.categoria,
+        idPai: data.id_pai,
+        idMae: data.id_mae,
+        idPaiSemen: data.id_pai_semen,
+        idMaeOvulo: data.id_mae_ovulo,
+      };
+
+      const result = await db.insert(bufalo).values(mappedData).returning();
       const novoBufalo = result[0];
 
       return novoBufalo;
@@ -325,17 +352,41 @@ export class BufaloRepositoryDrizzle {
   /**
    * Atualiza búfalo por ID.
    * Equivalente ao método original update().
+   *
+   * **Mapeamento explícito snake_case → camelCase** (Issue #7)
    */
   async update(id_bufalo: string, data: any) {
     try {
       const db = this.databaseService.db;
 
-      const updateData = {
-        ...data,
-        updatedAt: new Date().toISOString(),
-      };
+      // Mapeia snake_case (DTO) → camelCase (schema), apenas campos fornecidos
+      const mappedData: any = {};
 
-      const [result] = await db.update(bufalo).set(updateData).where(eq(bufalo.idBufalo, id_bufalo)).returning();
+      if (data.nome !== undefined) mappedData.nome = data.nome;
+      if (data.brinco !== undefined) mappedData.brinco = data.brinco;
+      if (data.microchip !== undefined) mappedData.microchip = data.microchip;
+      if (data.dt_nascimento !== undefined) mappedData.dtNascimento = data.dt_nascimento;
+      if (data.nivel_maturidade !== undefined) mappedData.nivelMaturidade = data.nivel_maturidade;
+      if (data.sexo !== undefined) mappedData.sexo = data.sexo;
+      if (data.data_baixa !== undefined) mappedData.dataBaixa = data.data_baixa;
+      if (data.status !== undefined) mappedData.status = data.status;
+      if (data.motivo_inativo !== undefined) mappedData.motivoInativo = data.motivo_inativo;
+      if (data.id_raca !== undefined) mappedData.idRaca = data.id_raca;
+      if (data.id_propriedade !== undefined) mappedData.idPropriedade = data.id_propriedade;
+      if (data.id_grupo !== undefined) mappedData.idGrupo = data.id_grupo;
+      if (data.origem !== undefined) mappedData.origem = data.origem;
+      if (data.brinco_original !== undefined) mappedData.brincoOriginal = data.brinco_original;
+      if (data.registro_prov !== undefined) mappedData.registroProv = data.registro_prov;
+      if (data.registro_def !== undefined) mappedData.registroDef = data.registro_def;
+      if (data.categoria !== undefined) mappedData.categoria = data.categoria;
+      if (data.id_pai !== undefined) mappedData.idPai = data.id_pai;
+      if (data.id_mae !== undefined) mappedData.idMae = data.id_mae;
+      if (data.id_pai_semen !== undefined) mappedData.idPaiSemen = data.id_pai_semen;
+      if (data.id_mae_ovulo !== undefined) mappedData.idMaeOvulo = data.id_mae_ovulo;
+
+      mappedData.updatedAt = new Date().toISOString();
+
+      const [result] = await db.update(bufalo).set(mappedData).where(eq(bufalo.idBufalo, id_bufalo)).returning();
 
       if (!result) {
         throw new InternalServerErrorException('Búfalo não encontrado');
