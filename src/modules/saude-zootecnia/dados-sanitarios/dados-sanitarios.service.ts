@@ -1,5 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
-import { SupabaseService } from '../../../core/supabase/supabase.service';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateDadosSanitariosDto } from './dto/create-dados-sanitarios.dto';
 import { UpdateDadosSanitariosDto } from './dto/update-dados-sanitarios.dto';
@@ -12,33 +11,20 @@ import { DoencaNormalizerUtil } from './utils/doenca-normalizer.utils';
 import { AlertasService } from '../../alerta/alerta.service';
 import { NichoAlerta, PrioridadeAlerta } from '../../alerta/dto/create-alerta.dto';
 import { ISoftDelete } from '../../../core/interfaces';
+import { DadosSanitariosRepositoryDrizzle } from './repositories';
+import { DatabaseService } from '../../../core/database/database.service';
+import { UserHelper } from '../../../core/utils';
+import { bufalo } from 'src/database/schema';
+import { eq } from 'drizzle-orm';
 
 @Injectable()
 export class DadosSanitariosService implements ISoftDelete {
   constructor(
-    private readonly supabase: SupabaseService,
+    private readonly repository: DadosSanitariosRepositoryDrizzle,
     private readonly alertasService: AlertasService,
     private readonly logger: LoggerService,
+    private readonly databaseService: DatabaseService,
   ) {}
-
-  private readonly tableName = 'dadossanitarios';
-  private readonly tableMedicacoes = 'medicacoes';
-
-  /**
-   * Função auxiliar para encontrar o ID numérico interno (bigint) do utilizador
-   * a partir do UUID de autenticação do Supabase (o 'sub' do JWT).
-   */
-  private async getInternalUserId(authUuid: string): Promise<number> {
-    const { data, error } = await this.supabase.getAdminClient().from('usuario').select('id_usuario').eq('auth_id', authUuid).single();
-
-    if (error || !data) {
-      throw new UnauthorizedException(
-        `Falha na sincronização do utilizador. O utilizador (auth: ${authUuid}) não foi encontrado no registo local 'Usuario'.`,
-      );
-    }
-
-    return data.id_usuario;
-  }
 
   /**
    * Normaliza o nome da doença para o nome correto
@@ -56,38 +42,20 @@ export class DadosSanitariosService implements ISoftDelete {
    */
   async create(dto: CreateDadosSanitariosDto, auth_uuid: string) {
     // 1. Validar se a medicação existe
-    const { data: medicacao, error: errorMedicacao } = await this.supabase
-      .getAdminClient()
-      .from(this.tableMedicacoes)
-      .select('id_medicacao')
-      .eq('id_medicacao', dto.id_medicao)
-      .single();
+    const medicacao = await this.repository.findMedicacaoById(dto.id_medicao);
 
-    if (errorMedicacao || !medicacao) {
+    if (!medicacao) {
       throw new BadRequestException(`Medicação com ID ${dto.id_medicao} não encontrada.`);
     }
 
-    // 2. Traduzir o Auth UUID (string) para o ID interno (bigint)
-    const internalUserId = await this.getInternalUserId(auth_uuid);
+    // 2. Buscar ID interno do usuário via helper
+    const internalUserId = await UserHelper.getInternalUserId(this.databaseService, auth_uuid);
 
     // 3. Normalizar o nome da doença antes de salvar
     const doencaNormalizada = this.normalizeDoenca(dto.doenca);
 
-    // 4. Inserir no banco de dados usando o ID numérico (bigint) correto
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .insert({
-        ...dto,
-        doenca: doencaNormalizada, // Salva a doença normalizada
-        id_usuario: internalUserId, // <-- CORRIGIDO: Inserindo o ID numérico correto
-      })
-      .select()
-      .single();
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao criar dado sanitário: ${error.message}`);
-    }
+    // 4. Inserir no banco de dados
+    const data = await this.repository.create(dto, internalUserId, doencaNormalizada);
 
     // 5. CRIAR ALERTA CLÍNICO AUTOMÁTICO para doenças graves
     try {
@@ -107,48 +75,38 @@ export class DadosSanitariosService implements ISoftDelete {
       const isGrave = doencasGraves.some((grave) => doencaLower.includes(grave));
 
       if (isGrave) {
-        // Buscar informações do búfalo
-        const { data: bufaloData } = await this.supabase
-          .getAdminClient()
-          .from('bufalo')
-          .select('id_bufalo, nome, id_grupo, id_propriedade')
-          .eq('id_bufalo', dto.id_bufalo)
-          .single();
+        // Buscar informações do búfalo usando Drizzle
+        const bufaloData = await this.databaseService.db.query.bufalo.findFirst({
+          where: eq(bufalo.idBufalo, dto.id_bufalo),
+          with: {
+            grupo: {
+              columns: {
+                nomeGrupo: true,
+              },
+            },
+            propriedade: {
+              columns: {
+                nome: true,
+              },
+            },
+          },
+        });
 
         if (bufaloData) {
-          let grupoNome = 'Não informado';
-          if (bufaloData.id_grupo) {
-            const { data: grupoData } = await this.supabase
-              .getAdminClient()
-              .from('grupo')
-              .select('nome_grupo')
-              .eq('id_grupo', bufaloData.id_grupo)
-              .single();
-            if (grupoData) grupoNome = grupoData.nome_grupo;
-          }
-
-          let propriedadeNome = 'Não informada';
-          if (bufaloData.id_propriedade) {
-            const { data: propData } = await this.supabase
-              .getAdminClient()
-              .from('propriedade')
-              .select('nome')
-              .eq('id_propriedade', bufaloData.id_propriedade)
-              .single();
-            if (propData) propriedadeNome = propData.nome;
-          }
+          const grupoNome = bufaloData.grupo?.nomeGrupo || 'Não informado';
+          const propriedadeNome = bufaloData.propriedade?.nome || 'Não informada';
 
           await this.alertasService.createIfNotExists({
-            animal_id: bufaloData.id_bufalo,
+            animal_id: bufaloData.idBufalo,
             grupo: grupoNome,
             localizacao: propriedadeNome,
-            id_propriedade: bufaloData.id_propriedade,
+            id_propriedade: bufaloData.idPropriedade,
             motivo: `⚠️ ATENÇÃO: ${bufaloData.nome} diagnosticado(a) com ${doencaNormalizada}.`,
             nicho: NichoAlerta.CLINICO,
             data_alerta: new Date().toISOString().split('T')[0],
             prioridade: PrioridadeAlerta.ALTA,
             observacao: `Doença grave detectada: ${doencaNormalizada}. Monitorar evolução clínica e isolamento se necessário.`,
-            id_evento_origem: data.id_sanit,
+            id_evento_origem: data.idSanit,
             tipo_evento_origem: 'DADOS_SANITARIOS_GRAVE',
           });
 
@@ -172,150 +130,56 @@ export class DadosSanitariosService implements ISoftDelete {
     const { page = 1, limit = 10 } = paginationDto;
     const { offset } = calculatePaginationParams(page, limit);
 
-    // Primeiro, busca o total de registros
-    const { count, error: countError } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('*', { count: 'exact', head: true })
-      .is('deleted_at', null);
+    const { data, total } = await this.repository.findAll(limit, offset);
 
-    if (countError) {
-      throw new InternalServerErrorException(`Falha ao contar registros sanitários: ${countError.message}`);
-    }
-
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select(
-        `
-        *,
-        bufalo:id_bufalo(id_bufalo, nome, brinco, id_propriedade)
-      `,
-      )
-      .is('deleted_at', null)
-      .order('dt_aplicacao', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao buscar dados sanitários: ${error.message}`);
-    }
-
-    const formattedData = formatDateFieldsArray(data || []);
-    return createPaginatedResponse(formattedData, count || 0, page, limit);
+    return createPaginatedResponse(formatDateFieldsArray(data), total, page, limit);
   }
 
   async findByBufalo(id_bufalo: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
     const { page = 1, limit = 10 } = paginationDto;
     const { offset } = calculatePaginationParams(page, limit);
 
-    // Primeiro, busca o total de registros para o búfalo
-    const { count, error: countError } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('*', { count: 'exact', head: true })
-      .eq('id_bufalo', id_bufalo)
-      .is('deleted_at', null);
+    const { data, total } = await this.repository.findByBufalo(id_bufalo, limit, offset);
 
-    if (countError) {
-      throw new InternalServerErrorException(`Falha ao contar registros sanitários do búfalo: ${countError.message}`);
-    }
-
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('*')
-      .eq('id_bufalo', id_bufalo)
-      .is('deleted_at', null)
-      .order('dt_aplicacao', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao buscar dados sanitários do búfalo: ${error.message}`);
-    }
-
-    const formattedData = formatDateFieldsArray(data || []);
-    return createPaginatedResponse(formattedData, count || 0, page, limit);
+    return createPaginatedResponse(formatDateFieldsArray(data), total, page, limit);
   }
 
   async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
     const { page = 1, limit = 10 } = paginationDto;
     const { offset } = calculatePaginationParams(page, limit);
 
-    // Primeiro, busca o total de registros para a propriedade (através do JOIN com búfalos)
-    const { count, error: countError } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('id_sanit, bufalo!inner(id_propriedade)', { count: 'exact', head: true })
-      .eq('bufalo.id_propriedade', id_propriedade);
+    const { data, total } = await this.repository.findByPropriedade(id_propriedade, limit, offset);
 
-    if (countError) {
-      throw new InternalServerErrorException(`Falha ao contar registros sanitários da propriedade: ${countError.message}`);
-    }
-
-    // Busca os registros com informações do búfalo
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select(
-        `
-        *,
-        bufalo:id_bufalo(id_bufalo, nome, brinco, id_propriedade)
-      `,
-      )
-      .eq('bufalo.id_propriedade', id_propriedade)
-      .order('dt_aplicacao', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao buscar dados sanitários da propriedade: ${error.message}`);
-    }
-
-    const formattedData = formatDateFieldsArray(data || []);
-    return createPaginatedResponse(formattedData, count || 0, page, limit);
+    return createPaginatedResponse(formatDateFieldsArray(data), total, page, limit);
   }
 
   async findOne(id_sanit: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('*')
-      .eq('id_sanit', id_sanit)
-      .is('deleted_at', null)
-      .single();
+    const data = await this.repository.findById(id_sanit);
 
-    if (error || !data) {
+    if (!data) {
       throw new NotFoundException(`Dado sanitário com ID ${id_sanit} não encontrado.`);
     }
+
     return formatDateFields(data);
   }
 
   async update(id_sanit: string, dto: UpdateDadosSanitariosDto) {
     await this.findOne(id_sanit);
 
+    // Validar medicação se estiver sendo atualizada
     if (dto.id_medicao) {
-      const { data: medicacao, error: errorMedicacao } = await this.supabase
-        .getAdminClient()
-        .from(this.tableMedicacoes)
-        .select('id_medicacao')
-        .eq('id_medicao', dto.id_medicao)
-        .single();
+      const medicacao = await this.repository.findMedicacaoById(dto.id_medicao);
 
-      if (errorMedicacao || !medicacao) {
+      if (!medicacao) {
         throw new BadRequestException(`Medicação com ID ${dto.id_medicao} não encontrada.`);
       }
     }
 
     // Normalizar a doença se estiver sendo atualizada
-    const updateData = {
-      ...dto,
-      ...(dto.doenca !== undefined && { doenca: this.normalizeDoenca(dto.doenca) }),
-    };
+    const doencaNormalizada = dto.doenca ? this.normalizeDoenca(dto.doenca) : undefined;
 
-    const { data, error } = await this.supabase.getAdminClient().from(this.tableName).update(updateData).eq('id_sanit', id_sanit).select().single();
+    const data = await this.repository.update(id_sanit, dto, doencaNormalizada);
 
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao atualizar dado sanitário: ${error.message}`);
-    }
     return formatDateFields(data);
   }
 
@@ -326,17 +190,7 @@ export class DadosSanitariosService implements ISoftDelete {
   async softDelete(id: string) {
     await this.findOne(id);
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id_sanit', id)
-      .select()
-      .single();
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao remover dado sanitário: ${error.message}`);
-    }
+    const data = await this.repository.softDelete(id);
 
     return {
       message: 'Registro removido com sucesso (soft delete)',
@@ -345,27 +199,17 @@ export class DadosSanitariosService implements ISoftDelete {
   }
 
   async restore(id: string) {
-    const { data: registro } = await this.supabase.getAdminClient().from(this.tableName).select('deleted_at').eq('id_sanit', id).single();
+    const registro = await this.repository.findById(id);
 
     if (!registro) {
       throw new NotFoundException(`Dado sanitário com ID ${id} não encontrado`);
     }
 
-    if (!registro.deleted_at) {
+    if (!registro.deletedAt) {
       throw new BadRequestException('Este registro não está removido');
     }
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .update({ deleted_at: null })
-      .eq('id_sanit', id)
-      .select()
-      .single();
-
-    if (error) {
-      throw new InternalServerErrorException(`Falha ao restaurar dado sanitário: ${error.message}`);
-    }
+    const data = await this.repository.restore(id);
 
     return {
       message: 'Registro restaurado com sucesso',
@@ -374,40 +218,22 @@ export class DadosSanitariosService implements ISoftDelete {
   }
 
   async findAllWithDeleted(): Promise<any[]> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('*')
-      .order('deleted_at', { ascending: false, nullsFirst: true })
-      .order('dt_aplicacao', { ascending: false });
-
-    if (error) {
-      throw new InternalServerErrorException('Erro ao buscar dados sanitários (incluindo deletados)');
-    }
-
-    return formatDateFieldsArray(data || []);
+    const data = await this.repository.findAllWithDeleted();
+    return formatDateFieldsArray(data);
   }
 
   /**
    * Retorna a frequência de doenças registradas na propriedade
-   * Normaliza os nomes das doenças para lowercase para evitar duplicatas
    * @param id_propriedade ID da propriedade
    * @param agruparSimilares Se true, agrupa doenças com nomes similares (ex: erros de digitação)
    * @param limiarSimilaridade Limiar de similaridade para agrupamento (0-1, padrão 0.8)
    */
   async getFrequenciaDoencas(id_propriedade: string, agruparSimilares = false, limiarSimilaridade = 0.8): Promise<FrequenciaDoencasResponseDto> {
-    // Busca todos os búfalos da propriedade
-    const { data: bufalos, error: bufaloError } = await this.supabase
-      .getAdminClient()
-      .from('bufalo')
-      .select('id_bufalo')
-      .eq('id_propriedade', id_propriedade);
+    // Buscar dados do repository
+    const frequenciaData = await this.repository.findFrequenciaDoencas(id_propriedade);
+    const totalRegistros = await this.repository.countTotalRegistros(id_propriedade);
 
-    if (bufaloError) {
-      throw new InternalServerErrorException(`Falha ao buscar búfalos da propriedade: ${bufaloError.message}`);
-    }
-
-    if (!bufalos || bufalos.length === 0) {
+    if (frequenciaData.length === 0) {
       return {
         dados: [],
         total_registros: 0,
@@ -415,59 +241,35 @@ export class DadosSanitariosService implements ISoftDelete {
       };
     }
 
-    const bufaloIds = bufalos.map((b) => b.id_bufalo);
-
-    // Busca todos os registros sanitários dos búfalos que possuem doença registrada
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('doenca')
-      .in('id_bufalo', bufaloIds)
-      .not('doenca', 'is', null);
-
-    if (error) {
-      console.error('❌ DEBUG - Erro ao buscar doenças:', error);
-      throw new InternalServerErrorException(`Falha ao buscar dados de doenças: ${error.message}`);
-    }
-
-    if (!data || data.length === 0) {
+    // Se não agrupar similares, retorna direto
+    if (!agruparSimilares) {
       return {
-        dados: [],
-        total_registros: 0,
-        total_doencas_distintas: 0,
+        dados: frequenciaData.map((item) => ({
+          doenca: item.doenca,
+          frequencia: Number(item.frequencia),
+        })),
+        total_registros: Number(totalRegistros),
+        total_doencas_distintas: frequenciaData.length,
       };
     }
+
+    // Agrupar doenças similares usando algoritmo de Levenshtein
+    const doencasUnicas = frequenciaData.map((item) => item.doenca);
+    const grupos = StringSimilarityUtil.groupSimilarStrings(doencasUnicas, limiarSimilaridade);
 
     const frequenciaMap = new Map<string, number>();
 
-    if (agruparSimilares) {
-      // Agrupa doenças similares usando o algoritmo de Levenshtein
-      const doencasUnicas = Array.from(new Set(data.map((r) => r.doenca?.toLowerCase().trim()).filter((d): d is string => !!d)));
+    frequenciaData.forEach((item) => {
+      const doenca = item.doenca;
+      const freq = Number(item.frequencia);
 
-      const grupos = StringSimilarityUtil.groupSimilarStrings(doencasUnicas, limiarSimilaridade);
+      // Encontra o grupo desta doença (usa o primeiro elemento do grupo como chave)
+      const grupoKey = Array.from(grupos.keys()).find((key) => grupos.get(key)!.includes(doenca));
 
-      data.forEach((registro) => {
-        if (registro.doenca) {
-          const doencaNormalizada = registro.doenca.toLowerCase().trim();
-
-          // Encontra o grupo desta doença (usa o primeiro elemento do grupo como chave)
-          const grupoKey = Array.from(grupos.keys()).find((key) => grupos.get(key)!.includes(doencaNormalizada));
-
-          const chave = grupoKey || doencaNormalizada;
-          const count = frequenciaMap.get(chave) || 0;
-          frequenciaMap.set(chave, count + 1);
-        }
-      });
-    } else {
-      // Versão simples: apenas normaliza sem agrupamento
-      data.forEach((registro) => {
-        if (registro.doenca) {
-          const doencaNormalizada = registro.doenca.toLowerCase().trim();
-          const count = frequenciaMap.get(doencaNormalizada) || 0;
-          frequenciaMap.set(doencaNormalizada, count + 1);
-        }
-      });
-    }
+      const chave = grupoKey || doenca;
+      const count = frequenciaMap.get(chave) || 0;
+      frequenciaMap.set(chave, count + freq);
+    });
 
     // Converte o Map para array e ordena por frequência (decrescente)
     const doencasOrdenadas = Array.from(frequenciaMap.entries())
@@ -476,7 +278,7 @@ export class DadosSanitariosService implements ISoftDelete {
 
     return {
       dados: doencasOrdenadas,
-      total_registros: data.length,
+      total_registros: Number(totalRegistros),
       total_doencas_distintas: doencasOrdenadas.length,
     };
   }
@@ -498,17 +300,10 @@ export class DadosSanitariosService implements ISoftDelete {
    */
   async migrarNormalizacaoDoencas() {
     // 1. Busca todos os registros com doença
-    const { data: registros, error: fetchError } = await this.supabase
-      .getAdminClient()
-      .from(this.tableName)
-      .select('id_sanit, doenca')
-      .not('doenca', 'is', null);
+    const registros = await this.repository.findAllWithDeleted();
+    const registrosComDoenca = registros.filter((r) => r.doenca);
 
-    if (fetchError) {
-      throw new InternalServerErrorException(`Falha ao buscar registros: ${fetchError.message}`);
-    }
-
-    if (!registros || registros.length === 0) {
+    if (registrosComDoenca.length === 0) {
       return {
         message: 'Nenhum registro encontrado para normalizar',
         total: 0,
@@ -520,28 +315,30 @@ export class DadosSanitariosService implements ISoftDelete {
     const updates: Array<{ id: string; de: string; para: string }> = [];
     const erros: Array<{ id: string; doenca_original: string; erro: string }> = [];
 
-    for (const registro of registros) {
-      const doencaNormalizada = this.normalizeDoenca(registro.doenca);
+    for (const registro of registrosComDoenca) {
+      const doencaNormalizada = this.normalizeDoenca(registro.doenca || undefined);
 
       // Só atualiza se a doença mudou
       if (doencaNormalizada && doencaNormalizada !== registro.doenca) {
-        const { error: updateError } = await this.supabase
-          .getAdminClient()
-          .from(this.tableName)
-          .update({ doenca: doencaNormalizada })
-          .eq('id_sanit', registro.id_sanit);
+        try {
+          await this.repository.update(
+            registro.idSanit,
+            {
+              doenca: doencaNormalizada,
+            },
+            doencaNormalizada,
+          );
 
-        if (updateError) {
-          erros.push({
-            id: registro.id_sanit,
-            doenca_original: registro.doenca,
-            erro: updateError.message,
-          });
-        } else {
           updates.push({
-            id: registro.id_sanit,
-            de: registro.doenca,
+            id: registro.idSanit,
+            de: registro.doenca || '',
             para: doencaNormalizada,
+          });
+        } catch (error) {
+          erros.push({
+            id: registro.idSanit,
+            doenca_original: registro.doenca || '',
+            erro: error.message,
           });
         }
       }
@@ -549,9 +346,9 @@ export class DadosSanitariosService implements ISoftDelete {
 
     return {
       message: 'Migração concluída',
-      total: registros.length,
+      total: registrosComDoenca.length,
       atualizados: updates.length,
-      sem_alteracao: registros.length - updates.length - erros.length,
+      sem_alteracao: registrosComDoenca.length - updates.length - erros.length,
       detalhes: updates,
       erros: erros.length > 0 ? erros : undefined,
     };

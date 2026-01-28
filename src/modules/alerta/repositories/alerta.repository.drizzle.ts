@@ -13,10 +13,26 @@ export class AlertaRepositoryDrizzle {
 
   /**
    * Cria novo alerta
+   * Mapeia snake_case (DTO) para camelCase (schema)
    */
   async create(data: any) {
     try {
-      const result = await this.databaseService.db.insert(alertas).values(data).returning();
+      const mappedData = {
+        animalId: data.animal_id,
+        grupo: data.grupo,
+        localizacao: data.localizacao,
+        idPropriedade: data.id_propriedade,
+        motivo: data.motivo,
+        nicho: data.nicho,
+        dataAlerta: data.data_alerta,
+        prioridade: data.prioridade,
+        observacao: data.observacao,
+        visto: data.visto,
+        idEventoOrigem: data.id_evento_origem,
+        tipoEventoOrigem: data.tipo_evento_origem,
+      };
+
+      const result = await this.databaseService.db.insert(alertas).values(mappedData).returning();
 
       return { data: result[0], error: null };
     } catch (error) {
@@ -175,6 +191,14 @@ export class AlertaRepositoryDrizzle {
 
       const result = await this.databaseService.db.query.alertas.findMany({
         where: and(...conditions),
+        with: {
+          bufalo: {
+            columns: {
+              nome: true,
+              brinco: true,
+            },
+          },
+        },
         orderBy: [asc(alertas.dataAlerta), desc(alertas.prioridade)],
         limit: filters.limit,
         offset: filters.offset,
@@ -237,14 +261,29 @@ export class AlertaRepositoryDrizzle {
 
   /**
    * Atualiza status de visualização de um alerta
+   * Mapeia snake_case (DTO) para camelCase (schema)
    */
   async update(idAlerta: string, data: any) {
     try {
-      const result = await this.databaseService.db
-        .update(alertas)
-        .set({ ...data, updatedAt: new Date() })
-        .where(eq(alertas.idAlerta, idAlerta))
-        .returning();
+      const updateData: any = {
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Mapeia snake_case para camelCase
+      if (data.animal_id !== undefined) updateData.animalId = data.animal_id;
+      if (data.grupo !== undefined) updateData.grupo = data.grupo;
+      if (data.localizacao !== undefined) updateData.localizacao = data.localizacao;
+      if (data.id_propriedade !== undefined) updateData.idPropriedade = data.id_propriedade;
+      if (data.motivo !== undefined) updateData.motivo = data.motivo;
+      if (data.nicho !== undefined) updateData.nicho = data.nicho;
+      if (data.data_alerta !== undefined) updateData.dataAlerta = data.data_alerta;
+      if (data.prioridade !== undefined) updateData.prioridade = data.prioridade;
+      if (data.observacao !== undefined) updateData.observacao = data.observacao;
+      if (data.visto !== undefined) updateData.visto = data.visto;
+      if (data.id_evento_origem !== undefined) updateData.idEventoOrigem = data.id_evento_origem;
+      if (data.tipo_evento_origem !== undefined) updateData.tipoEventoOrigem = data.tipo_evento_origem;
+
+      const result = await this.databaseService.db.update(alertas).set(updateData).where(eq(alertas.idAlerta, idAlerta)).returning();
 
       if (!result || result.length === 0) {
         return { data: null, error: { code: 'PGRST116', message: 'Alerta não encontrado' } };

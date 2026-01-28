@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { SupabaseModule } from './core/supabase/supabase.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsuarioModule } from './modules/usuario/usuario.module';
@@ -18,6 +19,13 @@ import { AlertasModule } from './modules/alerta/alerta.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    // Rate Limiting: 10 requisições por minuto por IP
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 60 segundos
+        limit: 10, // 10 requisições
+      },
+    ]),
     SupabaseModule,
     AuthModule,
     UsuarioModule,

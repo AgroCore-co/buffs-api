@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  InternalServerErrorException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseService } from 'src/core/supabase/supabase.service';
 import { CreateUsuarioDto } from '../dto/create-usuario.dto';
@@ -302,6 +309,73 @@ export class UsuarioService {
       id_endereco: perfil.idEndereco,
       created_at: perfil.createdAt,
       updated_at: perfil.updatedAt,
+    };
+  }
+
+  /**
+   * Atualiza o cargo de um funcionário
+   * ⚠️ Não permite mudança para/de PROPRIETARIO (regra de negócio)
+   *
+   * @param userId ID do usuário a ser atualizado
+   * @param novoCargo Novo cargo (GERENTE, FUNCIONARIO ou VETERINARIO)
+   * @param solicitante Usuário que está fazendo a requisição (deve ser PROPRIETARIO ou GERENTE)
+   */
+  async updateCargo(userId: string, novoCargo: Cargo, solicitante: { id_usuario?: string; cargo?: Cargo }) {
+    this.logger.log('[UsuarioService] updateCargo chamado', {
+      userId,
+      novoCargo,
+      solicitante: solicitante?.id_usuario,
+    });
+
+    // Validação de permissão
+    if (!solicitante?.id_usuario || !solicitante?.cargo) {
+      throw new ForbiddenException('Solicitante inválido.');
+    }
+
+    if (solicitante.cargo !== Cargo.PROPRIETARIO && solicitante.cargo !== Cargo.GERENTE) {
+      throw new ForbiddenException('Apenas PROPRIETARIO ou GERENTE podem alterar cargos.');
+    }
+
+    // Validação de cargo permitido
+    const cargosPermitidos = [Cargo.GERENTE, Cargo.FUNCIONARIO, Cargo.VETERINARIO];
+    if (!cargosPermitidos.includes(novoCargo)) {
+      throw new BadRequestException('Cargo deve ser GERENTE, FUNCIONARIO ou VETERINARIO.');
+    }
+
+    // Busca o usuário a ser atualizado
+    const usuario = await this.usuarioRepository.buscarPorId(userId);
+    if (!usuario) {
+      throw new NotFoundException(`Usuário com ID ${userId} não encontrado.`);
+    }
+
+    // Não permite alterar cargo de PROPRIETARIO
+    if (usuario.cargo === Cargo.PROPRIETARIO) {
+      throw new ForbiddenException('Não é permitido alterar o cargo de um PROPRIETARIO.');
+    }
+
+    // Se já tem o mesmo cargo, não faz nada
+    if (usuario.cargo === novoCargo) {
+      this.logger.log('[UsuarioService] Usuário já possui este cargo', { userId, cargo: novoCargo });
+      return {
+        id_usuario: usuario.idUsuario,
+        cargo: usuario.cargo,
+        message: 'Usuário já possui este cargo.',
+      };
+    }
+
+    // Atualiza o cargo
+    const atualizado = await this.usuarioRepository.atualizarCargo(userId, novoCargo);
+
+    return {
+      id_usuario: atualizado.idUsuario,
+      auth_id: atualizado.authId,
+      nome: atualizado.nome,
+      email: atualizado.email,
+      telefone: atualizado.telefone,
+      cargo: atualizado.cargo,
+      id_endereco: atualizado.idEndereco,
+      created_at: atualizado.createdAt,
+      updated_at: atualizado.updatedAt,
     };
   }
 }

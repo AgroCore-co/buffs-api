@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { SupabaseAuthGuard } from '../modules/auth/guards/auth.guard';
 
 @ApiTags('Health')
 @Controller('health')
@@ -34,10 +35,16 @@ export class HealthController {
   }
 
   @Get('detailed')
+  @UseGuards(SupabaseAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Detailed health check with system info' })
   @ApiResponse({
     status: 200,
     description: 'Detailed health information',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Authentication required',
   })
   checkDetailed() {
     const memoryUsage = process.memoryUsage();

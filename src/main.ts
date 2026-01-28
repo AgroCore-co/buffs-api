@@ -18,98 +18,153 @@ async function bootstrap() {
   );
 
   const swaggerDescription = `
-  Documentação da API para o sistema de gerenciamento de búfalos (BUFFS).
+# BUFFS API - Sistema de Gerenciamento de Búfalos
 
-  ## Guia Completo: Criando e Autenticando um Usuário
+API para gestão de propriedades rurais, rebanhos e produção de leite.
 
-  Esta API é desacoplada da autenticação. O fluxo completo para um novo usuário é gerenciado pelo cliente (frontend) em conjunto com o Supabase e esta API.
+---
+
+## Início Rápido
+
+### 1. Criar Conta
+\`\`\`json
+POST /auth/signup-proprietario
+{
+  "email": "proprietario@fazenda.com",
+  "password": "senha123",
+  "nome": "João Silva",
+  "telefone": "27999887766"
+}
+\`\`\`
+Retorna: \`access_token\` (use nos próximos passos)
+
+### 2. Criar Endereço
+\`\`\`json
+POST /enderecos
+Authorization: Bearer <token>
+{
+  "logradouro": "Rodovia BR-101",
+  "cidade": "Cachoeiro de Itapemirim",
+  "estado": "ES",
+  "cep": "29300-000"
+}
+\`\`\`
+Retorna: \`idEndereco\` (use no próximo passo)
+
+### 3. Criar Propriedade
+\`\`\`json
+POST /propriedades
+Authorization: Bearer <token>
+{
+  "nome": "Fazenda São João",
+  "area_hectares": 250.5,
+  "id_endereco": "<idEndereco>"
+}
+\`\`\`
+Sistema pronto para uso
+
+---
+
+## Autenticação
+
+Todos os endpoints (exceto signup/signin) requerem:
+\`\`\`
+Authorization: Bearer <access_token>
+\`\`\`
+
+**Login:** \`POST /auth/signin\`  
+
+**Refresh:** \`POST /auth/refresh\` (token expira em 1h)  
+
+**Logout:** \`POST /auth/signout\`
+
+---
+
+## Permissões por Cargo
+
+| Cargo | Criar Propriedade | Criar Funcionários | Alterar Cargos | Operações Gerais |
+|-------|------------------|-------------------|----------------|------------------|
+| PROPRIETARIO | ✅ | ✅ | ✅ | ✅ |
+| GERENTE | ❌ | ✅ | ✅ | ✅ |
+| FUNCIONARIO | ❌ | ❌ | ❌ | ✅ |
+| VETERINARIO | ❌ | ❌ | ❌ | ✅ (saúde apenas) |
+
+**Criar Funcionário:** \`POST /auth/signup-funcionario\` (PROPRIETARIO/GERENTE)  
+**Alterar Cargo:** \`PATCH /usuarios/{id}/cargo\` (PROPRIETARIO/GERENTE)
+
+---
+
+## Segurança
+
+**Rate Limiting:**
+- Signup: 3-5 req/min
+- Geral: 10 req/min
+- Resposta: HTTP 429
+
+**Guards:**
+- \`SupabaseAuthGuard\`: Valida JWT
+
+- \`RolesGuard\`: Verifica permissões por cargo
+
+- \`OnboardingGuard\`: Bloqueia proprietário sem propriedade
+
+- \`EmailVerifiedGuard\`: Requer email confirmado (ops críticas)
+
+---
+
+## Fluxo de Produção
+
+**Diário:**
+1. \`POST /lactacao\` - Iniciar ciclo após parto
+
+2. \`POST /ordenhas\` - Registrar ordenhas (2-3x/dia)
+
+3. \`POST /producao-diaria\` - Consolidar fim do dia
+
+4. \`POST /retiradas\` - Registrar coleta do laticínio
+
+---
+
+## Troubleshooting
+
+**401 Unauthorized:** Token ausente/expirado → use \`/auth/refresh\`  
+
+**403 Forbidden:** Cargo sem permissão → veja matriz acima  
+
+**403 Onboarding:** Proprietário sem propriedade → crie endereço + propriedade  
+
+**429 Too Many Requests:** Aguarde 60s
+
+---
+
+**Stack:** NestJS v10 + PostgreSQL + Supabase Auth + Drizzle ORM
 
   ---
 
-  ### **Etapa 1: Cadastro (Supabase Auth)**
-  O usuário se cadastra no frontend. O frontend **NÃO** chama a nossa API para isso. Ele usa o SDK do Supabase.
-  - **Função a ser chamada no frontend:** \`supabase.auth.signUp({ email, password })\`
-  - **Resultado:** Uma "conta de acesso" é criada no Supabase. Se a confirmação de email estiver ativa, um email será enviado.
+  ## Sistema de Produção de Leite - Fluxo Completo
 
-  ---
+  ### Conceitos Importantes:
 
-  ### **Etapa 2: Login e Obtenção do Token (Supabase Auth)**
-  Após confirmar o email (se aplicável), o usuário faz login.
-  - **Função a ser chamada no frontend:** \`supabase.auth.signInWithPassword()\` ou \`signInWithOAuth({ provider: 'google' })\`
-  - **Resultado:** O Supabase retorna uma sessão válida contendo um **access_token (JWT)**. Este token é a chave para acessar nossa API.
+  #### 1. Ciclo de Lactação
+  Período que inicia quando a búfala pare e começa a produzir leite.
+  - Início: Data do parto
+  - Fim: Quando a búfala é secada (para de ser ordenhada)
+  - Status: ATIVO (produzindo) ou ENCERRADO (parou de produzir)
 
-  ---
-
-  ## 🔐 Sistema de Autenticação e Permissões
-
-  ### **Fluxo de Autenticação**
-  1. **Cadastro**: Use \`POST /auth/signup\` para criar conta no Supabase
-  2. **Confirmação**: Confirme seu email (se configurado)
-  3. **Login**: Use \`POST /auth/signin\` para obter o JWT token
-  4. **Criar Perfil**: Use \`POST /usuarios\` com o token JWT para criar seu perfil na aplicação
-  5. **Usar a API**: Inclua o header \`Authorization: Bearer <access_token>\` em todas as requisições
-
-  ### **Sistema de Cargos e Permissões**
-
-  | Cargo | Criar Funcionários | Gestão de Propriedade | Outras Operações |
-  |-------|-------------------|----------------------|------------------|
-  | **PROPRIETARIO** | ✅ Sim | ✅ Sim | ✅ Todas |
-  | **GERENTE** | ✅ Sim | ❌ Não | ✅ Todas (exceto gestão propriedade) |
-  | **FUNCIONARIO** | ❌ Não | ❌ Não | ✅ Operações básicas |
-  | **VETERINARIO** | ❌ Não | ❌ Não | ✅ Operações básicas |
-
-  ### **Hierarquia de Permissões**
-  - **Gestão de Propriedade**: Apenas PROPRIETARIO
-  - **Criação de Funcionários**: PROPRIETARIO e GERENTE
-  - **Operações do Rebanho**: Todos os cargos
-  - **Visualização de Dados**: Todos os cargos
-
-  ---
-
-  ## 🚀 Primeiros Passos
-
-  ### **1. Para o primeiro usuário (Proprietário):**
-  1. **Cadastre-se**: \`POST /auth/signup\` com email, senha e dados opcionais
-  2. **Faça login**: \`POST /auth/signin\` para obter o \`access_token\`
-  3. **Crie seu perfil**: \`POST /usuarios\` com o token no header - **NÃO inclua email no body**
-  4. Seu perfil será criado automaticamente como **PROPRIETARIO**
-
-  ### **2. Para criar funcionários (apenas Proprietários e Gerentes):**
-  1. Faça login para obter seu JWT token
-  2. Use \`POST /usuarios/funcionarios\` para criar funcionários
-  3. Especifique o cargo: GERENTE, FUNCIONARIO ou VETERINARIO
-  4. O funcionário poderá usar \`POST /auth/signin\` com as credenciais fornecidas
-
-  ### **3. Renovação de Token:**
-  - Use \`POST /auth/refresh\` quando o access_token expirar
-  - Use \`POST /auth/signout\` para fazer logout
-
-  ---
-
-  ## 🥛 Sistema de Produção de Leite - Fluxo Completo
-
-  ### **Conceitos Importantes:**
-
-  #### **1️⃣ Ciclo de Lactação**
-  **O que é:** Período que inicia quando a búfala pare e começa a produzir leite.
-  - **Início:** Data do parto
-  - **Fim:** Quando a búfala é secada (para de ser ordenhada)
-  - **Status:** ATIVO (produzindo) ou ENCERRADO (parou de produzir)
-
-  #### **2️⃣ Controle Leiteiro (Ordenha Individual)**
-  **O que é:** Cada ordenha individual de uma búfala.
+  #### 2. Controle Leiteiro (Ordenha Individual)
+  Cada ordenha individual de uma búfala.
   - Registra quanto leite foi produzido por búfala em cada ordenha
   - Pode ter múltiplas ordenhas por dia (manhã, tarde, noite)
   - Vinculado a um ciclo de lactação específico
 
-  #### **3️⃣ Estoque de Leite**
-  **O que é:** Consolidação do leite produzido no dia pela propriedade.
+  #### 3. Estoque de Leite
+  Consolidação do leite produzido no dia pela propriedade.
   - Soma de todas as ordenhas do dia
   - Registrado no final do dia de produção
   - Representa o total de leite disponível
 
-  #### **4️⃣ Coleta de Leite**
-  **O que é:** Quando o laticínio vem buscar o leite na propriedade.
+  #### 4. Coleta de Leite
+  Quando o laticínio vem buscar o leite na propriedade.
   - Retira leite do estoque
   - Gera receita para a propriedade
   - Registra quantidade coletada e valor pago
@@ -133,64 +188,79 @@ async function bootstrap() {
   ### **Endpoints Organizados por Ordem de Uso:**
 
   **1. Gestão de Lactação (Após Parto)**
+
   - \`POST /lactacao\` - Iniciar novo período de lactação após parto
+
   - \`GET /lactacao/propriedade/:id\` - Ver períodos ativos
 
   **2. Ordenha Diária (2-3x por dia)**
+
   - \`POST /ordenhas\` - Registrar cada ordenha individual
+
   - \`GET /ordenhas/femeas/em-lactacao/:id_propriedade\` - Ver búfalas em lactação
 
   **3. Consolidação Diária (Fim do dia)**
+
   - \`POST /producao-diaria\` - Consolidar produção do dia
+
   - \`GET /producao-diaria/propriedade/:id\` - Ver produção disponível
 
   **4. Retirada pelo Laticínio (Conforme agendamento)**
+
   - \`POST /retiradas\` - Registrar retirada pelo laticínio
+
   - \`GET /retiradas/propriedade/:id\` - Histórico de retiradas
 
   ---
 
-  ## 📝 Notas Importantes
-
-  - **Autenticação**: Use os endpoints \`/auth/*\` para cadastro, login e gerenciamento de sessão
-  - **Perfil**: Use \`POST /usuarios\` apenas APÓS ter feito login para criar seu perfil na aplicação
-  - **Email**: NUNCA envie email no body das requisições - ele é extraído do token JWT
-  - **Funcionários**: Criados via \`POST /usuarios/funcionarios\` por proprietários/gerentes
-  - **Tokens**: Use sempre o \`access_token\` retornado pelo login nos headers das requisições
-
-  ## 🔐 Autenticação em Todas as Requisições
+  ## � Autenticação em Todas as Requisições
 
   Todos os endpoints protegidos requerem:
   \`\`\`
-  Authorization: Bearer <access_token_do_auth_signin>
+  Authorization: Bearer <access_token>
   \`\`\`
+
+  **Obtendo o access_token:**
+
+  - Cadastro: \`POST /auth/signup-proprietario\` retorna o token
+
+  - Login: \`POST /auth/signin\` retorna o token
+  
+  - Refresh: \`POST /auth/refresh\` renova o token expirado
+
+  ---
+
+  ## 📚 Documentação Completa
+
+  Para informações detalhadas sobre o sistema, consulte:
+**Stack:** NestJS v10 + PostgreSQL + Supabase Auth + Drizzle ORM
   `;
 
   const config = new DocumentBuilder()
     .setTitle('🐃 BUFFS API')
     .setDescription(swaggerDescription)
     .setVersion('1.0')
-    .addTag('Autenticação', 'Endpoints de cadastro, login e gerenciamento de sessão')
-    .addTag('Usuários (Perfis)', 'Gerenciamento de perfis de usuários (proprietários e outros).')
-    .addTag('Gestão de Propriedade - Propriedades', '🏠 Gerenciamento de propriedades (PROPRIETARIO apenas)')
-    .addTag('Gestão de Propriedade - Lotes (Piquetes)', '🌾 Gerenciamento de lotes (PROPRIETARIO apenas)')
-    .addTag('Gestão de Propriedade - Endereços', '📍 Gerenciamento de endereços (PROPRIETARIO apenas)')
-    .addTag('Rebanho - Búfalos', '🐃 Gerenciamento de búfalos (todos os cargos)')
-    .addTag('Produção - Lactação', '🔄 Gestão de lactação (início: parto | fim: secagem)')
-    .addTag('Produção - Ordenha', '🥛 Registro de ordenhas individuais')
-    .addTag('Produção - Produção Diária', '📊 Total produzido no dia')
-    .addTag('Produção - Retirada', '🚚 Retirada pelo laticínio')
-    .addTag('Produção - Laticínios', '🏭 Cadastro de compradores')
+    .addTag('Autenticação', 'Cadastro, login e sessão')
+    .addTag('Usuários', 'Gerenciamento de perfis')
+    .addTag('Gestão de Propriedade - Endereços', 'Endereços das propriedades')
+    .addTag('Gestão de Propriedade - Propriedades', 'Propriedades rurais')
+    .addTag('Gestão de Propriedade - Lotes (Piquetes)', 'Lotes e piquetes')
+    .addTag('Rebanho - Búfalos', 'Gestão do rebanho')
+    .addTag('Produção - Lactação', 'Ciclos de lactação')
+    .addTag('Produção - Ordenha', 'Registro de ordenhas')
+    .addTag('Produção - Produção Diária', 'Consolidação diária')
+    .addTag('Produção - Retirada', 'Coleta pelo laticínio')
+    .addTag('Produção - Laticínios', 'Cadastro de compradores')
     .addBearerAuth(
       {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
         name: 'JWT',
-        description: 'Token JWT obtido do endpoint /auth/signin. Exemplo: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        description: 'Token JWT obtido de /auth/signin',
         in: 'header',
       },
-      'JWT-auth', // Este nome deve corresponder ao usado no decorator @ApiBearerAuth()
+      'JWT-auth',
     )
     .build();
 

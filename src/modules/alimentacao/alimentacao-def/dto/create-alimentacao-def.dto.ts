@@ -23,21 +23,21 @@ export class CreateAlimentacaoDefDto {
     description: 'Tipo de alimentação (texto livre). Ex: Concentrado, Volumoso, Suplemento Mineral, etc.',
     example: 'Concentrado',
     required: true,
-    maxLength: 100,
+    maxLength: 50,
   })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(100)
+  @MaxLength(50)
   tipo_alimentacao: string;
 
   @ApiProperty({
     description: 'Descrição detalhada da alimentação, incluindo composição e características.',
     example: 'Ração balanceada para búfalos em fase de recria com 18% de proteína bruta.',
     required: false,
-    maxLength: 500,
+    maxLength: 200,
   })
   @IsString()
   @IsOptional()
-  @MaxLength(500)
+  @MaxLength(200)
   descricao?: string;
 }

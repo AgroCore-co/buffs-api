@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { BufaloRepository } from '../repositories/bufalo.repository';
+import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
 import { NivelMaturidade, SexoBufalo } from '../dto/create-bufalo.dto';
 
 /**
@@ -57,7 +57,7 @@ export interface ResultadoPaginado<T> {
 export class BufaloFiltrosService {
   private readonly logger = new Logger(BufaloFiltrosService.name);
 
-  constructor(private readonly bufaloRepo: BufaloRepository) {}
+  constructor(private readonly bufaloRepo: BufaloRepositoryDrizzle) {}
 
   /**
    * **Método unificado de filtragem.**
@@ -213,8 +213,7 @@ export class BufaloFiltrosService {
    */
   async buscarPorMicrochip(microchip: string, id_propriedades: string[]): Promise<any | null> {
     this.logger.debug(`Buscando búfalo por microchip: ${microchip}`);
-    const response = await this.bufaloRepo.findByMicrochip(microchip, id_propriedades);
-    return response.data || null;
+    return await this.bufaloRepo.findByMicrochip(microchip, id_propriedades);
   }
 
   /**
@@ -222,8 +221,7 @@ export class BufaloFiltrosService {
    */
   async buscarPorId(id_bufalo: string): Promise<any | null> {
     this.logger.debug(`Buscando búfalo por ID: ${id_bufalo}`);
-    const response = await this.bufaloRepo.findById(id_bufalo);
-    return response.data || null;
+    return await this.bufaloRepo.findById(id_bufalo);
   }
 
   /**
@@ -231,7 +229,6 @@ export class BufaloFiltrosService {
    */
   async buscarPorIds(ids: string[]): Promise<any[]> {
     this.logger.debug(`Buscando ${ids.length} búfalos por IDs`);
-    const response = await this.bufaloRepo.findActiveByIds(ids);
-    return response.data || [];
+    return await this.bufaloRepo.findActiveByIds(ids);
   }
 }

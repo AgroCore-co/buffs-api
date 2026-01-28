@@ -1,3 +1,5 @@
+import { distance } from 'fastest-levenshtein';
+
 /**
  * Utilitários para comparação e agrupamento de strings similares
  * Usado para detectar erros de digitação em nomes de doenças
@@ -11,34 +13,7 @@ export class StringSimilarityUtil {
    * @returns Número de edições (inserções, remoções, substituições)
    */
   static levenshteinDistance(s1: string, s2: string): number {
-    const matrix: number[][] = [];
-
-    // Inicializa primeira coluna
-    for (let i = 0; i <= s2.length; i++) {
-      matrix[i] = [i];
-    }
-
-    // Inicializa primeira linha
-    for (let j = 0; j <= s1.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    // Preenche a matriz
-    for (let i = 1; i <= s2.length; i++) {
-      for (let j = 1; j <= s1.length; j++) {
-        if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substituição
-            matrix[i][j - 1] + 1, // inserção
-            matrix[i - 1][j] + 1, // remoção
-          );
-        }
-      }
-    }
-
-    return matrix[s2.length][s1.length];
+    return distance(s1, s2);
   }
 
   /**

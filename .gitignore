@@ -35,4 +35,5 @@ DRIZZLE_*.ts
 /drizzle/*.sql
 /drizzle/meta
 
-prompts
+promptsdrizzle/
+drizzle/

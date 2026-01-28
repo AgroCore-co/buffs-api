@@ -17,11 +17,27 @@ export class CoberturaRepositoryDrizzle {
 
   /**
    * Cria nova cobertura
+   * Mapeia snake_case (DTO) → camelCase (schema)
    */
   async create(data: any) {
     try {
       const db = this.databaseService.db;
-      const result = await db.insert(dadosreproducao).values(data).returning();
+
+      // Mapeia snake_case (DTO) → camelCase (schema)
+      const mappedData = {
+        idOvulo: data.id_doadora,
+        idSemen: data.id_semen,
+        idBufala: data.id_bufala,
+        idBufalo: data.id_bufalo,
+        tipoInseminacao: data.tipo_inseminacao,
+        status: data.status,
+        tipoParto: data.tipo_parto,
+        dtEvento: data.dt_evento,
+        ocorrencia: data.ocorrencia,
+        idPropriedade: data.id_propriedade,
+      };
+
+      const result = await db.insert(dadosreproducao).values(mappedData).returning();
       return result[0];
     } catch (error) {
       throw new InternalServerErrorException(`Erro ao criar cobertura: ${error.message}`);
@@ -169,17 +185,29 @@ export class CoberturaRepositoryDrizzle {
 
   /**
    * Atualiza cobertura
+   * Mapeia snake_case (DTO) → camelCase (schema)
    */
   async update(idReproducao: string, data: any) {
     try {
       const db = this.databaseService.db;
 
-      const updateData = {
-        ...data,
-        updatedAt: new Date().toISOString(),
-      };
+      // Mapeia snake_case (DTO) → camelCase (schema), apenas campos fornecidos
+      const mappedData: any = {};
 
-      const result = await db.update(dadosreproducao).set(updateData).where(eq(dadosreproducao.idReproducao, idReproducao)).returning();
+      if (data.id_doadora !== undefined) mappedData.idOvulo = data.id_doadora;
+      if (data.id_semen !== undefined) mappedData.idSemen = data.id_semen;
+      if (data.id_bufala !== undefined) mappedData.idBufala = data.id_bufala;
+      if (data.id_bufalo !== undefined) mappedData.idBufalo = data.id_bufalo;
+      if (data.tipo_inseminacao !== undefined) mappedData.tipoInseminacao = data.tipo_inseminacao;
+      if (data.status !== undefined) mappedData.status = data.status;
+      if (data.tipo_parto !== undefined) mappedData.tipoParto = data.tipo_parto;
+      if (data.dt_evento !== undefined) mappedData.dtEvento = data.dt_evento;
+      if (data.ocorrencia !== undefined) mappedData.ocorrencia = data.ocorrencia;
+      if (data.id_propriedade !== undefined) mappedData.idPropriedade = data.id_propriedade;
+
+      mappedData.updatedAt = new Date().toISOString();
+
+      const result = await db.update(dadosreproducao).set(mappedData).where(eq(dadosreproducao.idReproducao, idReproducao)).returning();
 
       return result[0] || null;
     } catch (error) {
