@@ -29,12 +29,37 @@ export class EnderecoController {
 
   @Post()
   @ApiOperation({
-    summary: 'Cadastra um novo endereço',
-    description: 'Cria um novo registro de endereço no banco de dados. Retorna o endereço completo com o ID gerado.',
+    summary: '2️⃣ Criar endereço (SEGUNDO PASSO)',
+    description: `**FLUXO DE ONBOARDING - PASSO 2/3**
+
+Cria um endereço que será vinculado à propriedade no próximo passo.
+
+**Ordem correta:**
+1. ✅ POST /auth/signup-proprietario
+2. 🔵 POST /enderecos (VOCÊ ESTÁ AQUI)
+3. ⏩ POST /propriedades (usando o idEndereco retornado)
+
+**Importante:** Guarde o \`idEndereco\` retornado, você vai precisar dele no próximo passo.`,
   })
-  @ApiResponse({ status: 201, description: 'Endereço criado com sucesso.' })
-  @ApiResponse({ status: 400, description: 'Dados inválidos.' })
-  @ApiResponse({ status: 401, description: 'Não autorizado.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Endereço criado com sucesso. Use o idEndereco retornado para criar a propriedade.',
+    schema: {
+      example: {
+        idEndereco: 'uuid-endereco-123',
+        logradouro: 'Rodovia BR-101',
+        numero: 'Km 45',
+        complemento: 'Propriedade Rural',
+        bairro: 'Zona Rural',
+        cidade: 'Cachoeiro de Itapemirim',
+        estado: 'ES',
+        cep: '29300-000',
+        created_at: '28/01/2026 14:32',
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Dados inválidos (CEP inválido, estado com formato incorreto, etc).' })
+  @ApiResponse({ status: 401, description: 'Não autorizado. Token JWT ausente ou inválido.' })
   create(@Body() createEnderecoDto: CreateEnderecoDto) {
     return this.enderecoService.create(createEnderecoDto);
   }

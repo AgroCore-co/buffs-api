@@ -20,16 +20,51 @@ export class PropriedadeController {
   @UseGuards(RolesGuard)
   @Roles(Cargo.PROPRIETARIO)
   @ApiOperation({
-    summary: 'Criar propriedade',
-    description: 'Cria uma nova propriedade. Disponível apenas para proprietários.',
+    summary: '3️⃣ Criar propriedade (TERCEIRO PASSO)',
+    description: `**FLUXO DE ONBOARDING - PASSO 3/3**
+
+Cria a propriedade vinculada ao endereço criado no passo anterior.
+
+**Ordem correta:**
+1. ✅ POST /auth/signup-proprietario
+2. ✅ POST /enderecos
+3. 🔵 POST /propriedades (VOCÊ ESTÁ AQUI - use o idEndereco)
+
+**Próximos passos opcionais:**
+- POST /lotes (criar piquetes/lotes com geolocalização)
+- POST /auth/signup-funcionario (adicionar funcionários)
+
+**Importante:**
+- O campo \`id_endereco\` é OBRIGATÓRIO e deve ser o UUID retornado no passo 2
+- Apenas PROPRIETARIOS podem criar propriedades
+- Após criar a propriedade, você pode:
+  * Cadastrar búfalos
+  * Registrar produção
+  * Gerenciar alimentação
+  * Adicionar funcionários`,
   })
-  @ApiResponse({ status: 201, description: 'Propriedade criada com sucesso.' })
-  @ApiResponse({ status: 403, description: 'Acesso negado. Apenas proprietários podem gerenciar propriedades.' })
-  @ApiResponse({ status: 400, description: 'Dados inválidos ou endereço não encontrado.' })
   @ApiResponse({
-    status: 404,
-    description: 'Perfil do usuário não encontrado.',
+    status: 201,
+    description: 'Propriedade criada com sucesso. Sistema pronto para uso!',
+    schema: {
+      example: {
+        idPropriedade: 'uuid-propriedade-456',
+        nome: 'Fazenda São João',
+        area_hectares: 250.5,
+        id_endereco: 'uuid-endereco-123',
+        id_usuario: 'uuid-usuario-789',
+        created_at: '28/01/2026 14:35',
+        endereco: {
+          logradouro: 'Rodovia BR-101',
+          cidade: 'Cachoeiro de Itapemirim',
+          estado: 'ES',
+        },
+      },
+    },
   })
+  @ApiResponse({ status: 403, description: 'Acesso negado. Apenas proprietários (cargo: PROPRIETARIO) podem criar propriedades.' })
+  @ApiResponse({ status: 400, description: 'Dados inválidos ou id_endereco não encontrado.' })
+  @ApiResponse({ status: 404, description: 'Perfil do usuário não encontrado no sistema.' })
   create(@Body() createPropriedadeDto: CreatePropriedadeDto, @User() user: any) {
     return this.propriedadeService.create(createPropriedadeDto, user);
   }
