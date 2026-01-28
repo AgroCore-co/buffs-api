@@ -53,12 +53,22 @@ export class CacheService {
   }
 
   /**
-   * Limpar todo o cache (limitado pelo cache-manager)
+   * Limpar todo o cache
    */
   async reset(): Promise<void> {
     try {
-      // cache-manager não tem reset, então usamos uma solução alternativa
-      this.logger.log('Cache reset solicitado - TTL vai expirar naturalmente', { module: 'CacheService', method: 'reset' });
+      // O cache-manager v5 usa store.reset() se disponível
+      const store = (this.cacheManager as any).store;
+      if (store && typeof store.reset === 'function') {
+        await store.reset();
+        this.logger.log('Cache completamente limpo', { module: 'CacheService', method: 'reset' });
+      } else {
+        // Fallback: não há método reset disponível
+        this.logger.warn('Reset não disponível neste cache store - use invalidateKeys para chaves específicas', {
+          module: 'CacheService',
+          method: 'reset',
+        });
+      }
     } catch (error) {
       this.logger.warn('Erro ao limpar cache', { module: 'CacheService', method: 'reset', error: error.message });
     }
