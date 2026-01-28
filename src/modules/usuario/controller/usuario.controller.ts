@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseUUIDPipe, UseInterceptors } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { UsuarioService } from '../services/usuario.service';
-import { CreateFuncionarioDto, CreateUsuarioDto, UpdateUsuarioDto } from '../dto';
+import { FuncionarioService } from '../services/funcionario.service';
+import { CreateFuncionarioDto, CreateUsuarioDto, UpdateUsuarioDto, UpdateCargoDto } from '../dto';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -9,25 +10,17 @@ import { User } from '../../auth/decorators/user.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Cargo } from '../enums/cargo.enum';
 
-@ApiTags('Usuários (Perfis)')
+@ApiTags('Usuários')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
 @Controller('usuarios')
 export class UsuarioController {
-  constructor(private readonly usuarioService: UsuarioService) {}
+  constructor(
+    private readonly usuarioService: UsuarioService,
+    private readonly funcionarioService: FuncionarioService,
+  ) {}
 
-  @Post()
-  @ApiOperation({
-    summary: 'Criar perfil de proprietário',
-    description: `Cria o perfil inicial do usuário no sistema após cadastro e login. O cargo será automaticamente definido como PROPRIETARIO.`,
-  })
-  @ApiResponse({ status: 201, description: 'Perfil de proprietário criado com sucesso.' })
-  @ApiResponse({ status: 401, description: 'Token JWT inválido ou expirado.' })
-  @ApiResponse({ status: 409, description: 'Usuário já possui perfil cadastrado.' })
-  create(@Body() createUsuarioDto: CreateUsuarioDto, @User() user: any) {
-    console.log('--- DADOS DO USUÁRIO DO TOKEN JWT ---', user);
-    return this.usuarioService.create(createUsuarioDto, user.email, user.sub);
-  }
+  // ==================== USUÁRIO ROUTES ====================
 
   @Get('me')
   @ApiOperation({
@@ -79,6 +72,25 @@ export class UsuarioController {
     return this.usuarioService.update(id, updateUsuarioDto);
   }
 
+  @Patch(':id/cargo')
+  @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: 'Atualizar cargo de funcionário',
+    description:
+      'Permite alterar o cargo de um funcionário entre GERENTE, FUNCIONARIO e VETERINARIO. Não permite alteração para/de PROPRIETARIO. Apenas para proprietários e gerentes.',
+  })
+  @ApiResponse({ status: 200, description: 'Cargo atualizado com sucesso.' })
+  @ApiResponse({ status: 400, description: 'Cargo inválido.' })
+  @ApiResponse({ status: 403, description: 'Acesso negado ou tentativa de alterar cargo de PROPRIETARIO.' })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
+  updateCargo(@Param('id', ParseUUIDPipe) id: string, @Body() updateCargoDto: UpdateCargoDto, @User() user: any) {
+    return this.usuarioService.updateCargo(id, updateCargoDto.cargo, {
+      id_usuario: user.id,
+      cargo: user.cargo,
+    });
+  }
+
   @Delete(':id')
   @Roles(Cargo.PROPRIETARIO)
   @UseGuards(RolesGuard)
@@ -92,17 +104,44 @@ export class UsuarioController {
     return this.usuarioService.remove(id);
   }
 
-  @Post('/funcionarios')
+  // ==================== FUNCIONÁRIO ROUTES (Consulta Apenas) ====================
+
+  @Get('funcionarios')
   @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
   @UseGuards(RolesGuard)
   @ApiOperation({
-    summary: 'Criar funcionário/gerente/veterinário',
-    description:
-      'Cria um usuário (GERENTE, FUNCIONARIO ou VETERINARIO) usando o client admin e vincula à propriedade informada ou às propriedades do solicitante.',
+    summary: 'Listar meus funcionários',
+    description: 'Lista todos os funcionários de todas as propriedades do proprietário/gerente logado.',
   })
-  @ApiResponse({ status: 201, description: 'Funcionário criado com sucesso.' })
-  @ApiResponse({ status: 403, description: 'Acesso negado.' })
-  createFuncionario(@Body() dto: CreateFuncionarioDto, @User() user: any) {
-    return this.usuarioService.createFuncionario(dto, { id_usuario: user.id_usuario, cargo: user.cargo });
+  @ApiResponse({ status: 200, description: 'Lista de funcionários retornada com sucesso.' })
+  listarMeusFuncionarios(@User('sub') authId: string) {
+    return this.funcionarioService.listarMeusFuncionarios(authId);
+  }
+
+  @Get('funcionarios/propriedade/:idPropriedade')
+  @ApiOperation({
+    summary: 'Listar funcionários de uma propriedade',
+    description: 'Retorna todos os funcionários vinculados a uma propriedade específica.',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de funcionários da propriedade retornada.' })
+  @ApiResponse({ status: 403, description: 'Acesso negado. Você não é proprietário desta propriedade.' })
+  listarFuncionariosPorPropriedade(@Param('idPropriedade', ParseUUIDPipe) idPropriedade: string, @User('sub') authId: string) {
+    return this.funcionarioService.listarFuncionariosPorPropriedade(idPropriedade, authId);
+  }
+
+  @Delete('funcionarios/:idUsuario/propriedade/:idPropriedade')
+  @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: 'Desvincular um funcionário de uma propriedade',
+    description: 'Remove o vínculo entre um funcionário e uma propriedade específica.',
+  })
+  @ApiResponse({ status: 200, description: 'Funcionário desvinculado com sucesso.' })
+  desvincularFuncionario(
+    @Param('idUsuario', ParseUUIDPipe) idUsuario: string,
+    @Param('idPropriedade', ParseUUIDPipe) idPropriedade: string,
+    @User('sub') authId: string,
+  ) {
+    return this.funcionarioService.desvincularFuncionario(idUsuario, idPropriedade, authId);
   }
 }
