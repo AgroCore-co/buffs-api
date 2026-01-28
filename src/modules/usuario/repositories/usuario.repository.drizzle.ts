@@ -165,4 +165,20 @@ export class UsuarioRepositoryDrizzle {
 
     return resultado.length > 0;
   }
+
+  /**
+   * Atualiza apenas o cargo de um usuário
+   */
+  async atualizarCargo(idUsuario: string, novoCargo: Cargo) {
+    const [usuarioAtualizado] = await this.db.db
+      .update(usuario)
+      .set({
+        cargo: novoCargo,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(usuario.idUsuario, idUsuario))
+      .returning();
+
+    return usuarioAtualizado;
+  }
 }

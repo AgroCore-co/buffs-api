@@ -9,6 +9,10 @@ export class AuthService {
     private readonly logger: LoggerService,
   ) {}
 
+  /**
+   * Cria uma nova conta no Supabase Auth
+   * ⚠️ NÃO cria perfil no banco - use AuthFacadeService para fluxo completo
+   */
   async signUp(email: string, password: string, metadata?: any) {
     const { data, error } = await this.supabase.getClient().auth.signUp({
       email,
@@ -24,38 +28,6 @@ export class AuthService {
         throw new BadRequestException('Email já está em uso');
       }
       throw new BadRequestException(`Erro ao criar usuário: ${error.message}`);
-    }
-
-    // ✅ CRIAR PERFIL AUTOMATICAMENTE na tabela usuario
-    if (data.user && metadata?.nome) {
-      try {
-        const { error: perfilError } = await this.supabase
-          .getAdminClient()
-          .from('usuario')
-          .insert({
-            auth_id: data.user.id,
-            email: data.user.email,
-            nome: metadata.nome,
-            telefone: metadata.telefone || null,
-            cargo: 'PROPRIETARIO',
-          });
-
-        if (perfilError) {
-          this.logger.logError(perfilError, {
-            module: 'Auth',
-            method: 'signUp',
-            context: 'criar_perfil',
-            auth_id: data.user.id,
-          });
-          // Não lançar erro, pois o usuário pode criar o perfil depois via POST /usuarios
-        }
-      } catch (err) {
-        this.logger.logError(err, {
-          module: 'Auth',
-          method: 'signUp',
-          context: 'exception_criar_perfil',
-        });
-      }
     }
 
     return {
