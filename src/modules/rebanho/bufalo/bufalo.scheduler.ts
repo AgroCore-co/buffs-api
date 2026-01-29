@@ -6,6 +6,7 @@ import { BufaloMaturidadeService } from './services/bufalo-maturidade.service';
 @Injectable()
 export class BufaloScheduler {
   private readonly logger = new Logger(BufaloScheduler.name);
+  private isRunning = false;
 
   constructor(
     private readonly bufaloRepo: BufaloRepositoryDrizzle,
@@ -15,23 +16,43 @@ export class BufaloScheduler {
   /**
    * Roda todos os dias à meia-noite.
    * Atualiza a maturidade dos animais (ex: Bezerro -> Novilho)
+   *
+   * **Proteção contra concorrência:**
+   * - Flag `isRunning` previne execuções simultâneas
+   * - Importante se job anterior ainda estiver rodando
    */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleMaturityUpdate() {
+    // Previne execução concorrente
+    if (this.isRunning) {
+      this.logger.warn('Job de maturidade já está rodando. Pulando execução.');
+      return;
+    }
+
+    this.isRunning = true;
+    const startTime = Date.now();
     this.logger.log('Iniciando atualização diária de maturidade...');
 
-    // Busca apenas animais ativos para não sobrecarregar
-    // Nota: Na vida real, ideal seria processar em lotes (chunks)
-    const { data: bufalos } = await this.bufaloRepo.findWithFilters(
-      { status: true },
-      { offset: 0, limit: 1000 }, // Limite de segurança
-    );
+    try {
+      // Busca apenas animais ativos para não sobrecarregar
+      // Nota: Na vida real, ideal seria processar em lotes (chunks)
+      const { data: bufalos } = await this.bufaloRepo.findWithFilters(
+        { status: true },
+        { offset: 0, limit: 1000 }, // Limite de segurança
+      );
 
-    if (bufalos && bufalos.length > 0) {
-      const count = await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
-      this.logger.log(`Job finalizado. ${count} animais atualizados.`);
-    } else {
-      this.logger.log('Nenhum animal ativo encontrado para atualização.');
+      if (bufalos && bufalos.length > 0) {
+        const count = await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
+        const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+        this.logger.log(`Job finalizado em ${duration}s. ${count} animais atualizados.`);
+      } else {
+        this.logger.log('Nenhum animal ativo encontrado para atualização.');
+      }
+    } catch (error) {
+      this.logger.error(`Erro no job de maturidade: ${error.message}`, error.stack);
+    } finally {
+      // Sempre libera a flag, mesmo em caso de erro
+      this.isRunning = false;
     }
   }
 }

@@ -256,6 +256,59 @@ export class BufaloRepositoryDrizzle {
   }
 
   /**
+   * Busca múltiplos búfalos ativos por seus IDs.
+   *
+   * @param ids Array de IDs de búfalos
+   * @returns Array de búfalos encontrados
+   */
+  async findActiveByIds(ids: string[]) {
+    if (!ids || ids.length === 0) {
+      return [];
+    }
+
+    try {
+      const db = this.databaseService.db;
+
+      const result = await db.query.bufalo.findMany({
+        where: and(inArray(bufalo.idBufalo, ids), isNull(bufalo.deletedAt), eq(bufalo.status, true)),
+        columns: {
+          idBufalo: true,
+          brinco: true,
+          nome: true,
+        },
+      });
+
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao buscar búfalos por IDs: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca IDs de descendentes diretos (filhos) de um búfalo.
+   * Usado para validar circularidade genealógica.
+   *
+   * @param bufaloId ID do búfalo
+   * @returns Array de IDs dos filhos
+   */
+  async findChildrenIds(bufaloId: string): Promise<string[]> {
+    try {
+      const db = this.databaseService.db;
+
+      const result = await db.query.bufalo.findMany({
+        where: and(or(eq(bufalo.idPai, bufaloId), eq(bufalo.idMae, bufaloId)), isNull(bufalo.deletedAt)),
+        columns: {
+          idBufalo: true,
+        },
+      });
+
+      return result.map((b) => b.idBufalo);
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao buscar descendentes: ${error.message}`);
+    }
+  }
+
+  /**
    * Conta búfalos com filtros (para paginação).
    * Equivalente ao método original countWithFilters().
    */
@@ -428,39 +481,6 @@ export class BufaloRepositoryDrizzle {
       return result || null;
     } catch (error) {
       return { data: null, error };
-    }
-  }
-
-  /**
-   * Busca búfalos ativos (status = true) de uma lista de IDs.
-   * Equivalente ao método original findActiveByIds().
-   */
-  async findActiveByIds(ids: string[]) {
-    try {
-      const result = await this.databaseService.db.query.bufalo.findMany({
-        where: and(inArray(bufalo.idBufalo, ids), eq(bufalo.status, true)),
-        with: {
-          raca: {
-            columns: {
-              nome: true,
-            },
-          },
-          grupo: {
-            columns: {
-              nomeGrupo: true,
-            },
-          },
-          propriedade: {
-            columns: {
-              nome: true,
-            },
-          },
-        },
-      });
-
-      return result;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar búfalos ativos: ${error.message}`);
     }
   }
 

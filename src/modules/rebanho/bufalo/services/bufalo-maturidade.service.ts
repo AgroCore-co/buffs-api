@@ -14,6 +14,7 @@ import { NivelMaturidade, SexoBufalo } from '../dto/create-bufalo.dto';
 @Injectable()
 export class BufaloMaturidadeService {
   private readonly logger = new Logger(BufaloMaturidadeService.name);
+  private readonly debugEnabled = process.env.LOG_LEVEL === 'debug';
 
   constructor(private readonly bufaloRepo: BufaloRepositoryDrizzle) {}
 
@@ -76,7 +77,12 @@ export class BufaloMaturidadeService {
             nivel_maturidade: maturityInfo.maturityLevel,
           });
 
-          this.logger.log(`Maturidade atualizada: ${bufalo.nome || bufalo.brinco} ` + `(${bufalo.nivel_maturidade} → ${maturityInfo.maturityLevel})`);
+          // Log apenas em modo debug (evita spam em produção)
+          if (this.debugEnabled) {
+            this.logger.debug(
+              `Maturidade atualizada: ${bufalo.nome || bufalo.brinco} ` + `(${bufalo.nivel_maturidade} → ${maturityInfo.maturityLevel})`,
+            );
+          }
         }
       } catch (error) {
         this.logger.error(`Erro ao processar maturidade do búfalo ${bufalo.id_bufalo}:`, error);
