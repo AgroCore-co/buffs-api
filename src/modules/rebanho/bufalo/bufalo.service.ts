@@ -49,7 +49,7 @@ export class BufaloService implements ISoftDelete {
 
   /**
    * Busca todas as propriedades vinculadas ao usuário (como dono OU funcionário).
-   * Com CACHE de 5 minutos.
+   * Cache reduzido para 30 segundos (equilíbrio entre performance e segurança).
    */
   private async getUserPropriedades(userId: string): Promise<string[]> {
     const cacheKey = `user_props:${userId}`;
@@ -74,10 +74,20 @@ export class BufaloService implements ISoftDelete {
       throw new NotFoundException('Usuário não está associado a nenhuma propriedade.');
     }
 
-    // 4. Salva no cache por 5 minutos (300000 ms)
-    await this.cacheService.set(cacheKey, propriedadesUnicas, 300000);
+    // 4. Cache reduzido para 30 segundos
+    await this.cacheService.set(cacheKey, propriedadesUnicas, 30000);
 
     return propriedadesUnicas;
+  }
+
+  /**
+   * Invalida cache de propriedades do usuário.
+   * Deve ser chamado quando usuário é vinculado/desvinculado de propriedades.
+   */
+  async invalidarCachePropriedades(userId: string): Promise<void> {
+    const cacheKey = `user_props:${userId}`;
+    await this.cacheService.del(cacheKey);
+    this.logger.log(`Cache de propriedades invalidado: ${userId}`);
   }
 
   /**
@@ -185,6 +195,76 @@ export class BufaloService implements ISoftDelete {
     return bufalos.map((bufalo) => this.enrichBufaloWithDerivedFields(bufalo));
   }
 
+  /**
+   * Enriquece múltiplos búfalos com campos derivados (OTIMIZADO).
+   * Carrega todos os pais/mães em UMA query ao invés de N queries.
+   * Resolve N+1 query problem.
+   *
+   * @param bufalos Array de búfalos
+   * @returns Array de búfalos enriquecidos
+   */
+  private async enrichBufalosWithDerivedFieldsBatch(bufalos: any[]): Promise<any[]> {
+    if (!bufalos || bufalos.length === 0) return [];
+
+    // 1. Coletar todos os IDs únicos de pais e mães
+    const parentIds = new Set<string>();
+    bufalos.forEach((b) => {
+      if (b.idPai) parentIds.add(b.idPai);
+      if (b.idMae) parentIds.add(b.idMae);
+    });
+
+    // 2. Buscar todos os pais/mães em UMA query usando método específico
+    const parentsArray = parentIds.size > 0 ? await this.bufaloRepo.findActiveByIds(Array.from(parentIds)) : [];
+
+    // 3. Criar mapa para acesso O(1)
+    const parentsMap = new Map<string, any>(parentsArray.map((p) => [p.idBufalo, p]));
+
+    // 4. Enriquecer cada búfalo usando o mapa
+    return bufalos.map((bufalo) => {
+      const nomeRaca = bufalo.raca?.nome || null;
+
+      // Brinco do pai
+      let brincoPai = null;
+      if (bufalo.idPai) {
+        const pai = parentsMap.get(bufalo.idPai);
+        brincoPai = pai?.brinco || bufalo.materialgenetico_idPaiSemen?.bufalo?.brinco || bufalo.materialgenetico_idPaiSemen?.identificador || null;
+      } else if (bufalo.materialgenetico_idPaiSemen) {
+        brincoPai = bufalo.materialgenetico_idPaiSemen.bufalo?.brinco || bufalo.materialgenetico_idPaiSemen.identificador;
+      }
+
+      // Brinco da mãe
+      let brincoMae = null;
+      if (bufalo.idMae) {
+        const mae = parentsMap.get(bufalo.idMae);
+        brincoMae = mae?.brinco || bufalo.materialgenetico_idMaeOvulo?.bufalo?.brinco || bufalo.materialgenetico_idMaeOvulo?.identificador || null;
+      } else if (bufalo.materialgenetico_idMaeOvulo) {
+        brincoMae = bufalo.materialgenetico_idMaeOvulo.bufalo?.brinco || bufalo.materialgenetico_idMaeOvulo.identificador;
+      }
+
+      // Material genético (apenas se não houver pai/mãe interno)
+      let materialGeneticoMachoNome = null;
+      if (!bufalo.idPai && bufalo.materialgenetico_idPaiSemen) {
+        materialGeneticoMachoNome = bufalo.materialgenetico_idPaiSemen.identificador;
+      }
+
+      let materialGeneticoFemeaNome = null;
+      if (!bufalo.idMae && bufalo.materialgenetico_idMaeOvulo) {
+        materialGeneticoFemeaNome = bufalo.materialgenetico_idMaeOvulo.identificador;
+      }
+
+      const { bufalo_idPai, bufalo_idMae, materialgenetico_idPaiSemen, materialgenetico_idMaeOvulo, ...bufaloLimpo } = bufalo;
+
+      return {
+        ...bufaloLimpo,
+        nomeRaca,
+        brincoPai,
+        brincoMae,
+        materialGeneticoMachoNome,
+        materialGeneticoFemeaNome,
+      };
+    });
+  }
+
   // ==================== CRUD OPERATIONS ====================
   /**
    * Valida se o grupo existe e se o usuário tem acesso através das propriedades vinculadas.
@@ -202,6 +282,37 @@ export class BufaloService implements ISoftDelete {
   // ==================== CRUD BÁSICO ====================
 
   /**
+   * Valida genealogia para prevenir circularidade.
+   * @throws BadRequestException se detectar circularidade
+   */
+  private async validarGenealogiaCircular(bufaloId: string | undefined, idPai: string | undefined, idMae: string | undefined): Promise<void> {
+    // 1. Búfalo não pode ser pai/mãe de si mesmo
+    if (bufaloId && (bufaloId === idPai || bufaloId === idMae)) {
+      throw new BadRequestException('Búfalo não pode ser pai ou mãe de si mesmo');
+    }
+
+    // 2. Pai e mãe não podem ser o mesmo animal
+    if (idPai && idMae && idPai === idMae) {
+      throw new BadRequestException('Pai e mãe não podem ser o mesmo animal');
+    }
+
+    // 3. Verificar se os pais não são descendentes do próprio búfalo (apenas em updates)
+    if (bufaloId && idPai) {
+      const descendentes = await this.bufaloRepo.findChildrenIds(bufaloId);
+      if (descendentes.includes(idPai)) {
+        throw new BadRequestException('Circularidade detectada: pai é descendente do búfalo');
+      }
+    }
+
+    if (bufaloId && idMae) {
+      const descendentes = await this.bufaloRepo.findChildrenIds(bufaloId);
+      if (descendentes.includes(idMae)) {
+        throw new BadRequestException('Circularidade detectada: mãe é descendente do búfalo');
+      }
+    }
+  }
+
+  /**
    * Cria novo búfalo com cálculo automático de maturidade e categoria ABCB.
    */
   async create(createDto: CreateBufaloDto, user: any) {
@@ -209,6 +320,9 @@ export class BufaloService implements ISoftDelete {
 
     // Valida acesso à propriedade
     await this.validatePropriedadeAccess(createDto.id_propriedade, userId);
+
+    // Valida genealogia (previne circularidade)
+    await this.validarGenealogiaCircular(undefined, createDto.id_pai, createDto.id_mae);
 
     try {
       // 1. Processa maturidade automaticamente
@@ -279,8 +393,8 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade automaticamente
     await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
 
-    // Enriquece com campos derivados (Issue #6)
-    const bufalosEnriquecidos = this.enrichBufalosWithDerivedFields(bufalos);
+    // Enriquece com campos derivados usando método otimizado (previne N+1)
+    const bufalosEnriquecidos = await this.enrichBufalosWithDerivedFieldsBatch(bufalos);
 
     return createPaginatedResponse(bufalosEnriquecidos, total, page, limit);
   }
@@ -340,8 +454,8 @@ export class BufaloService implements ISoftDelete {
     // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
 
-    // Enriquece com campos derivados (Issue #6)
-    const bufalosEnriquecidos = this.enrichBufalosWithDerivedFields(bufalos);
+    // Enriquece com campos derivados usando método otimizado (previne N+1)
+    const bufalosEnriquecidos = await this.enrichBufalosWithDerivedFieldsBatch(bufalos);
 
     return createPaginatedResponse(bufalosEnriquecidos, total, page, limit);
   }
@@ -499,6 +613,16 @@ export class BufaloService implements ISoftDelete {
 
     // Valida acesso
     await this.validateBufaloAccess(id, userId);
+
+    // Valida genealogia se houver mudança de pai/mãe
+    if (updateDto.id_pai !== undefined || updateDto.id_mae !== undefined) {
+      const bufaloAtual = await this.bufaloRepo.findById(id);
+      await this.validarGenealogiaCircular(
+        id,
+        updateDto.id_pai !== undefined ? updateDto.id_pai : bufaloAtual?.idPai,
+        updateDto.id_mae !== undefined ? updateDto.id_mae : bufaloAtual?.idMae,
+      );
+    }
 
     // Se mudou data de nascimento ou sexo, recalcula maturidade
     let dadosAtualizados = { ...updateDto };
