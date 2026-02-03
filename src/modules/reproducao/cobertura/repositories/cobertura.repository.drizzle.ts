@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { eq, and, desc, count, isNull } from 'drizzle-orm';
+import { eq, and, desc, count, isNull, sql } from 'drizzle-orm';
 import { dadosreproducao, bufalo } from '../../../../database/schema';
 
 /**
@@ -46,15 +46,27 @@ export class CoberturaRepositoryDrizzle {
 
   /**
    * Busca todas as coberturas com paginação
+   * Ordenação: prioridade por status (Em andamento → Confirmada → Falhou) + data recente
    */
   async findAll(offset: number, limit: number) {
     try {
       const db = this.databaseService.db;
 
+      // Definir prioridade de status usando SQL CASE
+      const statusPriority = sql`
+        CASE ${dadosreproducao.status}
+          WHEN 'Em andamento' THEN 1
+          WHEN 'Confirmada' THEN 2
+          WHEN 'Falhou' THEN 3
+          WHEN 'Concluída' THEN 4
+          ELSE 5
+        END
+      `;
+
       const [data, totalResult] = await Promise.all([
         db.query.dadosreproducao.findMany({
           where: isNull(dadosreproducao.deletedAt),
-          orderBy: [desc(dadosreproducao.dtEvento)],
+          orderBy: [statusPriority, desc(dadosreproducao.dtEvento)],
           limit,
           offset,
           with: {
@@ -90,15 +102,27 @@ export class CoberturaRepositoryDrizzle {
 
   /**
    * Busca coberturas por propriedade com paginação
+   * Ordenação: prioridade por status (Em andamento → Confirmada → Falhou) + data recente
    */
   async findByPropriedade(idPropriedade: string, offset: number, limit: number) {
     try {
       const db = this.databaseService.db;
 
+      // Definir prioridade de status usando SQL CASE
+      const statusPriority = sql`
+        CASE ${dadosreproducao.status}
+          WHEN 'Em andamento' THEN 1
+          WHEN 'Confirmada' THEN 2
+          WHEN 'Falhou' THEN 3
+          WHEN 'Concluída' THEN 4
+          ELSE 5
+        END
+      `;
+
       const [data, totalResult] = await Promise.all([
         db.query.dadosreproducao.findMany({
           where: and(eq(dadosreproducao.idPropriedade, idPropriedade), isNull(dadosreproducao.deletedAt)),
-          orderBy: [desc(dadosreproducao.dtEvento)],
+          orderBy: [statusPriority, desc(dadosreproducao.dtEvento)],
           limit,
           offset,
           with: {
