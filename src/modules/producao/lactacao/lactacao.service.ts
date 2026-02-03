@@ -295,13 +295,49 @@ export class LactacaoService implements ISoftDelete {
     try {
       const { registros, total } = await this.cicloRepository.listarPorPropriedade(id_propriedade, page, limitValue);
 
-      // Transformar a resposta para aplanar os dados da búfala
-      const enrichedData = registros.map((ciclo: any) => ({
-        ...ciclo,
-        bufala_nome: ciclo.bufala?.nome || null,
-        bufala_brinco: ciclo.bufala?.brinco || null,
-        bufala: undefined, // remover o objeto aninhado
-      }));
+      // Buscar todos os ciclos ativos para determinar qual é o ciclo atual de cada búfala
+      const bufalaIds = registros.map((ciclo: any) => ciclo.idBufala).filter(Boolean);
+      const ciclosAtivosMap = new Map<string, string>();
+
+      if (bufalaIds.length > 0) {
+        const uniqueBufalaIds = [...new Set(bufalaIds)];
+        await Promise.all(
+          uniqueBufalaIds.map(async (idBufala) => {
+            const cicloAtivo = await this.cicloRepository.buscarCicloAtivo(idBufala);
+            if (cicloAtivo) {
+              ciclosAtivosMap.set(idBufala, cicloAtivo.idCicloLactacao);
+            }
+          }),
+        );
+      }
+
+      // Transformar a resposta para enriquecer os dados
+      const enrichedData = registros.map((ciclo: any) => {
+        const diasEmLactacao = this.calcularDiasEmLactacao(ciclo.dtParto, ciclo.dtSecagemReal);
+        const cicloAtual = ciclosAtivosMap.get(ciclo.idBufala) === ciclo.idCicloLactacao;
+
+        return {
+          idCicloLactacao: ciclo.idCicloLactacao,
+          idBufala: ciclo.idBufala,
+          idPropriedade: ciclo.idPropriedade,
+          dtParto: ciclo.dtParto,
+          padraoDias: ciclo.padraoDias,
+          dtSecagemPrevista: ciclo.dtSecagemPrevista,
+          dtSecagemReal: ciclo.dtSecagemReal,
+          status: ciclo.status,
+          observacao: ciclo.observacao,
+          createdAt: ciclo.createdAt,
+          updatedAt: ciclo.updatedAt,
+          deletedAt: ciclo.deletedAt,
+          diasEmLactacao,
+          cicloAtual,
+          bufala: {
+            nome: ciclo.bufalo?.nome || null,
+            brinco: ciclo.bufalo?.brinco || null,
+            raca: ciclo.bufalo?.raca?.nome || null,
+          },
+        };
+      });
 
       this.logger.log(`Busca concluída - ${registros.length} ciclos encontrados (página ${page})`, {
         module: 'CicloLactacaoService',

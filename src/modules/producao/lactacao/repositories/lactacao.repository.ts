@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { eq, and, desc, isNull, sql } from 'drizzle-orm';
-import { ciclolactacao, bufalo } from '../../../../database/schema';
+import { eq, and, desc, isNull, sql, asc } from 'drizzle-orm';
+import { ciclolactacao, bufalo, raca } from '../../../../database/schema';
 
 @Injectable()
 export class LactacaoRepository {
@@ -42,7 +42,7 @@ export class LactacaoRepository {
 
     const registros = await this.db.db.query.ciclolactacao.findMany({
       where: and(eq(ciclolactacao.idPropriedade, idPropriedade), isNull(ciclolactacao.deletedAt)),
-      orderBy: [desc(ciclolactacao.dtParto)],
+      orderBy: [sql`CASE WHEN ${ciclolactacao.status} = 'Em Lactação' THEN 0 ELSE 1 END`, desc(ciclolactacao.dtParto)],
       limit: limit,
       offset: offset,
       with: {
@@ -50,6 +50,14 @@ export class LactacaoRepository {
           columns: {
             nome: true,
             brinco: true,
+            idBufalo: true,
+          },
+          with: {
+            raca: {
+              columns: {
+                nome: true,
+              },
+            },
           },
         },
       },
