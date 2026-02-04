@@ -1,29 +1,34 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { BaseRepository } from 'src/core/database/base.repository';
 import { eq, and, isNull, desc, sql, count } from 'drizzle-orm';
 import { dadoszootecnicos, bufalo, propriedade } from 'src/database/schema';
 import { CreateDadoZootecnicoDto } from '../dto/create-dado-zootecnico.dto';
 import { UpdateDadoZootecnicoDto } from '../dto/update-dado-zootecnico.dto';
 
 @Injectable()
-export class DadosZootecnicosRepositoryDrizzle extends BaseRepository<typeof dadoszootecnicos> {
-  constructor(databaseService: DatabaseService) {
-    super(databaseService, dadoszootecnicos, 'idZootec', 'DadosZootecnicosRepositoryDrizzle');
-  }
+export class DadosZootecnicosRepositoryDrizzle {
+  constructor(private readonly databaseService: DatabaseService) {}
 
   async createFromDto(dto: CreateDadoZootecnicoDto, idBufalo: string, idUsuario: string) {
-    return this.create({
-      idBufalo: idBufalo,
-      idUsuario: idUsuario,
-      peso: dto.peso ? String(dto.peso) : null,
-      condicaoCorporal: dto.condicaoCorporal ? String(dto.condicaoCorporal) : null,
-      corPelagem: dto.corPelagem,
-      formatoChifre: dto.formatoChifre,
-      porteCorporal: dto.porteCorporal,
-      dtRegistro: dto.dtRegistro ? dto.dtRegistro.toISOString() : new Date().toISOString(),
-      tipoPesagem: dto.tipoPesagem,
-    });
+    try {
+      const [result] = await this.databaseService.db
+        .insert(dadoszootecnicos)
+        .values({
+          idBufalo: idBufalo,
+          idUsuario: idUsuario,
+          peso: dto.peso ? String(dto.peso) : null,
+          condicaoCorporal: dto.condicaoCorporal ? String(dto.condicaoCorporal) : null,
+          corPelagem: dto.corPelagem,
+          formatoChifre: dto.formatoChifre,
+          porteCorporal: dto.porteCorporal,
+          dtRegistro: dto.dtRegistro ? dto.dtRegistro.toISOString() : new Date().toISOString(),
+          tipoPesagem: dto.tipoPesagem,
+        })
+        .returning();
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`[DadosZootecnicosRepository] Erro ao criar: ${error.message}`);
+    }
   }
 
   async updateFromDto(idZootec: string, dto: UpdateDadoZootecnicoDto) {
@@ -37,7 +42,12 @@ export class DadosZootecnicosRepositoryDrizzle extends BaseRepository<typeof dad
     if (dto.dtRegistro !== undefined) updateData.dtRegistro = dto.dtRegistro.toISOString();
     if (dto.tipoPesagem !== undefined) updateData.tipoPesagem = dto.tipoPesagem;
 
-    return this.update(idZootec, updateData);
+    const [result] = await this.databaseService.db
+      .update(dadoszootecnicos)
+      .set(updateData)
+      .where(eq(dadoszootecnicos.idZootec, idZootec))
+      .returning();
+    return result || null;
   }
 
   async findAllByBufalo(idBufalo: string, limit: number, offset: number) {
@@ -100,7 +110,7 @@ export class DadosZootecnicosRepositoryDrizzle extends BaseRepository<typeof dad
     };
   }
 
-  override async findById(idZootec: string) {
+  async findById(idZootec: string) {
     const result = await this.databaseService.db.query.dadoszootecnicos.findFirst({
       where: and(eq(dadoszootecnicos.idZootec, idZootec), isNull(dadoszootecnicos.deletedAt)),
       with: {
@@ -114,5 +124,29 @@ export class DadosZootecnicosRepositoryDrizzle extends BaseRepository<typeof dad
     });
 
     return result || null;
+  }
+
+  async softDelete(id: string) {
+    const [result] = await this.databaseService.db
+      .update(dadoszootecnicos)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(dadoszootecnicos.idZootec, id))
+      .returning();
+    return result || null;
+  }
+
+  async restore(id: string) {
+    const [result] = await this.databaseService.db
+      .update(dadoszootecnicos)
+      .set({ deletedAt: null })
+      .where(eq(dadoszootecnicos.idZootec, id))
+      .returning();
+    return result || null;
+  }
+
+  async findAllWithDeleted() {
+    return await this.databaseService.db.query.dadoszootecnicos.findMany({
+      orderBy: [desc(dadoszootecnicos.dtRegistro)],
+    });
   }
 }

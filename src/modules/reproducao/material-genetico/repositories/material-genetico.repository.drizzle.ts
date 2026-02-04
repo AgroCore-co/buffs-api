@@ -1,6 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { BaseRepository } from '../../../../core/database/base.repository';
 import { eq, and, desc, count, isNull } from 'drizzle-orm';
 import { materialgenetico } from '../../../../database/schema';
 
@@ -13,25 +12,30 @@ import { materialgenetico } from '../../../../database/schema';
  * - Não contém lógica de negócio
  */
 @Injectable()
-export class MaterialGeneticoRepositoryDrizzle extends BaseRepository<typeof materialgenetico> {
-  constructor(databaseService: DatabaseService) {
-    super(databaseService, materialgenetico, 'idMaterial', 'MaterialGeneticoRepositoryDrizzle');
-  }
+export class MaterialGeneticoRepositoryDrizzle {
+  constructor(private readonly databaseService: DatabaseService) {}
 
   /**
    * Cria novo material genético
    * Mapeia snake_case (DTO) → camelCase (schema)
    */
   async createFromDto(data: any) {
-    const mappedData = {
-      tipo: data.tipo,
-      origem: data.origem,
-      idBufaloOrigem: data.idBufaloOrigem,
-      fornecedor: data.fornecedor,
-      dataColeta: data.dataColeta,
-      idPropriedade: data.idPropriedade,
-    };
-    return this.create(mappedData);
+    try {
+      const results: any = await this.databaseService.db
+        .insert(materialgenetico)
+        .values({
+          tipo: data.tipo,
+          origem: data.origem,
+          idBufaloOrigem: data.idBufaloOrigem,
+          fornecedor: data.fornecedor,
+          dataColeta: data.dataColeta,
+          idPropriedade: data.idPropriedade,
+        })
+        .returning();
+      return results[0];
+    } catch (error) {
+      throw new InternalServerErrorException(`[MaterialGeneticoRepository] Erro ao criar: ${error.message}`);
+    }
   }
 
   /**
@@ -48,7 +52,21 @@ export class MaterialGeneticoRepositoryDrizzle extends BaseRepository<typeof mat
     if (data.dataColeta !== undefined) mappedData.dataColeta = data.dataColeta;
     if (data.idPropriedade !== undefined) mappedData.idPropriedade = data.idPropriedade;
 
-    return this.update(idMaterial, mappedData);
+    const [result] = await this.databaseService.db
+      .update(materialgenetico)
+      .set(mappedData)
+      .where(eq(materialgenetico.idMaterial, idMaterial))
+      .returning();
+    return result || null;
+  }
+
+  async findById(id: string) {
+    const [result] = await this.databaseService.db
+      .select()
+      .from(materialgenetico)
+      .where(and(eq(materialgenetico.idMaterial, id), isNull(materialgenetico.deletedAt)))
+      .limit(1);
+    return result || null;
   }
 
   /**
@@ -97,5 +115,37 @@ export class MaterialGeneticoRepositoryDrizzle extends BaseRepository<typeof mat
       data,
       total: totalResult[0]?.count || 0,
     };
+  }
+
+  async softDelete(id: string) {
+    const [result] = await this.databaseService.db
+      .update(materialgenetico)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(materialgenetico.idMaterial, id))
+      .returning();
+    return result || null;
+  }
+
+  async restore(id: string) {
+    const [result] = await this.databaseService.db
+      .update(materialgenetico)
+      .set({ deletedAt: null })
+      .where(eq(materialgenetico.idMaterial, id))
+      .returning();
+    return result || null;
+  }
+
+  async findAllWithDeleted() {
+    return await this.databaseService.db.query.materialgenetico.findMany({
+      orderBy: [desc(materialgenetico.createdAt)],
+    });
+  }
+
+  async create(data: any) {
+    return this.createFromDto(data);
+  }
+
+  async update(id: string, data: any) {
+    return this.updateFromDto(id, data);
   }
 }

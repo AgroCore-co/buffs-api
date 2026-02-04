@@ -1,48 +1,55 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { BaseRepository } from 'src/core/database/base.repository';
 import { endereco } from 'src/database/schema';
 import { CreateEnderecoDto } from '../dto/create-endereco.dto';
 import { UpdateEnderecoDto } from '../dto/update-endereco.dto';
+import { eq } from 'drizzle-orm';
 
 /**
  * Repository Drizzle para operações de Endereço.
  * Isola queries do Drizzle da lógica de negócio.
  */
 @Injectable()
-export class EnderecoRepositoryDrizzle extends BaseRepository<typeof endereco> {
-  constructor(databaseService: DatabaseService) {
-    super(databaseService, endereco, 'idEndereco', 'EnderecoRepositoryDrizzle');
-  }
+export class EnderecoRepositoryDrizzle {
+  constructor(private readonly databaseService: DatabaseService) {}
 
   /**
    * Cria um novo endereço
    */
   async criar(createEnderecoDto: CreateEnderecoDto) {
-    return this.create({
-      pais: createEnderecoDto.pais,
-      estado: createEnderecoDto.estado,
-      cidade: createEnderecoDto.cidade,
-      bairro: createEnderecoDto.bairro,
-      rua: createEnderecoDto.rua,
-      cep: createEnderecoDto.cep,
-      numero: createEnderecoDto.numero,
-      pontoReferencia: createEnderecoDto.ponto_referencia,
-    });
+    try {
+      const [result] = await this.databaseService.db
+        .insert(endereco)
+        .values({
+          pais: createEnderecoDto.pais,
+          estado: createEnderecoDto.estado,
+          cidade: createEnderecoDto.cidade,
+          bairro: createEnderecoDto.bairro,
+          rua: createEnderecoDto.rua,
+          cep: createEnderecoDto.cep,
+          numero: createEnderecoDto.numero,
+          pontoReferencia: createEnderecoDto.ponto_referencia,
+        })
+        .returning();
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`[EnderecoRepository] Erro ao criar endereço: ${error.message}`);
+    }
   }
 
   /**
    * Busca todos os endereços
    */
   async buscarTodos() {
-    return this.findAll();
+    return await this.databaseService.db.select().from(endereco);
   }
 
   /**
    * Busca um endereço por ID
    */
   async buscarPorId(id: string) {
-    return this.findById(id);
+    const [result] = await this.databaseService.db.select().from(endereco).where(eq(endereco.idEndereco, id)).limit(1);
+    return result || null;
   }
 
   /**
@@ -60,13 +67,15 @@ export class EnderecoRepositoryDrizzle extends BaseRepository<typeof endereco> {
     if (updateEnderecoDto.numero !== undefined) updateData.numero = updateEnderecoDto.numero;
     if (updateEnderecoDto.ponto_referencia !== undefined) updateData.pontoReferencia = updateEnderecoDto.ponto_referencia;
 
-    return this.update(id, updateData);
+    const [result] = await this.databaseService.db.update(endereco).set(updateData).where(eq(endereco.idEndereco, id)).returning();
+    return result || null;
   }
 
   /**
    * Remove um endereço (hard delete)
    */
   async remover(id: string) {
-    return this.hardDelete(id);
+    await this.databaseService.db.delete(endereco).where(eq(endereco.idEndereco, id));
+    return true;
   }
 }

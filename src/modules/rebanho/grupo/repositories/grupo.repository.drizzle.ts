@@ -1,38 +1,54 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { BaseRepository } from '../../../../core/database/base.repository';
 import { eq, and, isNull, desc, asc, sql } from 'drizzle-orm';
 import { grupo } from '../../../../database/schema';
 import { CreateGrupoDto } from '../dto/create-grupo.dto';
 import { UpdateGrupoDto } from '../dto/update-grupo.dto';
 
 @Injectable()
-export class GrupoRepositoryDrizzle extends BaseRepository<typeof grupo> {
-  constructor(databaseService: DatabaseService) {
-    super(databaseService, grupo, 'idGrupo', 'GrupoRepositoryDrizzle');
+export class GrupoRepositoryDrizzle {
+  constructor(private readonly databaseService: DatabaseService) {}
+
+  async create(dto: CreateGrupoDto) {
+    try {
+      const [result] = await this.databaseService.db
+        .insert(grupo)
+        .values({
+          nomeGrupo: dto.nomeGrupo,
+          idPropriedade: dto.idPropriedade,
+          color: dto.color,
+        })
+        .returning();
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`[GrupoRepository] Erro ao criar: ${error.message}`);
+    }
   }
 
-  private createFromDto(dto: CreateGrupoDto) {
-    return {
-      nomeGrupo: dto.nomeGrupo,
-      idPropriedade: dto.idPropriedade,
-      color: dto.color,
-    };
-  }
-
-  private updateFromDto(dto: UpdateGrupoDto) {
+  async update(id: string, dto: UpdateGrupoDto) {
     const data: any = {};
     if (dto.nomeGrupo) data.nomeGrupo = dto.nomeGrupo;
     if (dto.color) data.color = dto.color;
     if (dto.idPropriedade) data.idPropriedade = dto.idPropriedade;
-    return data;
+
+    const [result] = await this.databaseService.db.update(grupo).set(data).where(eq(grupo.idGrupo, id)).returning();
+    return result || null;
   }
 
-  override async findAll() {
+  async findAll() {
     return await this.databaseService.db.query.grupo.findMany({
       where: isNull(grupo.deletedAt),
       orderBy: [asc(grupo.nomeGrupo)],
     });
+  }
+
+  async findById(id: string) {
+    const [result] = await this.databaseService.db
+      .select()
+      .from(grupo)
+      .where(and(eq(grupo.idGrupo, id), isNull(grupo.deletedAt)))
+      .limit(1);
+    return result || null;
   }
 
   async findByPropriedade(idPropriedade: string, page: number, limit: number) {
@@ -67,9 +83,23 @@ export class GrupoRepositoryDrizzle extends BaseRepository<typeof grupo> {
     });
   }
 
-  override async findAllWithDeleted() {
+  async findAllWithDeleted() {
     return await this.databaseService.db.query.grupo.findMany({
       orderBy: [desc(grupo.deletedAt), asc(grupo.nomeGrupo)],
     });
+  }
+
+  async softDelete(id: string) {
+    const [result] = await this.databaseService.db
+      .update(grupo)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(grupo.idGrupo, id))
+      .returning();
+    return result || null;
+  }
+
+  async restore(id: string) {
+    const [result] = await this.databaseService.db.update(grupo).set({ deletedAt: null }).where(eq(grupo.idGrupo, id)).returning();
+    return result || null;
   }
 }

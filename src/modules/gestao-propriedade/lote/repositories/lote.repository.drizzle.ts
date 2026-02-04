@@ -1,6 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { BaseRepository } from 'src/core/database/base.repository';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { lote, grupo } from 'src/database/schema';
 import { CreateLoteDto } from '../dto/create-lote.dto';
@@ -14,27 +13,33 @@ import { UpdateLoteDto } from '../dto/update-lote.dto';
  * Drizzle retorna como objeto JavaScript automaticamente, pronto para o frontend usar com mapas.
  */
 @Injectable()
-export class LoteRepositoryDrizzle extends BaseRepository<typeof lote> {
-  constructor(databaseService: DatabaseService) {
-    super(databaseService, lote, 'idLote', 'LoteRepositoryDrizzle');
-  }
+export class LoteRepositoryDrizzle {
+  constructor(private readonly databaseService: DatabaseService) {}
 
   /**
    * Cria um novo lote
    * geo_mapa é inserido como string (GeoJSON stringificado ou WKT)
    */
   async criar(createLoteDto: CreateLoteDto) {
-    return this.create({
-      nomeLote: createLoteDto.nomeLote,
-      idPropriedade: createLoteDto.idPropriedade,
-      idGrupo: createLoteDto.idGrupo,
-      tipoLote: createLoteDto.tipoLote,
-      status: createLoteDto.status,
-      descricao: createLoteDto.descricao,
-      qtdMax: createLoteDto.qtd_max,
-      areaM2: createLoteDto.area_m2 !== undefined ? String(createLoteDto.area_m2) : undefined,
-      geoMapa: createLoteDto.geo_mapa,
-    });
+    try {
+      const [result] = await this.databaseService.db
+        .insert(lote)
+        .values({
+          nomeLote: createLoteDto.nomeLote,
+          idPropriedade: createLoteDto.idPropriedade,
+          idGrupo: createLoteDto.idGrupo,
+          tipoLote: createLoteDto.tipoLote,
+          status: createLoteDto.status,
+          descricao: createLoteDto.descricao,
+          qtdMax: createLoteDto.qtd_max,
+          areaM2: createLoteDto.area_m2 !== undefined ? String(createLoteDto.area_m2) : undefined,
+          geoMapa: createLoteDto.geo_mapa,
+        })
+        .returning();
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`[LoteRepository] Erro ao criar: ${error.message}`);
+    }
   }
 
   /**
@@ -98,14 +103,16 @@ export class LoteRepositoryDrizzle extends BaseRepository<typeof lote> {
     if (updateLoteDto.area_m2 !== undefined) data.areaM2 = String(updateLoteDto.area_m2);
     if (updateLoteDto.geo_mapa !== undefined) data.geoMapa = updateLoteDto.geo_mapa;
 
-    return this.update(id, data);
+    const [result] = await this.databaseService.db.update(lote).set(data).where(eq(lote.idLote, id)).returning();
+    return result || null;
   }
 
   /**
    * Remove um lote (hard delete)
    */
   async remover(id: string) {
-    return this.hardDelete(id);
+    await this.databaseService.db.delete(lote).where(eq(lote.idLote, id));
+    return true;
   }
 
   /**

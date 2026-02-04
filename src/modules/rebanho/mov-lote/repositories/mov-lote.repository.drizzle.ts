@@ -1,34 +1,46 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { BaseRepository } from '../../../../core/database/base.repository';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { movlote, lote, grupo } from '../../../../database/schema';
 import { CreateMovLoteDto } from '../dto/create-mov-lote.dto';
 import { UpdateMovLoteDto } from '../dto/update-mov-lote.dto';
 
 @Injectable()
-export class MovLoteRepositoryDrizzle extends BaseRepository<typeof movlote> {
-  constructor(databaseService: DatabaseService) {
-    super(databaseService, movlote, 'idMovimento', 'MovLoteRepositoryDrizzle');
+export class MovLoteRepositoryDrizzle {
+  constructor(private readonly databaseService: DatabaseService) {}
+
+  async create(dto: CreateMovLoteDto) {
+    try {
+      const [result] = await this.databaseService.db
+        .insert(movlote)
+        .values({
+          idGrupo: dto.idGrupo,
+          idLoteAnterior: dto.idLoteAnterior,
+          idLoteAtual: dto.idLoteAtual,
+          dtEntrada: dto.dtEntrada,
+          idPropriedade: dto.idPropriedade,
+        })
+        .returning();
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`[MovLoteRepository] Erro ao criar: ${error.message}`);
+    }
   }
 
-  private createFromDto(dto: CreateMovLoteDto) {
-    return {
-      idGrupo: dto.idGrupo,
-      idLoteAnterior: dto.idLoteAnterior,
-      idLoteAtual: dto.idLoteAtual,
-      dtEntrada: dto.dtEntrada,
-      idPropriedade: dto.idPropriedade,
-    };
-  }
-
-  private updateFromDto(dto: UpdateMovLoteDto) {
+  async update(id: string, dto: UpdateMovLoteDto) {
     const data: any = {};
     if (dto.dtEntrada) data.dtEntrada = dto.dtEntrada;
     if (dto.dtSaida) data.dtSaida = dto.dtSaida;
     if (dto.idLoteAtual) data.idLoteAtual = dto.idLoteAtual;
     if (dto.idLoteAnterior) data.idLoteAnterior = dto.idLoteAnterior;
-    return data;
+
+    const [result] = await this.databaseService.db.update(movlote).set(data).where(eq(movlote.idMovimento, id)).returning();
+    return result || null;
+  }
+
+  async findById(id: string) {
+    const [result] = await this.databaseService.db.select().from(movlote).where(eq(movlote.idMovimento, id)).limit(1);
+    return result || null;
   }
 
   async findByPropriedade(idPropriedade: string, page: number, limit: number) {
@@ -95,6 +107,7 @@ export class MovLoteRepositoryDrizzle extends BaseRepository<typeof movlote> {
 
   // NOTA: MovLote não usa soft delete, então o método remove é um hard delete
   async remove(id: string) {
-    return this.hardDelete(id);
+    await this.databaseService.db.delete(movlote).where(eq(movlote.idMovimento, id));
+    return true;
   }
 }

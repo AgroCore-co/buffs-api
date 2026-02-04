@@ -1,23 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { BaseRepository } from '../../../../core/database/base.repository';
-import { asc } from 'drizzle-orm';
+import { asc, eq, isNull } from 'drizzle-orm';
 import { raca } from '../../../../database/schema';
 import { CreateRacaDto } from '../dto/create-raca.dto';
 import { UpdateRacaDto } from '../dto/update-raca.dto';
 
 /**
  * Repository para operações de Raça usando Drizzle ORM.
- * Herda métodos CRUD básicos do BaseRepository.
  */
 @Injectable()
-export class RacaRepositoryDrizzle extends BaseRepository<typeof raca> {
-  constructor(protected readonly databaseService: DatabaseService) {
-    super(databaseService, raca, 'idRaca', 'RacaRepositoryDrizzle');
-  }
+export class RacaRepositoryDrizzle {
+  constructor(private readonly databaseService: DatabaseService) {}
 
   /**
-   * Busca todas as raças ordenadas por nome (sobrescreve método base para adicionar ordenação)
+   * Busca todas as raças ordenadas por nome
    */
   async findAll() {
     return await this.databaseService.db.query.raca.findMany({
@@ -27,20 +23,65 @@ export class RacaRepositoryDrizzle extends BaseRepository<typeof raca> {
   }
 
   /**
-   * Método auxiliar para criar raça a partir do DTO
+   * Busca raça por ID
    */
-  async createFromDto(createRacaDto: CreateRacaDto) {
-    return this.create({
-      nome: createRacaDto.nome,
-    });
+  async findById(id: string) {
+    const [result] = await this.databaseService.db.select().from(raca).where(eq(raca.idRaca, id)).limit(1);
+    return result || null;
   }
 
   /**
-   * Método auxiliar para atualizar raça a partir do DTO
+   * Cria raça a partir do DTO
+   */
+  async createFromDto(createRacaDto: CreateRacaDto) {
+    try {
+      const [result] = await this.databaseService.db
+        .insert(raca)
+        .values({
+          nome: createRacaDto.nome,
+        })
+        .returning();
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`[RacaRepository] Erro ao criar raça: ${error.message}`);
+    }
+  }
+
+  /**
+   * Atualiza raça a partir do DTO
    */
   async updateFromDto(id: string, updateRacaDto: UpdateRacaDto) {
     const data: any = { updatedAt: new Date().toISOString() };
     if (updateRacaDto.nome) data.nome = updateRacaDto.nome;
-    return this.update(id, data);
+
+    const [result] = await this.databaseService.db.update(raca).set(data).where(eq(raca.idRaca, id)).returning();
+    return result || null;
+  }
+
+  /**
+   * Soft delete de raça
+   */
+  async softDelete(id: string) {
+    const [result] = await this.databaseService.db.update(raca).set({ deletedAt: new Date().toISOString() }).where(eq(raca.idRaca, id)).returning();
+    return result || null;
+  }
+
+  async restore(id: string) {
+    const [result] = await this.databaseService.db.update(raca).set({ deletedAt: null }).where(eq(raca.idRaca, id)).returning();
+    return result || null;
+  }
+
+  async findAllWithDeleted() {
+    return await this.databaseService.db.query.raca.findMany({
+      orderBy: [asc(raca.nome)],
+    });
+  }
+
+  async create(data: any) {
+    return this.createFromDto(data);
+  }
+
+  async update(id: string, data: any) {
+    return this.updateFromDto(id, data);
   }
 }

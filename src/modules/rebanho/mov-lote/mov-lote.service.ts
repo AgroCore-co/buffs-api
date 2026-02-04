@@ -74,7 +74,7 @@ export class MovLoteService {
 
         this.logger.debug(`[FINALIZANDO_REGISTRO] Fechando registro ${registroAtual.idMovimento} com data de saida: ${dtEntrada}`);
 
-        await this.movLoteRepository.update(registroAtual.idMovimento, { dt_saida: dtEntrada });
+        await this.movLoteRepository.update(registroAtual.idMovimento, { dtSaida: dtEntrada });
 
         this.logger.log(`[REGISTRO_FECHADO] Registro ${registroAtual.idMovimento} finalizado com sucesso`);
 
@@ -111,7 +111,7 @@ export class MovLoteService {
           id_lote_anterior: novoRegistro.idLoteAnterior,
           id_lote_atual: novoRegistro.idLoteAtual,
           dt_entrada: novoRegistro.dtEntrada,
-          dt_saida: novoRegistro.dtSaida,
+          dt_saida: novoRegistro.dtSaida || null,
           dias_lote_anterior: registroAtual
             ? Math.ceil((new Date(dtEntrada).getTime() - new Date(registroAtual.dtEntrada).getTime()) / (1000 * 60 * 60 * 24))
             : null,
