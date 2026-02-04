@@ -314,7 +314,7 @@ export class LactacaoService implements ISoftDelete {
       // Transformar a resposta para enriquecer os dados
       const enrichedData = registros.map((ciclo: any) => {
         const diasEmLactacao = this.calcularDiasEmLactacao(ciclo.dtParto, ciclo.dtSecagemReal);
-        const cicloAtual = ciclosAtivosMap.get(ciclo.idBufala) === ciclo.idCicloLactacao;
+        const isCicloAtual = ciclosAtivosMap.get(ciclo.idBufala) === ciclo.idCicloLactacao;
 
         return {
           idCicloLactacao: ciclo.idCicloLactacao,
@@ -330,7 +330,7 @@ export class LactacaoService implements ISoftDelete {
           updatedAt: ciclo.updatedAt,
           deletedAt: ciclo.deletedAt,
           diasEmLactacao,
-          cicloAtual,
+          cicloAtual: isCicloAtual ? 1 : 0,
           bufala: {
             nome: ciclo.bufalo?.nome || null,
             brinco: ciclo.bufalo?.brinco || null,
