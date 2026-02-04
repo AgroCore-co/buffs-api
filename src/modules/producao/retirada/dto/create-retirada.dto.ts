@@ -21,7 +21,7 @@ export class CreateRetiradaDto {
   @ApiProperty({ example: 'Leite com acidez um pouco elevada.', description: 'Observações sobre a coleta', required: false })
   @IsString({ message: 'A observação deve ser uma string' })
   @IsOptional()
-  @MaxLength(500, { message: 'A observação deve ter no máximo 500 caracteres' })
+  @MaxLength(50, { message: 'A observação deve ter no máximo 50 caracteres' })
   observacao?: string;
 
   @ApiProperty({ example: 250.5, description: 'Quantidade de leite coletado (em litros)' })
