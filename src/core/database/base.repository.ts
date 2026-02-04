@@ -14,16 +14,14 @@ import { PgTable } from 'drizzle-orm/pg-core';
  * @example
  * ```typescript
  * @Injectable()
- * export class MeuRepository extends BaseRepository<typeof minhaTabela, Insert, Select> {
+ * export class MeuRepository extends BaseRepository<typeof minhaTabela> {
  *   constructor(protected readonly databaseService: DatabaseService) {
  *     super(databaseService, minhaTabela, 'id_coluna', 'MeuRepository');
  *   }
  * }
  * ```
  */
-export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSelect = any> {
-  protected readonly db;
-
+export abstract class BaseRepository<TTable extends PgTable> {
   /**
    * @param databaseService - Serviço de conexão com banco de dados
    * @param table - Tabela Drizzle a ser manipulada
@@ -33,10 +31,16 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
   constructor(
     protected readonly databaseService: DatabaseService,
     protected readonly table: TTable,
-    protected readonly idColumn: keyof TTable['_']['columns'] & string,
+    protected readonly idColumn: string,
     protected readonly repositoryName: string,
-  ) {
-    this.db = this.databaseService.db;
+  ) {}
+
+  /**
+   * Acessa a instância do banco de dados através do getter.
+   * Garante que o db esteja disponível quando necessário.
+   */
+  protected get db() {
+    return this.databaseService.db;
   }
 
   /**
@@ -46,11 +50,14 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
    * @returns Registro criado
    * @throws InternalServerErrorException em caso de erro
    */
-  async create(data: TInsert): Promise<TSelect> {
+  async create(data: any): Promise<any> {
     try {
-      const [result] = await this.db.insert(this.table).values(data).returning();
+      const [result] = await this.db
+        .insert(this.table)
+        .values(data as any)
+        .returning();
 
-      return result as TSelect;
+      return result;
     } catch (error) {
       throw new InternalServerErrorException(`[${this.repositoryName}] Erro ao criar registro: ${error.message}`);
     }
@@ -63,7 +70,7 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
    * @returns Registro encontrado ou null
    * @throws InternalServerErrorException em caso de erro
    */
-  async findById(id: string): Promise<TSelect | null> {
+  async findById(id: string): Promise<any | null> {
     try {
       const deletedAtColumn = (this.table as any).deletedAt;
       const conditions: SQL[] = [eq((this.table as any)[this.idColumn], id)];
@@ -75,11 +82,11 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
 
       const [result] = await this.db
         .select()
-        .from(this.table)
+        .from(this.table as any)
         .where(and(...conditions))
         .limit(1);
 
-      return (result as TSelect) || null;
+      return result || null;
     } catch (error) {
       throw new InternalServerErrorException(`[${this.repositoryName}] Erro ao buscar registro por ID: ${error.message}`);
     }
@@ -93,10 +100,10 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
    * @returns Array de registros
    * @throws InternalServerErrorException em caso de erro
    */
-  async findAll(limit?: number, offset?: number): Promise<TSelect[]> {
+  async findAll(limit?: number, offset?: number): Promise<any[]> {
     try {
       const deletedAtColumn = (this.table as any).deletedAt;
-      let query = this.db.select().from(this.table);
+      let query = this.db.select().from(this.table as any);
 
       // Se a tabela tiver deletedAt, adiciona filtro
       if (deletedAtColumn) {
@@ -112,7 +119,7 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
       }
 
       const results = await query;
-      return results as TSelect[];
+      return results;
     } catch (error) {
       throw new InternalServerErrorException(`[${this.repositoryName}] Erro ao buscar todos os registros: ${error.message}`);
     }
@@ -124,10 +131,10 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
    * @returns Array de registros
    * @throws InternalServerErrorException em caso de erro
    */
-  async findAllWithDeleted(): Promise<TSelect[]> {
+  async findAllWithDeleted(): Promise<any[]> {
     try {
-      const results = await this.db.select().from(this.table);
-      return results as TSelect[];
+      const results = await this.db.select().from(this.table as any);
+      return results;
     } catch (error) {
       throw new InternalServerErrorException(`[${this.repositoryName}] Erro ao buscar registros (incluindo deletados): ${error.message}`);
     }
@@ -141,15 +148,15 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
    * @returns Registro atualizado ou null
    * @throws InternalServerErrorException em caso de erro
    */
-  async update(id: string, data: Partial<TInsert>): Promise<TSelect | null> {
+  async update(id: string, data: any): Promise<any | null> {
     try {
-      const [result] = await this.db
+      const results: any = await this.db
         .update(this.table)
         .set(data as any)
         .where(eq((this.table as any)[this.idColumn], id))
         .returning();
 
-      return (result as TSelect) || null;
+      return results[0] || null;
     } catch (error) {
       throw new InternalServerErrorException(`[${this.repositoryName}] Erro ao atualizar registro: ${error.message}`);
     }
@@ -163,7 +170,7 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
    * @returns Registro deletado ou null
    * @throws InternalServerErrorException em caso de erro
    */
-  async softDelete(id: string): Promise<TSelect | null> {
+  async softDelete(id: string): Promise<any | null> {
     try {
       const deletedAtColumn = (this.table as any).deletedAt;
 
@@ -171,13 +178,13 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
         throw new Error(`Tabela ${this.table} não possui coluna deletedAt para soft delete`);
       }
 
-      const [result] = await this.db
+      const results: any = await this.db
         .update(this.table)
         .set({ deletedAt: new Date().toISOString() } as any)
         .where(eq((this.table as any)[this.idColumn], id))
         .returning();
 
-      return (result as TSelect) || null;
+      return results[0] || null;
     } catch (error) {
       throw new InternalServerErrorException(`[${this.repositoryName}] Erro ao fazer soft delete: ${error.message}`);
     }
@@ -191,7 +198,7 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
    * @returns Registro restaurado ou null
    * @throws InternalServerErrorException em caso de erro
    */
-  async restore(id: string): Promise<TSelect | null> {
+  async restore(id: string): Promise<any | null> {
     try {
       const deletedAtColumn = (this.table as any).deletedAt;
 
@@ -199,13 +206,13 @@ export abstract class BaseRepository<TTable extends PgTable, TInsert = any, TSel
         throw new Error(`Tabela ${this.table} não possui coluna deletedAt para restore`);
       }
 
-      const [result] = await this.db
+      const results: any = await this.db
         .update(this.table)
         .set({ deletedAt: null } as any)
         .where(eq((this.table as any)[this.idColumn], id))
         .returning();
 
-      return (result as TSelect) || null;
+      return results[0] || null;
     } catch (error) {
       throw new InternalServerErrorException(`[${this.repositoryName}] Erro ao restaurar registro: ${error.message}`);
     }
