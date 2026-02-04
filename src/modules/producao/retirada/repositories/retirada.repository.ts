@@ -17,13 +17,26 @@ export class RetiradaRepository {
           idPropriedade: createDto.idPropriedade,
           resultadoTeste: createDto.resultadoTeste,
           observacao: createDto.observacao,
-          quantidade: createDto.quantidade !== undefined ? String(createDto.quantidade) : undefined,
+          quantidade: createDto.quantidade?.toString(),
           dtColeta: createDto.dtColeta,
           idFuncionario,
         })
         .returning();
       return novaColeta;
     } catch (error) {
+      // Foreign key violation
+      if (error.cause?.code === '23503') {
+        const detail = error.cause.detail || '';
+        if (detail.includes('id_funcionario')) {
+          throw new InternalServerErrorException(`Funcionário com ID ${idFuncionario} não existe no sistema`);
+        }
+        if (detail.includes('id_industria')) {
+          throw new InternalServerErrorException(`Indústria com ID ${createDto.idIndustria} não existe no sistema`);
+        }
+        if (detail.includes('id_propriedade')) {
+          throw new InternalServerErrorException(`Propriedade com ID ${createDto.idPropriedade} não existe no sistema`);
+        }
+      }
       throw new InternalServerErrorException(`[RetiradaRepository] Erro ao criar coleta: ${error.message}`);
     }
   }

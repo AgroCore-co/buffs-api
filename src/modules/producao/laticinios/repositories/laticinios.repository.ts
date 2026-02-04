@@ -22,12 +22,36 @@ export class LaticiniosRepository {
   }
 
   async listarTodas() {
-    return await this.db.db.select().from(industria).where(isNull(industria.deletedAt)).orderBy(desc(industria.createdAt));
+    return await this.db.db
+      .select({
+        idIndustria: industria.idIndustria,
+        nome: industria.nome,
+        representante: industria.representante,
+        contato: industria.contato,
+        observacao: industria.observacao,
+        idPropriedade: industria.idPropriedade,
+        createdAt: industria.createdAt,
+        updatedAt: industria.updatedAt,
+        deletedAt: industria.deletedAt,
+      })
+      .from(industria)
+      .where(isNull(industria.deletedAt))
+      .orderBy(desc(industria.createdAt));
   }
 
   async listarPorPropriedade(idPropriedade: string) {
     return await this.db.db
-      .select()
+      .select({
+        idIndustria: industria.idIndustria,
+        nome: industria.nome,
+        representante: industria.representante,
+        contato: industria.contato,
+        observacao: industria.observacao,
+        idPropriedade: industria.idPropriedade,
+        createdAt: industria.createdAt,
+        updatedAt: industria.updatedAt,
+        deletedAt: industria.deletedAt,
+      })
       .from(industria)
       .where(and(eq(industria.idPropriedade, idPropriedade), isNull(industria.deletedAt)))
       .orderBy(desc(industria.createdAt));
@@ -35,7 +59,17 @@ export class LaticiniosRepository {
 
   async buscarPorId(idIndustria: string) {
     const resultado = await this.db.db
-      .select()
+      .select({
+        idIndustria: industria.idIndustria,
+        nome: industria.nome,
+        representante: industria.representante,
+        contato: industria.contato,
+        observacao: industria.observacao,
+        idPropriedade: industria.idPropriedade,
+        createdAt: industria.createdAt,
+        updatedAt: industria.updatedAt,
+        deletedAt: industria.deletedAt,
+      })
       .from(industria)
       .where(and(eq(industria.idIndustria, idIndustria), isNull(industria.deletedAt)))
       .limit(1);
@@ -80,6 +114,19 @@ export class LaticiniosRepository {
   }
 
   async listarComDeletados() {
-    return await this.db.db.select().from(industria).orderBy(desc(industria.createdAt));
+    return await this.db.db
+      .select({
+        idIndustria: industria.idIndustria,
+        nome: industria.nome,
+        representante: industria.representante,
+        contato: industria.contato,
+        observacao: industria.observacao,
+        idPropriedade: industria.idPropriedade,
+        createdAt: industria.createdAt,
+        updatedAt: industria.updatedAt,
+        deletedAt: industria.deletedAt,
+      })
+      .from(industria)
+      .orderBy(desc(industria.createdAt));
   }
 }
