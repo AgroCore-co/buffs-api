@@ -149,6 +149,46 @@ export class GenealogiaService {
   }
 
   /**
+   * Constrói árvore genealógica a partir de dados fornecidos (sem buscar o búfalo no banco).
+   * Útil para calcular categoria ABCB durante a criação de um novo búfalo.
+   *
+   * @param idRaca ID da raça do búfalo
+   * @param idPai ID do pai (opcional)
+   * @param idMae ID da mãe (opcional)
+   * @param geracao Geração atual (padrão: 1)
+   * @returns Árvore genealógica construída a partir dos pais
+   */
+  async construirArvoreParaCategoriaFromData(
+    idRaca: string | null,
+    idPai: string | null | undefined,
+    idMae: string | null | undefined,
+    geracao: number = 1,
+  ): Promise<ArvoreGenealogicaNode | null> {
+    // Cria o nó raiz com os dados fornecidos
+    const arvore: ArvoreGenealogicaNode = {
+      id_bufalo: 'temp', // ID temporário (não será usado para queries)
+      id_raca: idRaca,
+      categoria: null, // Será calculado posteriormente
+      geracao,
+      pai: null,
+      mae: null,
+    };
+
+    // Busca pai e mãe se necessário (até 4 gerações) em PARALELO
+    if (geracao <= 4) {
+      const [pai, mae] = await Promise.all([
+        idPai ? this.construirArvoreParaCategoria(idPai, geracao + 1) : Promise.resolve(null),
+        idMae ? this.construirArvoreParaCategoria(idMae, geracao + 1) : Promise.resolve(null),
+      ]);
+
+      arvore.pai = pai;
+      arvore.mae = mae;
+    }
+
+    return arvore;
+  }
+
+  /**
    * Verifica se um búfalo tem descendentes
    */
   async verificarSeTemDescendentes(bufaloId: string): Promise<boolean> {

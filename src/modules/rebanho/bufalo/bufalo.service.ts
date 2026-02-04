@@ -332,15 +332,13 @@ export class BufaloService implements ISoftDelete {
       let dadosFinais = { ...dadosComMaturidade };
 
       if (createDto.id_pai || createDto.id_mae) {
-        // Cria búfalo temporário para construir árvore
-        const bufaloTemp = {
-          id_bufalo: 'temp',
-          id_pai: createDto.id_pai,
-          id_mae: createDto.id_mae,
-          id_raca: createDto.id_raca,
-        };
-
-        const arvoreGenealogica = await this.genealogiaService.construirArvoreParaCategoria(bufaloTemp.id_bufalo, 4);
+        // Constrói árvore genealógica a partir dos dados fornecidos (sem buscar búfalo inexistente)
+        const arvoreGenealogica = await this.genealogiaService.construirArvoreParaCategoriaFromData(
+          createDto.id_raca ?? null,
+          createDto.id_pai,
+          createDto.id_mae,
+          1,
+        );
 
         if (arvoreGenealogica) {
           // Verifica se propriedade participa ABCB
