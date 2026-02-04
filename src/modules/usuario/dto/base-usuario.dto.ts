@@ -34,5 +34,5 @@ export class BaseUsuarioDto {
   @IsUUID('4', { message: 'ID do endereço deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_endereco?: string;
+  idEndereco?: string;
 }

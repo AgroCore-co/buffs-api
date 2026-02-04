@@ -1,5 +1,5 @@
 import { CategoriaABCB } from '../dto/categoria-abcb.dto';
-import { ArvoreGenealogicaNode } from '../../../reproducao/genealogia/genealogia.service';
+import { ArvoreGenealogicaDto } from '../../../reproducao/genealogia/dto';
 
 export class CategoriaABCBUtil {
   /**
@@ -9,13 +9,13 @@ export class CategoriaABCBUtil {
    * @param propriedadeParticipaABCB Se a propriedade participa da ABCB
    * @returns Categoria ABCB do animal
    */
-  static calcularCategoria(arvoreGenealogica: ArvoreGenealogicaNode, propriedadeParticipaABCB: boolean): CategoriaABCB {
+  static calcularCategoria(arvoreGenealogica: ArvoreGenealogicaDto, propriedadeParticipaABCB: boolean): CategoriaABCB {
     // 1. Se propriedade não participa da ABCB, sempre SRD
     if (!propriedadeParticipaABCB) {
       return CategoriaABCB.SRD;
     }
 
-    const racaAnimal = arvoreGenealogica.id_raca;
+    const racaAnimal = arvoreGenealogica.idRaca;
 
     // 2. Se não tem raça definida, é SRD
     if (!racaAnimal) {
@@ -60,14 +60,14 @@ export class CategoriaABCBUtil {
    *                        Para PO (4 gerações), chama-se com niveisRestantes = 4.
    * @returns true se o animal e seus ancestrais atendem aos critérios de pureza
    */
-  private static verificarPurezaRecursiva(arvore: ArvoreGenealogicaNode | null | undefined, racaAlvo: string, niveisRestantes: number): boolean {
+  private static verificarPurezaRecursiva(arvore: ArvoreGenealogicaDto | null | undefined, racaAlvo: string, niveisRestantes: number): boolean {
     // 1. Caso Base de Sucesso: Verificamos todos os níveis necessários.
     if (niveisRestantes === 0) {
       return true;
     }
 
     // 2. Caso de Falha: Nó não existe ou não é da raça alvo.
-    if (!arvore?.id_raca || arvore.id_raca !== racaAlvo) {
+    if (!arvore?.idRaca || arvore.idRaca !== racaAlvo) {
       return false;
     }
 

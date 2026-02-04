@@ -3,8 +3,8 @@
  * Usado internamente pelo módulo de rebanho para categorização
  */
 export interface ArvoreGenealogicaDto {
-  id_bufalo: string;
-  id_raca: string | null;
+  idBufalo: string;
+  idRaca: string | null;
   categoria: string | null;
   nome?: string;
   pai?: ArvoreGenealogicaDto | null;

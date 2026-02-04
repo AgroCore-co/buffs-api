@@ -19,8 +19,8 @@ export class ProducaoDiariaService implements ISoftDelete {
     this.logger.log('Iniciando criação de registro de estoque de leite', {
       module: 'ProducaoDiariaService',
       method: 'create',
-      usuarioId: dto.id_usuario,
-      propriedadeId: dto.id_propriedade,
+      usuarioId: dto.idUsuario,
+      propriedadeId: dto.idPropriedade,
     });
 
     try {
@@ -30,7 +30,7 @@ export class ProducaoDiariaService implements ISoftDelete {
         module: 'ProducaoDiariaService',
         method: 'create',
         estoqueId: data.idEstoque,
-        usuarioId: dto.id_usuario,
+        usuarioId: dto.idUsuario,
       });
 
       return {
@@ -48,7 +48,7 @@ export class ProducaoDiariaService implements ISoftDelete {
       this.logger.logError(error, {
         module: 'ProducaoDiariaService',
         method: 'create',
-        usuarioId: dto.id_usuario,
+        usuarioId: dto.idUsuario,
       });
       throw new InternalServerErrorException(`Falha ao criar registro de estoque: ${error.message}`);
     }

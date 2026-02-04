@@ -21,7 +21,7 @@ export class CreateCoberturaDto {
   @ApiProperty({ description: 'ID da propriedade onde a cobertura foi realizada (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
   @IsUUID()
   @IsNotEmpty()
-  id_propriedade: string;
+  idPropriedade: string;
 
   @ApiProperty({
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -31,7 +31,7 @@ export class CreateCoberturaDto {
   @IsUUID()
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_semen?: string;
+  idSemen?: string;
 
   @ApiProperty({
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -41,7 +41,7 @@ export class CreateCoberturaDto {
   @IsUUID()
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_doadora?: string;
+  idDoadora?: string;
 
   @ApiProperty({
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -49,7 +49,7 @@ export class CreateCoberturaDto {
   })
   @IsUUID()
   @IsNotEmpty()
-  id_bufala: string;
+  idBufala: string;
 
   @ApiProperty({
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -59,7 +59,7 @@ export class CreateCoberturaDto {
   @IsUUID()
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_bufalo?: string;
+  idBufalo?: string;
 
   @ApiProperty({
     example: 'IA',
@@ -77,13 +77,13 @@ export class CreateCoberturaDto {
   @IsString()
   @IsNotEmpty()
   @IsIn(tiposInseminacao)
-  tipo_inseminacao: string;
+  tipoInseminacao: string;
 
   @ApiProperty({ example: '2025-08-18', description: 'Data do evento (inseminação ou monta)' })
   @IsDateString()
   @IsNotEmpty()
   @IsNotFutureDate({ message: 'A data do evento não pode estar no futuro' })
-  dt_evento: string;
+  dtEvento: string;
 
   @ApiProperty({
     example: 'Em andamento',

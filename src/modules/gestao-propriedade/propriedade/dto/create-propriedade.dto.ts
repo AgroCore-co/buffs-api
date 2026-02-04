@@ -31,7 +31,7 @@ export class CreatePropriedadeDto {
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
   })
   @IsUUID('4', { message: 'ID do endereço deve ser um UUID válido' })
-  id_endereco: string;
+  idEndereco: string;
 
   @ApiProperty({
     description: 'Indica se a propriedade participa do programa ABCB',
@@ -49,5 +49,5 @@ export class CreatePropriedadeDto {
   })
   @IsString()
   @IsOptional()
-  tipo_manejo?: string;
+  tipoManejo?: string;
 }

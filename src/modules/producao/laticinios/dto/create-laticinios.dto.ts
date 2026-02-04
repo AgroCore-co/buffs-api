@@ -3,9 +3,9 @@ import { IsString, IsNotEmpty, IsOptional, MaxLength, IsUUID } from 'class-valid
 
 export class CreateLaticiniosDto {
   @ApiProperty({ description: 'ID da propriedade à qual esta indústria está vinculada (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
-  @IsUUID('4', { message: 'O id_propriedade deve ser um UUID válido' })
-  @IsNotEmpty({ message: 'O id_propriedade é obrigatório' })
-  id_propriedade: string;
+  @IsUUID('4', { message: 'O idPropriedade deve ser um UUID válido' })
+  @IsNotEmpty({ message: 'O idPropriedade é obrigatório' })
+  idPropriedade: string;
 
   @ApiProperty({ example: 'Laticínios Búfalo Dourado', description: 'Nome da indústria/laticínio' })
   @IsString({ message: 'O nome deve ser uma string' })

@@ -44,7 +44,7 @@ export class RetiradaController {
       module: 'RetiradaController',
       method: 'create',
       funcionarioId: id_funcionario,
-      industriaId: dto.id_industria,
+      industriaId: dto.idIndustria,
     });
     return this.service.create(dto, id_funcionario);
   }

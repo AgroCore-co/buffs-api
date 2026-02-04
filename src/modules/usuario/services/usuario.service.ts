@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseService } from 'src/core/supabase/supabase.service';
+import { AuthHelperService } from 'src/core/services/auth-helper.service';
 import { CreateUsuarioDto } from '../dto/create-usuario.dto';
 import { UpdateUsuarioDto } from '../dto/update-usuario.dto';
 import { Cargo } from '../enums/cargo.enum';
@@ -22,6 +23,7 @@ export class UsuarioService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly logger: LoggerService,
+    private readonly authHelper: AuthHelperService,
     private readonly usuarioRepository: UsuarioRepositoryDrizzle,
     private readonly usuarioPropriedadeRepository: UsuarioPropriedadeRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryHelper,
@@ -215,19 +217,11 @@ export class UsuarioService {
 
   /**
    * Busca todas as propriedades onde o usuário é o dono.
+   * Delegado ao AuthHelperService para evitar duplicação.
    * @param userId ID UUID do usuário proprietário.
    */
   async getUserPropriedades(userId: string): Promise<string[]> {
-    this.logger.log(`[UsuarioService] getUserPropriedades chamado`, { userId });
-
-    const propriedades = await this.propriedadeRepository.listarPorDono(userId);
-
-    if (propriedades.length === 0) {
-      this.logger.warn(`[UsuarioService] Usuário não possui nenhuma propriedade`, { userId });
-      throw new NotFoundException('Usuário não possui nenhuma propriedade cadastrada.');
-    }
-
-    return propriedades;
+    return this.authHelper.getUserPropriedades(userId);
   }
 
   /**

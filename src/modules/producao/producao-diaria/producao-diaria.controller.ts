@@ -40,8 +40,8 @@ export class ProducaoDiariaController {
     this.logger.logApiRequest('POST', '/producao-diaria', undefined, {
       module: 'ProducaoDiariaController',
       method: 'create',
-      usuarioId: dto.id_usuario,
-      propriedadeId: dto.id_propriedade,
+      usuarioId: dto.idUsuario,
+      propriedadeId: dto.idPropriedade,
     });
     return this.service.create(dto);
   }

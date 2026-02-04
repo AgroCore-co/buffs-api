@@ -25,16 +25,16 @@ export class CoberturaRepositoryDrizzle {
 
       // Mapeia snake_case (DTO) → camelCase (schema)
       const mappedData = {
-        idOvulo: data.id_doadora,
-        idSemen: data.id_semen,
-        idBufala: data.id_bufala,
-        idBufalo: data.id_bufalo,
-        tipoInseminacao: data.tipo_inseminacao,
+        idOvulo: data.idDoadora,
+        idSemen: data.idSemen,
+        idBufala: data.idBufala,
+        idBufalo: data.idBufalo,
+        tipoInseminacao: data.tipoInseminacao,
         status: data.status,
-        tipoParto: data.tipo_parto,
-        dtEvento: data.dt_evento,
+        tipoParto: data.tipoParto,
+        dtEvento: data.dtEvento,
         ocorrencia: data.ocorrencia,
-        idPropriedade: data.id_propriedade,
+        idPropriedade: data.idPropriedade,
       };
 
       const result = await db.insert(dadosreproducao).values(mappedData).returning();
@@ -218,16 +218,16 @@ export class CoberturaRepositoryDrizzle {
       // Mapeia snake_case (DTO) → camelCase (schema), apenas campos fornecidos
       const mappedData: any = {};
 
-      if (data.id_doadora !== undefined) mappedData.idOvulo = data.id_doadora;
-      if (data.id_semen !== undefined) mappedData.idSemen = data.id_semen;
-      if (data.id_bufala !== undefined) mappedData.idBufala = data.id_bufala;
-      if (data.id_bufalo !== undefined) mappedData.idBufalo = data.id_bufalo;
-      if (data.tipo_inseminacao !== undefined) mappedData.tipoInseminacao = data.tipo_inseminacao;
+      if (data.idDoadora !== undefined) mappedData.idOvulo = data.idDoadora;
+      if (data.idSemen !== undefined) mappedData.idSemen = data.idSemen;
+      if (data.idBufala !== undefined) mappedData.idBufala = data.idBufala;
+      if (data.idBufalo !== undefined) mappedData.idBufalo = data.idBufalo;
+      if (data.tipoInseminacao !== undefined) mappedData.tipoInseminacao = data.tipoInseminacao;
       if (data.status !== undefined) mappedData.status = data.status;
-      if (data.tipo_parto !== undefined) mappedData.tipoParto = data.tipo_parto;
-      if (data.dt_evento !== undefined) mappedData.dtEvento = data.dt_evento;
+      if (data.tipoParto !== undefined) mappedData.tipoParto = data.tipoParto;
+      if (data.dtEvento !== undefined) mappedData.dtEvento = data.dtEvento;
       if (data.ocorrencia !== undefined) mappedData.ocorrencia = data.ocorrencia;
-      if (data.id_propriedade !== undefined) mappedData.idPropriedade = data.id_propriedade;
+      if (data.idPropriedade !== undefined) mappedData.idPropriedade = data.idPropriedade;
 
       mappedData.updatedAt = new Date().toISOString();
 

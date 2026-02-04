@@ -4,31 +4,31 @@ import { Transform } from 'class-transformer';
 
 export class CreateMovLoteDto {
   @ApiProperty({ example: 'b8c4a72d-1234-4567-8901-234567890123', description: 'ID da propriedade (UUID)' })
-  @IsUUID('4', { message: 'O id_propriedade deve ser um UUID válido' })
-  @IsNotEmpty({ message: 'O id_propriedade é obrigatório' })
-  id_propriedade: string;
+  @IsUUID('4', { message: 'O idPropriedade deve ser um UUID válido' })
+  @IsNotEmpty({ message: 'O idPropriedade é obrigatório' })
+  idPropriedade: string;
 
   @ApiProperty({ example: 'b8c4a72d-1234-4567-8901-234567890123', description: 'ID do grupo de animais que está sendo movido' })
-  @IsUUID('4', { message: 'O id_grupo deve ser um UUID válido' })
-  id_grupo: string;
+  @IsUUID('4', { message: 'O idGrupo deve ser um UUID válido' })
+  idGrupo: string;
 
   @ApiProperty({
     example: 'b8c4a72d-1234-4567-8901-234567890123',
     description: 'ID do lote de origem (opcional - será detectado automaticamente se não informado)',
     required: false,
   })
-  @IsUUID('4', { message: 'O id_lote_anterior deve ser um UUID válido' })
+  @IsUUID('4', { message: 'O idLoteAnterior deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_lote_anterior?: string;
+  idLoteAnterior?: string;
 
   @ApiProperty({ example: 'b8c4a72d-1234-4567-8901-234567890123', description: 'ID do lote de destino (para onde o grupo está se movendo)' })
-  @IsUUID('4', { message: 'O id_lote_atual deve ser um UUID válido' })
-  id_lote_atual: string;
+  @IsUUID('4', { message: 'O idLoteAtual deve ser um UUID válido' })
+  idLoteAtual: string;
 
   @ApiProperty({ example: '2025-01-15T08:00:00Z', description: 'Data e hora de entrada do grupo no novo lote' })
   @IsDateString({}, { message: 'A data de entrada deve estar no formato ISO 8601 válido' })
-  dt_entrada: string;
+  dtEntrada: string;
 
   @ApiProperty({
     example: '2025-09-20',
@@ -37,6 +37,6 @@ export class CreateMovLoteDto {
   })
   @IsDateString({}, { message: 'A data de saída deve estar no formato ISO 8601 válido' })
   @IsOptional()
-  @ValidateIf((o) => o.dt_saida !== null)
-  dt_saida?: string;
+  @ValidateIf((o) => o.dtSaida !== null)
+  dtSaida?: string;
 }

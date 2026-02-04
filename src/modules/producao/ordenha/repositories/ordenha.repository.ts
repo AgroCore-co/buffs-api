@@ -10,14 +10,14 @@ export class OrdenhaRepository {
 
   async criar(createDto: CreateDadosLactacaoDto, idUsuario: string) {
     const data = {
-      idBufala: createDto.id_bufala,
+      idBufala: createDto.idBufala,
       idUsuario: idUsuario,
-      idCicloLactacao: createDto.id_ciclo_lactacao,
-      idPropriedade: createDto.id_propriedade,
-      qtOrdenha: createDto.qt_ordenha !== undefined ? String(createDto.qt_ordenha) : undefined,
+      idCicloLactacao: createDto.idCicloLactacao,
+      idPropriedade: createDto.idPropriedade,
+      qtOrdenha: createDto.qtOrdenha !== undefined ? String(createDto.qtOrdenha) : undefined,
       periodo: createDto.periodo,
       ocorrencia: createDto.ocorrencia,
-      dtOrdenha: createDto.dt_ordenha || sql`now()`,
+      dtOrdenha: createDto.dtOrdenha || sql`now()`,
     };
 
     const [novoDado] = await this.db.db.insert(dadoslactacao).values(data).returning();
@@ -137,13 +137,13 @@ export class OrdenhaRepository {
       updatedAt: sql`now()`,
     };
 
-    if (updateDto.id_bufala !== undefined) data.idBufala = updateDto.id_bufala;
-    if (updateDto.id_ciclo_lactacao !== undefined) data.idCicloLactacao = updateDto.id_ciclo_lactacao;
-    if (updateDto.id_propriedade !== undefined) data.idPropriedade = updateDto.id_propriedade;
-    if (updateDto.qt_ordenha !== undefined) data.qtOrdenha = String(updateDto.qt_ordenha);
+    if (updateDto.idBufala !== undefined) data.idBufala = updateDto.idBufala;
+    if (updateDto.idCicloLactacao !== undefined) data.idCicloLactacao = updateDto.idCicloLactacao;
+    if (updateDto.idPropriedade !== undefined) data.idPropriedade = updateDto.idPropriedade;
+    if (updateDto.qtOrdenha !== undefined) data.qtOrdenha = String(updateDto.qtOrdenha);
     if (updateDto.periodo !== undefined) data.periodo = updateDto.periodo;
     if (updateDto.ocorrencia !== undefined) data.ocorrencia = updateDto.ocorrencia;
-    if (updateDto.dt_ordenha !== undefined) data.dtOrdenha = updateDto.dt_ordenha;
+    if (updateDto.dtOrdenha !== undefined) data.dtOrdenha = updateDto.dtOrdenha;
 
     const [dadoAtualizado] = await this.db.db
       .update(dadoslactacao)

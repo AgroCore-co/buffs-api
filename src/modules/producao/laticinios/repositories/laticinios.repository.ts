@@ -14,7 +14,7 @@ export class LaticiniosRepository {
       representante: createDto.representante,
       contato: createDto.contato,
       observacao: createDto.observacao,
-      idPropriedade: createDto.id_propriedade,
+      idPropriedade: createDto.idPropriedade,
     };
 
     const [novaIndustria] = await this.db.db.insert(industria).values(data).returning();
@@ -52,7 +52,7 @@ export class LaticiniosRepository {
     if (updateDto.representante !== undefined) data.representante = updateDto.representante;
     if (updateDto.contato !== undefined) data.contato = updateDto.contato;
     if (updateDto.observacao !== undefined) data.observacao = updateDto.observacao;
-    if (updateDto.id_propriedade !== undefined) data.idPropriedade = updateDto.id_propriedade;
+    if (updateDto.idPropriedade !== undefined) data.idPropriedade = updateDto.idPropriedade;
 
     const [industriaAtualizada] = await this.db.db
       .update(industria)

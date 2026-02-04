@@ -52,15 +52,15 @@ export class MaxAgeValidator implements ValidatorConstraintInterface {
 
 export class CreateBufaloDto {
   @ApiProperty({ description: 'Nome de identificação do búfalo.', example: 'Valente', maxLength: 50 })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
+  @IsString({ message: 'O nome deve ser um texto' })
+  @IsNotEmpty({ message: 'O nome é obrigatório' })
+  @MaxLength(50, { message: 'O nome deve ter no máximo 50 caracteres' })
   nome: string;
 
   @ApiProperty({ description: 'Código do brinco do búfalo.', example: 'BR54321', required: false, maxLength: 10 })
-  @IsString()
+  @IsString({ message: 'O brinco deve ser um texto' })
   @IsOptional()
-  @MaxLength(10)
+  @MaxLength(10, { message: 'O brinco deve ter no máximo 10 caracteres' })
   brinco?: string;
 
   @ApiProperty({
@@ -69,9 +69,9 @@ export class CreateBufaloDto {
     required: false,
     maxLength: 30,
   })
-  @IsString()
+  @IsString({ message: 'O microchip deve ser um texto' })
   @IsOptional()
-  @MaxLength(30)
+  @MaxLength(30, { message: 'O microchip deve ter no máximo 30 caracteres' })
   microchip?: string;
 
   @ApiProperty({
@@ -85,7 +85,7 @@ export class CreateBufaloDto {
   @IsOptional()
   @IsNotFutureDate({ message: 'A data de nascimento não pode estar no futuro' })
   @MaxAge(50, { message: 'O búfalo não pode ter mais de 50 anos de idade' })
-  dt_nascimento?: Date;
+  dtNascimento?: Date;
 
   @ApiProperty({
     description:
@@ -94,17 +94,17 @@ export class CreateBufaloDto {
     example: NivelMaturidade.NOVILHO_NOVILHA,
     required: false,
   })
-  @IsEnum(NivelMaturidade)
+  @IsEnum(NivelMaturidade, { message: 'O nível de maturidade deve ser: B (Bezerro), N (Novilho/Novilha), V (Vaca) ou T (Touro)' })
   @IsOptional()
-  nivel_maturidade?: NivelMaturidade;
+  nivelMaturidade?: NivelMaturidade;
 
   @ApiProperty({
     description: 'Sexo do búfalo (M ou F).',
     enum: SexoBufalo,
     example: SexoBufalo.FEMEA,
   })
-  @IsEnum(SexoBufalo)
-  @IsNotEmpty()
+  @IsEnum(SexoBufalo, { message: 'O sexo deve ser M (Macho) ou F (Fêmea)' })
+  @IsNotEmpty({ message: 'O sexo é obrigatório' })
   sexo: SexoBufalo;
 
   @ApiProperty({
@@ -112,33 +112,33 @@ export class CreateBufaloDto {
     example: 'b8c4a72d-1234-4567-8901-234567890123',
     required: false,
   })
-  @IsUUID()
+  @IsUUID('4', { message: 'O idRaca deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_raca?: string;
+  idRaca?: string;
 
   @ApiProperty({ description: 'ID da propriedade onde o búfalo está localizado.', example: 'b8c4a72d-1234-4567-8901-234567890123' })
-  @IsUUID()
-  @IsNotEmpty()
-  id_propriedade: string;
+  @IsUUID('4', { message: 'O idPropriedade deve ser um UUID válido' })
+  @IsNotEmpty({ message: 'O idPropriedade é obrigatório' })
+  idPropriedade: string;
 
   @ApiProperty({ description: 'ID do grupo ao qual o búfalo pertence.', example: 'b8c4a72d-1234-4567-8901-234567890123', required: false })
-  @IsUUID()
+  @IsUUID('4', { message: 'O idGrupo deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_grupo?: string;
+  idGrupo?: string;
 
   @ApiProperty({ description: 'ID do búfalo pai (se houver).', example: 'b8c4a72d-1234-4567-8901-234567890123', required: false })
-  @IsUUID()
+  @IsUUID('4', { message: 'O idPai deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_pai?: string;
+  idPai?: string;
 
   @ApiProperty({ description: 'ID da búfala mãe (se houver).', example: 'b8c4a72d-1234-4567-8901-234567890123', required: false })
-  @IsUUID()
+  @IsUUID('4', { message: 'O idMae deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_mae?: string;
+  idMae?: string;
 
   @ApiProperty({
     description:
@@ -146,7 +146,7 @@ export class CreateBufaloDto {
     example: true,
     default: true,
   })
-  @IsBoolean()
+  @IsBoolean({ message: 'O status deve ser verdadeiro ou falso' })
   @IsOptional()
   status?: boolean = true;
 
@@ -156,7 +156,7 @@ export class CreateBufaloDto {
     example: CategoriaABCB.PA,
     required: false,
   })
-  @IsEnum(CategoriaABCB)
+  @IsEnum(CategoriaABCB, { message: 'A categoria deve ser PO, PC, PA, CCG ou SRD' })
   @IsOptional()
   categoria?: CategoriaABCB;
 
@@ -166,9 +166,9 @@ export class CreateBufaloDto {
     required: false,
     maxLength: 100,
   })
-  @IsString()
+  @IsString({ message: 'A origem deve ser um texto' })
   @IsOptional()
-  @MaxLength(100)
+  @MaxLength(100, { message: 'A origem deve ter no máximo 100 caracteres' })
   origem?: string;
 
   @ApiProperty({
@@ -177,9 +177,9 @@ export class CreateBufaloDto {
     required: false,
     maxLength: 10,
   })
-  @IsString()
+  @IsString({ message: 'O brinco original deve ser um texto' })
   @IsOptional()
-  @MaxLength(10)
+  @MaxLength(10, { message: 'O brinco original deve ter no máximo 10 caracteres' })
   brinco_original?: string;
 
   @ApiProperty({
@@ -188,9 +188,9 @@ export class CreateBufaloDto {
     required: false,
     maxLength: 50,
   })
-  @IsString()
+  @IsString({ message: 'O registro provisório deve ser um texto' })
   @IsOptional()
-  @MaxLength(50)
+  @MaxLength(50, { message: 'O registro provisório deve ter no máximo 50 caracteres' })
   registro_prov?: string;
 
   @ApiProperty({
@@ -199,9 +199,9 @@ export class CreateBufaloDto {
     required: false,
     maxLength: 50,
   })
-  @IsString()
+  @IsString({ message: 'O registro definitivo deve ser um texto' })
   @IsOptional()
-  @MaxLength(50)
+  @MaxLength(50, { message: 'O registro definitivo deve ter no máximo 50 caracteres' })
   registro_def?: string;
 
   // ==================== REPRODUÇÃO ASSISTIDA ====================
@@ -211,7 +211,7 @@ export class CreateBufaloDto {
     example: 'b8c4a72d-1234-4567-8901-234567890123',
     required: false,
   })
-  @IsUUID()
+  @IsUUID('4', { message: 'O id_pai_semen deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
   id_pai_semen?: string;
@@ -221,7 +221,7 @@ export class CreateBufaloDto {
     example: 'b8c4a72d-1234-4567-8901-234567890123',
     required: false,
   })
-  @IsUUID()
+  @IsUUID('4', { message: 'O id_mae_ovulo deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
   id_mae_ovulo?: string;

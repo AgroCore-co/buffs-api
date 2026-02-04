@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from 'src/core/supabase/supabase.service';
 import { LoggerService } from 'src/core/logger/logger.service';
+import { AuthHelperService } from 'src/core/services/auth-helper.service';
 import { CreateFuncionarioDto } from '../dto/create-funcionario.dto';
 import { Cargo } from '../enums/cargo.enum';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -21,6 +22,7 @@ export class FuncionarioService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly logger: LoggerService,
+    private readonly authHelper: AuthHelperService,
     private readonly usuarioRepository: UsuarioRepositoryDrizzle,
     private readonly usuarioPropriedadeRepository: UsuarioPropriedadeRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryHelper,
@@ -44,18 +46,10 @@ export class FuncionarioService {
 
   /**
    * Busca todas as propriedades onde o usuário é o dono.
+   * Delegado ao AuthHelperService para evitar duplicação.
    */
   private async getUserPropriedades(userId: string): Promise<string[]> {
-    this.logger.log(`[FuncionarioService] getUserPropriedades chamado`, { userId });
-
-    const propriedades = await this.propriedadeRepository.listarPorDono(userId);
-
-    if (propriedades.length === 0) {
-      this.logger.warn(`[FuncionarioService] Usuário não possui nenhuma propriedade`, { userId });
-      throw new NotFoundException('Usuário não possui nenhuma propriedade cadastrada.');
-    }
-
-    return propriedades;
+    return this.authHelper.getUserPropriedades(userId);
   }
 
   /**
@@ -73,7 +67,7 @@ export class FuncionarioService {
     const proprietario = await this.getUserByAuthId(authId);
     const propriedadesDoProprietario = await this.getUserPropriedades(proprietario.idUsuario);
 
-    if (createFuncionarioDto.id_propriedade && !propriedadesDoProprietario.includes(createFuncionarioDto.id_propriedade)) {
+    if (createFuncionarioDto.idPropriedade && !propriedadesDoProprietario.includes(createFuncionarioDto.idPropriedade)) {
       throw new ForbiddenException('Você só pode criar funcionários para suas próprias propriedades.');
     }
 
@@ -108,10 +102,10 @@ export class FuncionarioService {
         email: createFuncionarioDto.email,
         telefone: createFuncionarioDto.telefone,
         cargo: createFuncionarioDto.cargo,
-        id_endereco: createFuncionarioDto.id_endereco,
+        id_endereco: createFuncionarioDto.idEndereco,
       });
 
-      const propriedadesParaVincular = createFuncionarioDto.id_propriedade ? [createFuncionarioDto.id_propriedade] : propriedadesDoProprietario;
+      const propriedadesParaVincular = createFuncionarioDto.idPropriedade ? [createFuncionarioDto.idPropriedade] : propriedadesDoProprietario;
 
       await this.usuarioPropriedadeRepository.vincular(novoFuncionario.idUsuario, propriedadesParaVincular);
 

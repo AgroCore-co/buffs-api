@@ -36,7 +36,7 @@ export class OrdenhaController {
   @ApiResponse({ status: 201, description: 'Ordenha registrada com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos ou búfala não está em lactação.' })
   create(@Body() dto: CreateDadosLactacaoDto, @User() user: any) {
-    this.logger.logApiRequest('POST', '/ordenhas', undefined, { module: 'OrdenhaController', method: 'create', bufalaId: dto.id_bufala });
+    this.logger.logApiRequest('POST', '/ordenhas', undefined, { module: 'OrdenhaController', method: 'create', bufalaId: dto.idBufala });
     return this.service.create(dto, user);
   }
 

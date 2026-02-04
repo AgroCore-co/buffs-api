@@ -60,7 +60,7 @@ export class AuthFacadeService {
         {
           nome: dto.nome,
           telefone: dto.telefone,
-          id_endereco: dto.id_endereco,
+          idEndereco: dto.idEndereco,
           cargo: Cargo.PROPRIETARIO,
         },
         dto.email,
@@ -125,7 +125,7 @@ export class AuthFacadeService {
     }
 
     // 2. Validar propriedade específica se fornecida
-    if (dto.id_propriedade && !propriedadesDoProprietario.includes(dto.id_propriedade)) {
+    if (dto.idPropriedade && !propriedadesDoProprietario.includes(dto.idPropriedade)) {
       throw new BadRequestException('Propriedade não pertence a você');
     }
 
@@ -160,11 +160,11 @@ export class AuthFacadeService {
         email: dto.email,
         telefone: dto.telefone,
         cargo: dto.cargo,
-        id_endereco: dto.id_endereco,
+        id_endereco: dto.idEndereco,
       });
 
       // Vincular à propriedade específica ou a todas do proprietário
-      const propriedadesVinculadas = dto.id_propriedade ? [dto.id_propriedade] : propriedadesDoProprietario;
+      const propriedadesVinculadas = dto.idPropriedade ? [dto.idPropriedade] : propriedadesDoProprietario;
 
       await this.usuarioPropriedadeRepository.vincular(perfil.idUsuario, propriedadesVinculadas);
 

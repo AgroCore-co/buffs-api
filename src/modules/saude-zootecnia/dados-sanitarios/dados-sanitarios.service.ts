@@ -42,10 +42,10 @@ export class DadosSanitariosService implements ISoftDelete {
    */
   async create(dto: CreateDadosSanitariosDto, auth_uuid: string) {
     // 1. Validar se a medicação existe
-    const medicacao = await this.repository.findMedicacaoById(dto.id_medicao);
+    const medicacao = await this.repository.findMedicacaoById(dto.idMedicao);
 
     if (!medicacao) {
-      throw new BadRequestException(`Medicação com ID ${dto.id_medicao} não encontrada.`);
+      throw new BadRequestException(`Medicação com ID ${dto.idMedicao} não encontrada.`);
     }
 
     // 2. Buscar ID interno do usuário via helper
@@ -77,7 +77,7 @@ export class DadosSanitariosService implements ISoftDelete {
       if (isGrave) {
         // Buscar informações do búfalo usando Drizzle
         const bufaloData = await this.databaseService.db.query.bufalo.findFirst({
-          where: eq(bufalo.idBufalo, dto.id_bufalo),
+          where: eq(bufalo.idBufalo, dto.idBufalo),
           with: {
             grupo: {
               columns: {
@@ -167,11 +167,11 @@ export class DadosSanitariosService implements ISoftDelete {
     await this.findOne(id_sanit);
 
     // Validar medicação se estiver sendo atualizada
-    if (dto.id_medicao) {
-      const medicacao = await this.repository.findMedicacaoById(dto.id_medicao);
+    if (dto.idMedicao) {
+      const medicacao = await this.repository.findMedicacaoById(dto.idMedicao);
 
       if (!medicacao) {
-        throw new BadRequestException(`Medicação com ID ${dto.id_medicao} não encontrada.`);
+        throw new BadRequestException(`Medicação com ID ${dto.idMedicao} não encontrada.`);
       }
     }
 

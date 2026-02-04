@@ -47,60 +47,60 @@ export class CoberturaService implements ISoftDelete {
     // ============================================================
     // 1. VALIDAR CONSISTÊNCIA DOS CAMPOS POR TIPO DE INSEMINAÇÃO
     // ============================================================
-    if (dto.tipo_inseminacao === 'Monta Natural') {
-      if (!dto.id_bufalo) {
-        throw new BadRequestException('Monta Natural requer id_bufalo (macho reprodutor)');
+    if (dto.tipoInseminacao === 'Monta Natural') {
+      if (!dto.idBufalo) {
+        throw new BadRequestException('Monta Natural requer idBufalo (macho reprodutor)');
       }
-      if (dto.id_semen) {
-        throw new BadRequestException('Monta Natural não deve ter id_semen');
+      if (dto.idSemen) {
+        throw new BadRequestException('Monta Natural não deve ter idSemen');
       }
-      if (dto.id_doadora) {
-        throw new BadRequestException('Monta Natural não deve ter id_doadora');
-      }
-    }
-
-    if (dto.tipo_inseminacao === 'IA' || dto.tipo_inseminacao === 'IATF') {
-      if (!dto.id_semen) {
-        const tipoNome = dto.tipo_inseminacao === 'IA' ? 'IA (Inseminação Artificial)' : 'IATF (Inseminação Artificial em Tempo Fixo)';
-        throw new BadRequestException(`${tipoNome} requer id_semen (material genético)`);
-      }
-      if (dto.id_doadora) {
-        throw new BadRequestException('IA e IATF não devem ter id_doadora (apenas TE usa doadora)');
+      if (dto.idDoadora) {
+        throw new BadRequestException('Monta Natural não deve ter idDoadora');
       }
     }
 
-    if (dto.tipo_inseminacao === 'TE') {
-      if (!dto.id_semen) {
-        throw new BadRequestException('TE (Transferência de Embrião) requer id_semen (embrião)');
+    if (dto.tipoInseminacao === 'IA' || dto.tipoInseminacao === 'IATF') {
+      if (!dto.idSemen) {
+        const tipoNome = dto.tipoInseminacao === 'IA' ? 'IA (Inseminação Artificial)' : 'IATF (Inseminação Artificial em Tempo Fixo)';
+        throw new BadRequestException(`${tipoNome} requer idSemen (material genético)`);
       }
-      if (!dto.id_doadora) {
-        throw new BadRequestException('TE (Transferência de Embrião) requer id_doadora (búfala doadora do óvulo)');
+      if (dto.idDoadora) {
+        throw new BadRequestException('IA e IATF não devem ter idDoadora (apenas TE usa doadora)');
+      }
+    }
+
+    if (dto.tipoInseminacao === 'TE') {
+      if (!dto.idSemen) {
+        throw new BadRequestException('TE (Transferência de Embrião) requer idSemen (embrião)');
+      }
+      if (!dto.idDoadora) {
+        throw new BadRequestException('TE (Transferência de Embrião) requer idDoadora (búfala doadora do óvulo)');
       }
     }
 
     // ============================================================
     // 2. VALIDAR FÊMEA RECEPTORA
     // ============================================================
-    if (dto.id_bufala && dto.dt_evento) {
-      await this.validator.validarAnimalAtivo(dto.id_bufala);
-      await this.validator.validarGestacaoDuplicada(dto.id_bufala, dto.dt_evento);
-      await this.validator.validarIdadeMinimaReproducao(dto.id_bufala, 'F');
-      await this.validator.validarIdadeMaximaReproducao(dto.id_bufala, 'F');
-      await this.validator.validarIntervaloEntrePartos(dto.id_bufala, dto.dt_evento);
+    if (dto.idBufala && dto.dtEvento) {
+      await this.validator.validarAnimalAtivo(dto.idBufala);
+      await this.validator.validarGestacaoDuplicada(dto.idBufala, dto.dtEvento);
+      await this.validator.validarIdadeMinimaReproducao(dto.idBufala, 'F');
+      await this.validator.validarIdadeMaximaReproducao(dto.idBufala, 'F');
+      await this.validator.validarIntervaloEntrePartos(dto.idBufala, dto.dtEvento);
     }
 
     // ============================================================
     // 3. VALIDAR MACHO REPRODUTOR (se Monta Natural)
     // ============================================================
-    if (dto.id_bufalo) {
-      await this.validator.validarAnimalAtivo(dto.id_bufalo);
-      await this.validator.validarIdadeMinimaReproducao(dto.id_bufalo, 'M');
-      await this.validator.validarIdadeMaximaReproducao(dto.id_bufalo, 'M');
-      await this.validator.validarIntervaloUsoMacho(dto.id_bufalo, dto.dt_evento);
+    if (dto.idBufalo) {
+      await this.validator.validarAnimalAtivo(dto.idBufalo);
+      await this.validator.validarIdadeMinimaReproducao(dto.idBufalo, 'M');
+      await this.validator.validarIdadeMaximaReproducao(dto.idBufalo, 'M');
+      await this.validator.validarIntervaloUsoMacho(dto.idBufalo, dto.dtEvento);
 
       // Verificar que é realmente macho
       const macho = await this.databaseService.db.query.bufalo.findFirst({
-        where: (bufalo, { eq }) => eq(bufalo.idBufalo, dto.id_bufalo),
+        where: (bufalo, { eq }) => eq(bufalo.idBufalo, dto.idBufalo),
         columns: {
           sexo: true,
           nome: true,
@@ -108,25 +108,25 @@ export class CoberturaService implements ISoftDelete {
       });
 
       if (!macho) {
-        throw new BadRequestException(`Reprodutor não encontrado: ${dto.id_bufalo}`);
+        throw new BadRequestException(`Reprodutor não encontrado: ${dto.idBufalo}`);
       }
 
       if (macho.sexo !== 'M') {
-        throw new BadRequestException(`Animal "${macho.nome}" não é macho. Para Monta Natural, id_bufalo deve ser um búfalo macho.`);
+        throw new BadRequestException(`Animal "${macho.nome}" não é macho. Para Monta Natural, idBufalo deve ser um búfalo macho.`);
       }
     }
 
     // ============================================================
     // 4. VALIDAR BÚFALA DOADORA (se TE - Transferência de Embrião)
     // ============================================================
-    if (dto.id_doadora) {
-      await this.validator.validarAnimalAtivo(dto.id_doadora);
-      await this.validator.validarIdadeMinimaReproducao(dto.id_doadora, 'F');
-      await this.validator.validarIdadeMaximaReproducao(dto.id_doadora, 'F');
+    if (dto.idDoadora) {
+      await this.validator.validarAnimalAtivo(dto.idDoadora);
+      await this.validator.validarIdadeMinimaReproducao(dto.idDoadora, 'F');
+      await this.validator.validarIdadeMaximaReproducao(dto.idDoadora, 'F');
 
       // Verificar que é realmente fêmea
       const doadora = await this.databaseService.db.query.bufalo.findFirst({
-        where: (bufalo, { eq }) => eq(bufalo.idBufalo, dto.id_doadora),
+        where: (bufalo, { eq }) => eq(bufalo.idBufalo, dto.idDoadora),
         columns: {
           sexo: true,
           nome: true,
@@ -134,20 +134,20 @@ export class CoberturaService implements ISoftDelete {
       });
 
       if (!doadora) {
-        throw new BadRequestException(`Doadora não encontrada: ${dto.id_doadora}`);
+        throw new BadRequestException(`Doadora não encontrada: ${dto.idDoadora}`);
       }
 
       if (doadora.sexo !== 'F') {
-        throw new BadRequestException(`Animal "${doadora.nome}" não é fêmea. Para TE, id_doadora deve ser uma búfala fêmea.`);
+        throw new BadRequestException(`Animal "${doadora.nome}" não é fêmea. Para TE, idDoadora deve ser uma búfala fêmea.`);
       }
     }
 
     // ============================================================
     // 5. VALIDAR MATERIAL GENÉTICO (se IA, IATF ou TE)
     // ============================================================
-    if (dto.id_semen) {
+    if (dto.idSemen) {
       const semen = await this.databaseService.db.query.materialgenetico.findFirst({
-        where: (materialgenetico, { eq }) => eq(materialgenetico.idMaterial, dto.id_semen),
+        where: (materialgenetico, { eq }) => eq(materialgenetico.idMaterial, dto.idSemen),
         columns: {
           idMaterial: true,
           tipo: true,
@@ -156,7 +156,7 @@ export class CoberturaService implements ISoftDelete {
       });
 
       if (!semen) {
-        throw new BadRequestException(`Material genético não encontrado: ${dto.id_semen}`);
+        throw new BadRequestException(`Material genético não encontrado: ${dto.idSemen}`);
       }
 
       if (!semen.ativo) {
@@ -164,12 +164,12 @@ export class CoberturaService implements ISoftDelete {
       }
 
       // Validar tipo de material conforme técnica (IA e IATF usam Sêmen)
-      if ((dto.tipo_inseminacao === 'IA' || dto.tipo_inseminacao === 'IATF') && semen.tipo !== 'Sêmen') {
+      if ((dto.tipoInseminacao === 'IA' || dto.tipoInseminacao === 'IATF') && semen.tipo !== 'Sêmen') {
         throw new BadRequestException('IA e IATF requerem material genético do tipo "Sêmen"');
       }
 
       // TE usa Embrião
-      if (dto.tipo_inseminacao === 'TE' && semen.tipo !== 'Embrião') {
+      if (dto.tipoInseminacao === 'TE' && semen.tipo !== 'Embrião') {
         throw new BadRequestException('TE (Transferência de Embrião) requer material genético do tipo "Embrião"');
       }
     }
@@ -424,10 +424,10 @@ export class CoberturaService implements ISoftDelete {
       }
 
       resultado.push({
-        id_bufalo: femea.idBufalo,
+        idBufalo: femea.idBufalo,
         nome: femea.nome,
         brinco: femea.brinco || 'Sem brinco',
-        idade_meses: idadeMeses,
+        idadeMeses: idadeMeses,
         raca: nomeRaca,
         ultima_cobertura: dtUltimaCobertura,
         dias_desde_ultima_cobertura: diasDesdeCobertura,
@@ -667,10 +667,10 @@ export class CoberturaService implements ISoftDelete {
 
       // 11. Montar resposta
       const recomendacao: RecomendacaoFemeaDto = {
-        id_bufalo: femea.idBufalo,
+        idBufalo: femea.idBufalo,
         nome: femea.nome,
         brinco: femea.brinco || 'S/N',
-        idade_meses: idadeMeses,
+        idadeMeses: idadeMeses,
         raca: (femea as any).raca?.nome || 'Não informada',
         dados_reprodutivos: {
           status,
@@ -775,10 +775,10 @@ export class CoberturaService implements ISoftDelete {
 
       // 7. Montar resposta
       const recomendacao: RecomendacaoMachoDto = {
-        id_bufalo: macho.idBufalo,
+        idBufalo: macho.idBufalo,
         nome: macho.nome,
         brinco: macho.brinco || 'S/N',
-        idade_meses: idadeMeses,
+        idadeMeses: idadeMeses,
         raca: (macho as any).raca?.nome || 'Não informada',
         categoria_abcb: macho.categoria || null,
         dados_reprodutivos: {

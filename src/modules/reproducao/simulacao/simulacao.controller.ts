@@ -64,7 +64,7 @@ export class SimulacaoController {
   encontrarMachosCompativeis(@Param('id_femea') id_femea: string, @Query('max_consanguinidade') max_consanguinidade: string, @User() user: any) {
     return this.simulacaoService.encontrarMachosCompativeis(
       {
-        id_femea: id_femea,
+        idFemea: id_femea,
         max_consanguinidade: max_consanguinidade ? parseFloat(max_consanguinidade) : 6.25,
       },
       user,

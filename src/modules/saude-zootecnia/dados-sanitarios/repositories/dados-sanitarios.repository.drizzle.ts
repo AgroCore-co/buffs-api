@@ -14,14 +14,14 @@ export class DadosSanitariosRepositoryDrizzle {
       const [result] = await this.databaseService.db
         .insert(dadossanitarios)
         .values({
-          idBufalo: dto.id_bufalo,
-          idMedicao: dto.id_medicao,
-          dtAplicacao: dto.dt_aplicacao,
+          idBufalo: dto.idBufalo,
+          idMedicao: dto.idMedicao,
+          dtAplicacao: dto.dtAplicacao,
           dosagem: dto.dosagem ? String(dto.dosagem) : null,
           unidadeMedida: dto.unidade_medida,
           doenca: doencaNormalizada || dto.doenca,
           necessitaRetorno: dto.necessita_retorno,
-          dtRetorno: dto.dt_retorno,
+          dtRetorno: dto.dtRetorno,
           idUsuario: idUsuario,
         })
         .returning();
@@ -182,14 +182,14 @@ export class DadosSanitariosRepositoryDrizzle {
         updatedAt: sql`now()`,
       };
 
-      if (dto.id_bufalo !== undefined) updateData.idBufalo = dto.id_bufalo;
-      if (dto.id_medicao !== undefined) updateData.idMedicao = dto.id_medicao;
-      if (dto.dt_aplicacao !== undefined) updateData.dtAplicacao = dto.dt_aplicacao;
+      if (dto.idBufalo !== undefined) updateData.idBufalo = dto.idBufalo;
+      if (dto.idMedicao !== undefined) updateData.idMedicao = dto.idMedicao;
+      if (dto.dtAplicacao !== undefined) updateData.dtAplicacao = dto.dtAplicacao;
       if (dto.dosagem !== undefined) updateData.dosagem = String(dto.dosagem);
       if (dto.unidade_medida !== undefined) updateData.unidadeMedida = dto.unidade_medida;
       if (dto.doenca !== undefined) updateData.doenca = doencaNormalizada || dto.doenca;
       if (dto.necessita_retorno !== undefined) updateData.necessitaRetorno = dto.necessita_retorno;
-      if (dto.dt_retorno !== undefined) updateData.dtRetorno = dto.dt_retorno;
+      if (dto.dtRetorno !== undefined) updateData.dtRetorno = dto.dtRetorno;
 
       const [result] = await this.databaseService.db
         .update(dadossanitarios)

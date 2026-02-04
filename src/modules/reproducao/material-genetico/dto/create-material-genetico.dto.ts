@@ -10,7 +10,7 @@ export class CreateMaterialGeneticoDto {
   @ApiProperty({ description: 'ID da propriedade onde o material genético está armazenado (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
   @IsUUID()
   @IsNotEmpty()
-  id_propriedade: string;
+  idPropriedade: string;
 
   @ApiProperty({ example: 'Sêmen', description: 'Tipo do material genético', enum: tiposValidos })
   @IsString()
@@ -32,7 +32,7 @@ export class CreateMaterialGeneticoDto {
   @Transform(({ value }) => (value === '' ? undefined : value))
   @IsUUID()
   @IsOptional()
-  id_bufalo_origem?: string;
+  idBufaloOrigem?: string;
 
   @ApiProperty({
     example: 'Central de Genética XYZ',
@@ -52,5 +52,5 @@ export class CreateMaterialGeneticoDto {
   @IsDateString()
   @IsNotFutureDate({ message: 'A data de coleta não pode ser no futuro' })
   @IsNotEmpty()
-  data_coleta: string;
+  dataColeta: string;
 }

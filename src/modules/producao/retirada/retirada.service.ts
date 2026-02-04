@@ -19,7 +19,7 @@ export class RetiradaService implements ISoftDelete {
       module: 'RetiradaService',
       method: 'create',
       funcionarioId: id_funcionario,
-      industriaId: dto.id_industria,
+      industriaId: dto.idIndustria,
     });
 
     try {

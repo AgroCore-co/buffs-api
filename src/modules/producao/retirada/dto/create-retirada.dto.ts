@@ -4,19 +4,19 @@ import { IsNotFutureDate } from '../../../../core/validators/date.validators';
 
 export class CreateRetiradaDto {
   @ApiProperty({ example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', description: 'ID da indústria que realizou a coleta' })
-  @IsUUID('4', { message: 'O id_industria deve ser um UUID válido' })
-  @IsNotEmpty({ message: 'O id_industria é obrigatório' })
-  id_industria: string;
+  @IsUUID('4', { message: 'O idIndustria deve ser um UUID válido' })
+  @IsNotEmpty({ message: 'O idIndustria é obrigatório' })
+  idIndustria: string;
 
   @ApiProperty({ description: 'ID da propriedade onde a coleta foi realizada (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
-  @IsUUID('4', { message: 'O id_propriedade deve ser um UUID válido' })
-  @IsNotEmpty({ message: 'O id_propriedade é obrigatório' })
-  id_propriedade: string;
+  @IsUUID('4', { message: 'O idPropriedade deve ser um UUID válido' })
+  @IsNotEmpty({ message: 'O idPropriedade é obrigatório' })
+  idPropriedade: string;
 
   @ApiProperty({ example: true, description: 'Resultado do teste de qualidade do leite (aprovado/reprovado)', required: false })
   @IsBoolean({ message: 'O resultado do teste deve ser um valor booleano' })
   @IsOptional()
-  resultado_teste?: boolean;
+  resultadoTeste?: boolean;
 
   @ApiProperty({ example: 'Leite com acidez um pouco elevada.', description: 'Observações sobre a coleta', required: false })
   @IsString({ message: 'A observação deve ser uma string' })
@@ -34,5 +34,5 @@ export class CreateRetiradaDto {
   @IsDateString({}, { message: 'A data da coleta deve estar no formato ISO 8601 válido' })
   @IsNotEmpty({ message: 'A data da coleta é obrigatória' })
   @IsNotFutureDate({ message: 'A data da coleta não pode estar no futuro' })
-  dt_coleta: string;
+  dtColeta: string;
 }

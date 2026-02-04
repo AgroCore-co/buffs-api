@@ -10,15 +10,15 @@ export class CreateGrupoDto {
   @IsString({ message: 'O nome do grupo deve ser uma string' })
   @IsNotEmpty({ message: 'O nome do grupo é obrigatório' })
   @MaxLength(50, { message: 'O nome do grupo deve ter no máximo 50 caracteres' })
-  nome_grupo: string;
+  nomeGrupo: string;
 
   @ApiProperty({
     description: 'ID da propriedade à qual este grupo pertence (UUID).',
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
   })
-  @IsUUID('4', { message: 'O id_propriedade deve ser um UUID válido' })
-  @IsNotEmpty({ message: 'O id_propriedade é obrigatório' })
-  id_propriedade: string;
+  @IsUUID('4', { message: 'O idPropriedade deve ser um UUID válido' })
+  @IsNotEmpty({ message: 'O idPropriedade é obrigatório' })
+  idPropriedade: string;
 
   @ApiProperty({
     description: 'Cor associada ao grupo para identificação visual.',

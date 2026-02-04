@@ -11,12 +11,12 @@ export class RetiradaRepository {
 
   async criar(createDto: CreateRetiradaDto, idFuncionario: string) {
     const data = sanitizeForDrizzle({
-      idIndustria: createDto.id_industria,
-      idPropriedade: createDto.id_propriedade,
-      resultadoTeste: createDto.resultado_teste,
+      idIndustria: createDto.idIndustria,
+      idPropriedade: createDto.idPropriedade,
+      resultadoTeste: createDto.resultadoTeste,
       observacao: createDto.observacao,
       quantidade: createDto.quantidade !== undefined ? String(createDto.quantidade) : undefined,
-      dtColeta: createDto.dt_coleta || sql`now()`,
+      dtColeta: createDto.dtColeta || sql`now()`,
       idFuncionario,
     });
 
@@ -93,12 +93,12 @@ export class RetiradaRepository {
       updatedAt: sql`now()`,
     };
 
-    if (updateDto.id_industria !== undefined) data.idIndustria = updateDto.id_industria;
-    if (updateDto.id_propriedade !== undefined) data.idPropriedade = updateDto.id_propriedade;
-    if (updateDto.resultado_teste !== undefined) data.resultadoTeste = updateDto.resultado_teste;
+    if (updateDto.idIndustria !== undefined) data.idIndustria = updateDto.idIndustria;
+    if (updateDto.idPropriedade !== undefined) data.idPropriedade = updateDto.idPropriedade;
+    if (updateDto.resultadoTeste !== undefined) data.resultadoTeste = updateDto.resultadoTeste;
     if (updateDto.observacao !== undefined) data.observacao = updateDto.observacao;
     if (updateDto.quantidade !== undefined) data.quantidade = String(updateDto.quantidade);
-    if (updateDto.dt_coleta !== undefined) data.dtColeta = updateDto.dt_coleta;
+    if (updateDto.dtColeta !== undefined) data.dtColeta = updateDto.dtColeta;
 
     const [coletaAtualizada] = await this.db.db
       .update(coleta)

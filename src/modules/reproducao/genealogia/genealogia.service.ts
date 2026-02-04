@@ -104,8 +104,8 @@ export class GenealogiaService {
     if (!bufalo) return null;
 
     const arvore: ArvoreGenealogicaDto = {
-      id_bufalo: bufalo.idBufalo,
-      id_raca: bufalo.idRaca,
+      idBufalo: bufalo.idBufalo,
+      idRaca: bufalo.idRaca,
       categoria: bufalo.categoria,
       geracao,
       pai: null,
@@ -144,8 +144,8 @@ export class GenealogiaService {
   ): Promise<ArvoreGenealogicaDto | null> {
     // Cria o nó raiz com os dados fornecidos
     const arvore: ArvoreGenealogicaDto = {
-      id_bufalo: 'temp', // ID temporário (não será usado para queries)
-      id_raca: idRaca,
+      idBufalo: 'temp', // ID temporário (não será usado para queries)
+      idRaca: idRaca,
       categoria: null, // Será calculado posteriormente
       geracao,
       pai: null,

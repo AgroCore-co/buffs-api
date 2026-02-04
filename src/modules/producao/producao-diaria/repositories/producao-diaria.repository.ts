@@ -11,10 +11,10 @@ export class ProducaoDiariaRepository {
 
   async criar(createDto: CreateProducaoDiariaDto) {
     const data = {
-      idPropriedade: createDto.id_propriedade,
-      idUsuario: createDto.id_usuario,
+      idPropriedade: createDto.idPropriedade,
+      idUsuario: createDto.idUsuario,
       quantidade: String(createDto.quantidade),
-      dtRegistro: createDto.dt_registro || sql`now()`,
+      dtRegistro: createDto.dtRegistro || sql`now()`,
       observacao: createDto.observacao,
     };
 
@@ -71,10 +71,10 @@ export class ProducaoDiariaRepository {
       updatedAt: sql`now()`,
     };
 
-    if (updateDto.id_propriedade !== undefined) data.idPropriedade = updateDto.id_propriedade;
-    if (updateDto.id_usuario !== undefined) data.idUsuario = updateDto.id_usuario;
+    if (updateDto.idPropriedade !== undefined) data.idPropriedade = updateDto.idPropriedade;
+    if (updateDto.idUsuario !== undefined) data.idUsuario = updateDto.idUsuario;
     if (updateDto.quantidade !== undefined) data.quantidade = String(updateDto.quantidade);
-    if (updateDto.dt_registro !== undefined) data.dtRegistro = updateDto.dt_registro;
+    if (updateDto.dtRegistro !== undefined) data.dtRegistro = updateDto.dtRegistro;
     if (updateDto.observacao !== undefined) data.observacao = updateDto.observacao;
 
     const [estoqueAtualizado] = await this.db.db

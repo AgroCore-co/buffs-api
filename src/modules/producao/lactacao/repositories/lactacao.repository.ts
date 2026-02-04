@@ -9,12 +9,12 @@ export class LactacaoRepository {
 
   async criar(data: any) {
     const insertData = {
-      idBufala: data.id_bufala,
-      idPropriedade: data.id_propriedade,
-      dtParto: data.dt_parto,
-      padraoDias: data.padrao_dias,
+      idBufala: data.idBufala,
+      idPropriedade: data.idPropriedade,
+      dtParto: data.dtParto,
+      padraoDias: data.padraoDias,
       dtSecagemPrevista: data.dt_secagem_prevista,
-      dtSecagemReal: data.dt_secagem_real,
+      dtSecagemReal: data.dtSecagemReal,
       status: data.status,
       observacao: data.observacao,
     };
@@ -105,12 +105,12 @@ export class LactacaoRepository {
       updatedAt: sql`now()`,
     };
 
-    if (data.id_bufala !== undefined) updateData.idBufala = data.id_bufala;
-    if (data.id_propriedade !== undefined) updateData.idPropriedade = data.id_propriedade;
-    if (data.dt_parto !== undefined) updateData.dtParto = data.dt_parto;
-    if (data.padrao_dias !== undefined) updateData.padraoDias = data.padrao_dias;
+    if (data.idBufala !== undefined) updateData.idBufala = data.idBufala;
+    if (data.idPropriedade !== undefined) updateData.idPropriedade = data.idPropriedade;
+    if (data.dtParto !== undefined) updateData.dtParto = data.dtParto;
+    if (data.padraoDias !== undefined) updateData.padraoDias = data.padraoDias;
     if (data.dt_secagem_prevista !== undefined) updateData.dtSecagemPrevista = data.dt_secagem_prevista;
-    if (data.dt_secagem_real !== undefined) updateData.dtSecagemReal = data.dt_secagem_real;
+    if (data.dtSecagemReal !== undefined) updateData.dtSecagemReal = data.dtSecagemReal;
     if (data.status !== undefined) updateData.status = data.status;
     if (data.observacao !== undefined) updateData.observacao = data.observacao;
 

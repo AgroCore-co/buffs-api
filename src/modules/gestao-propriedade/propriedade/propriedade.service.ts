@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, InternalServerErrorException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { CreatePropriedadeDto } from './dto/create-propriedade.dto';
 import { UpdatePropriedadeDto } from './dto/update-propriedade.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
@@ -9,24 +10,12 @@ import { PropriedadeRepositoryDrizzle } from './repositories';
 export class PropriedadeService {
   constructor(
     private readonly propriedadeRepo: PropriedadeRepositoryDrizzle,
+    private readonly authHelper: AuthHelperService,
     private readonly logger: LoggerService,
   ) {}
 
-  /**
-   * Método privado para obter o ID UUID do usuário a partir do token.
-   * Reutilizado em vários métodos para evitar repetição de código.
-   */
-  private async getUserId(user: any): Promise<string> {
-    const perfilUsuario = await this.propriedadeRepo.buscarUsuarioPorEmail(user.email);
-
-    if (!perfilUsuario) {
-      throw new NotFoundException('Perfil de usuário não encontrado.');
-    }
-    return perfilUsuario.idUsuario;
-  }
-
   async create(createPropriedadeDto: CreatePropriedadeDto, user: any) {
-    const idDono = await this.getUserId(user);
+    const idDono = await this.authHelper.getUserId(user);
 
     try {
       const novaPropriedade = await this.propriedadeRepo.criar(createPropriedadeDto, idDono);
@@ -34,7 +23,7 @@ export class PropriedadeService {
     } catch (error) {
       // Verifica erro de chave estrangeira (endereço não existe)
       if (error.message && error.message.includes('foreign key')) {
-        throw new BadRequestException(`O endereço com id ${createPropriedadeDto.id_endereco} não foi encontrado.`);
+        throw new BadRequestException(`O endereço com id ${createPropriedadeDto.idEndereco} não foi encontrado.`);
       }
       console.error('Erro ao criar propriedade:', error);
       throw new InternalServerErrorException('Falha ao criar a propriedade.');
@@ -45,7 +34,7 @@ export class PropriedadeService {
    * Lista todas as propriedades vinculadas ao usuário (como dono OU funcionário)
    */
   async findAll(user: any) {
-    const userId = await this.getUserId(user);
+    const userId = await this.authHelper.getUserId(user);
     this.logger.log(`[INICIO] Buscando propriedades do usuário ${userId}`);
 
     try {
@@ -80,7 +69,7 @@ export class PropriedadeService {
    * Busca uma propriedade específica, garantindo que ela pertença ao usuário logado.
    */
   async findOne(id: string, user: any) {
-    const userId = await this.getUserId(user);
+    const userId = await this.authHelper.getUserId(user);
 
     // 1. Verifica se o usuário é dono da propriedade
     const propriedadeComoDono = await this.propriedadeRepo.buscarPropriedadeComoDono(id, userId);
@@ -104,7 +93,7 @@ export class PropriedadeService {
    * Apenas donos podem atualizar propriedades.
    */
   async update(id: string, updatePropriedadeDto: UpdatePropriedadeDto, user: any) {
-    const userId = await this.getUserId(user);
+    const userId = await this.authHelper.getUserId(user);
 
     // Verifica se o usuário é DONO da propriedade (apenas donos podem atualizar)
     const propriedade = await this.propriedadeRepo.buscarPropriedadeComoDono(id, userId);
@@ -122,7 +111,7 @@ export class PropriedadeService {
    * Apenas donos podem remover propriedades.
    */
   async remove(id: string, user: any) {
-    const userId = await this.getUserId(user);
+    const userId = await this.authHelper.getUserId(user);
 
     // Verifica se o usuário é DONO da propriedade (apenas donos podem deletar)
     const propriedade = await this.propriedadeRepo.buscarPropriedadeComoDono(id, userId);

@@ -45,7 +45,7 @@ export class FemeaEmLactacaoDto {
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
     format: 'uuid',
   })
-  id_bufalo: string;
+  idBufalo: string;
 
   /**
    * Nome de registro da búfala
@@ -82,7 +82,7 @@ export class FemeaEmLactacaoDto {
     minimum: 0,
     type: 'integer',
   })
-  idade_meses: number;
+  idadeMeses: number;
 
   /**
    * Nome da raça da búfala conforme cadastro.

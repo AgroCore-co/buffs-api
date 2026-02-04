@@ -23,6 +23,34 @@ import { NotFoundException, InternalServerErrorException } from '@nestjs/common'
 import { PaginationDto } from '../../../core/dto/pagination.dto';
 import { LoggerService } from '../../../core/logger/logger.service';
 
+/**
+ * Controlador REST para gerenciamento de búfalos.
+ *
+ * **Endpoints Principais:**
+ * - POST /bufalos - Cadastrar novo búfalo
+ * - GET /bufalos - Listar todos os búfalos (paginado)
+ * - GET /bufalos/:id - Buscar búfalo por ID
+ * - PATCH /bufalos/:id - Atualizar búfalo
+ * - DELETE /bufalos/:id - Inativar búfalo (soft-delete)
+ * - GET /bufalos/categoria/:categoria - Filtrar por categoria ABCB
+ * - GET /bufalos/filtros - Filtros avançados (sexo, maturidade, status, etc.)
+ *
+ * **Autenticação:**
+ * Todos os endpoints exigem autenticação JWT via Bearer token.
+ * Usuários só podem acessar búfalos de propriedades vinculadas.
+ *
+ * **Cache:**
+ * - Removido da maioria dos endpoints devido a mudanças frequentes
+ * - Mantido apenas em consultas de categoria (TTL: 10 minutos)
+ *
+ * **Observações:**
+ * - Maturidade é atualizada automaticamente em queries
+ * - Categoria ABCB é calculada na criação/atualização
+ * - Soft-delete: búfalos inativos permanecem no banco
+ *
+ * @class BufaloController
+ * @see {@link BufaloService}
+ */
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
 @ApiTags('Rebanho - Búfalos')
@@ -582,7 +610,7 @@ export class BufaloController {
       module: 'BufaloController',
       method: 'inativar',
       bufaloId: id,
-      motivo: inativarDto.motivo_inativo,
+      motivo: inativarDto.motivoInativo,
     });
 
     return this.bufaloService.inativar(id, inativarDto, user);

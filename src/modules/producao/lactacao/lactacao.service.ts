@@ -209,12 +209,12 @@ export class LactacaoService implements ISoftDelete {
     this.logger.log('Iniciando criação de ciclo de lactação', {
       module: 'LactacaoService',
       method: 'create',
-      bufalaId: dto.id_bufala,
-      dtParto: dto.dt_parto,
+      bufalaId: dto.idBufala,
+      dtParto: dto.dtParto,
     });
 
-    const dt_secagem_prevista = this.computeSecagemPrevista(dto.dt_parto, dto.padrao_dias);
-    const status = this.computeStatus(dto.dt_secagem_real);
+    const dt_secagem_prevista = this.computeSecagemPrevista(dto.dtParto, dto.padraoDias);
+    const status = this.computeStatus(dto.dtSecagemReal);
 
     this.logger.log('Calculando datas e status do ciclo', {
       module: 'LactacaoService',
@@ -231,7 +231,7 @@ export class LactacaoService implements ISoftDelete {
       });
 
       // Buscar dados da búfala para verificar alertas
-      const bufalaData = await this.bufaloRepository.findById(dto.id_bufala);
+      const bufalaData = await this.bufaloRepository.findById(dto.idBufala);
 
       if (bufalaData) {
         await this.verificarAlertasCiclo(data, bufalaData);
@@ -241,14 +241,14 @@ export class LactacaoService implements ISoftDelete {
         module: 'CicloLactacaoService',
         method: 'create',
         cicloId: data.idCicloLactacao,
-        bufalaId: dto.id_bufala,
+        bufalaId: dto.idBufala,
       });
       return formatDateFields(data);
     } catch (error) {
       this.logger.logError(error, {
         module: 'CicloLactacaoService',
         method: 'create',
-        bufalaId: dto.id_bufala,
+        bufalaId: dto.idBufala,
       });
       throw new InternalServerErrorException(`Falha ao criar ciclo de lactação: ${error.message}`);
     }
@@ -390,10 +390,10 @@ export class LactacaoService implements ISoftDelete {
 
     const current = await this.findOne(id_ciclo_lactacao);
 
-    const dt_parto = dto.dt_parto ?? current.dtParto;
-    const padrao_dias = dto.padrao_dias ?? current.padraoDias;
+    const dt_parto = dto.dtParto ?? current.dtParto;
+    const padrao_dias = dto.padraoDias ?? current.padraoDias;
     const dt_secagem_prevista = this.computeSecagemPrevista(dt_parto, padrao_dias);
-    const status = this.computeStatus(dto.dt_secagem_real ?? current.dtSecagemReal);
+    const status = this.computeStatus(dto.dtSecagemReal ?? current.dtSecagemReal);
 
     this.logger.log('Recalculando datas e status do ciclo', {
       module: 'CicloLactacaoService',
