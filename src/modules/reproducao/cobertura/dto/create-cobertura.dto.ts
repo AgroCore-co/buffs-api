@@ -9,6 +9,12 @@ import { IsNotFutureDate } from '../../../../core/validators/date.validators';
 // - TE (Transferência de Embrião): Implantação de embrião em receptora
 // - Monta Natural: Acasalamento natural entre macho e fêmea
 const tiposInseminacao = ['IA', 'IATF', 'TE', 'Monta Natural'];
+
+// Status de Reprodução (Regras de Negócio):
+// - "Em andamento": Gestação ativa - BLOQUEIA nova cobertura
+// - "Confirmada": Reprodução concluída com sucesso - PERMITE nova cobertura
+// - "Falhou": Reprodução sem sucesso, animal apto - PERMITE nova cobertura
+// - "Concluída": Status legado (equivalente a Confirmada)
 const statusValidos = ['Em andamento', 'Confirmada', 'Falhou', 'Concluída'];
 
 export class CreateCoberturaDto {
@@ -81,7 +87,17 @@ export class CreateCoberturaDto {
 
   @ApiProperty({
     example: 'Em andamento',
-    description: 'Status inicial do processo reprodutivo',
+    description: `Status inicial do processo reprodutivo:
+
+• Em andamento (padrão): Gestação ativa - impede criação de nova cobertura até ser concluída ou marcada como falha
+
+• Confirmada: Reprodução concluída com sucesso - permite nova cobertura futura
+
+• Falhou: Reprodução sem sucesso, animal apto para nova tentativa - permite nova cobertura
+
+• Concluída: Status legado (equivalente a Confirmada)
+
+**Regra:** Apenas "Em andamento" bloqueia criação de nova cobertura.`,
     enum: statusValidos,
     required: false,
     default: 'Em andamento',
