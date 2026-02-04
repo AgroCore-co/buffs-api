@@ -3,13 +3,14 @@ import { DatabaseService } from 'src/core/database/database.service';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { coleta, industria } from '../../../../database/schema';
 import { CreateRetiradaDto, UpdateRetiradaDto } from '../dto';
+import { sanitizeForDrizzle } from '../../../../core/utils';
 
 @Injectable()
 export class RetiradaRepository {
   constructor(private readonly db: DatabaseService) {}
 
   async criar(createDto: CreateRetiradaDto, idFuncionario: string) {
-    const data = {
+    const data = sanitizeForDrizzle({
       idIndustria: createDto.id_industria,
       idPropriedade: createDto.id_propriedade,
       resultadoTeste: createDto.resultado_teste,
@@ -17,7 +18,7 @@ export class RetiradaRepository {
       quantidade: createDto.quantidade !== undefined ? String(createDto.quantidade) : undefined,
       dtColeta: createDto.dt_coleta || sql`now()`,
       idFuncionario,
-    };
+    });
 
     const [novaColeta] = await this.db.db.insert(coleta).values(data).returning();
     return novaColeta;
