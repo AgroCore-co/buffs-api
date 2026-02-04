@@ -6,9 +6,10 @@ import { GenealogiaRepositoryDrizzle } from './repositories/genealogia.repositor
 import { AuthModule } from '../../auth/auth.module';
 import { LoggerModule } from '../../../core/logger/logger.module';
 import { DatabaseModule } from '../../../core/database/database.module';
+import { UsuarioModule } from '../../usuario/usuario.module';
 
 @Module({
-  imports: [AuthModule, LoggerModule, DatabaseModule, CacheModule.register()],
+  imports: [AuthModule, LoggerModule, DatabaseModule, CacheModule.register(), UsuarioModule],
   controllers: [GenealogiaController],
   providers: [GenealogiaService, GenealogiaRepositoryDrizzle],
   exports: [GenealogiaService],
