@@ -23,7 +23,7 @@ import { AlertasModule } from './modules/alerta/alerta.module';
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // 60 segundos
-        limit: 10, // 10 requisições
+        limit: 50, // 50 requisições
       },
     ]),
     SupabaseModule,
