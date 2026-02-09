@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { CoberturaController } from './cobertura.controller';
 import { CoberturaService } from './cobertura.service';
 import { CoberturaValidatorDrizzle } from './validators/cobertura.validator.drizzle';
-import { CoberturaRepositoryDrizzle } from './repositories/cobertura.repository';
+import { CoberturaRepositoryDrizzle } from './repositories';
 import { DatabaseModule } from 'src/core/database/database.module';
 import { AuthModule } from 'src/modules/auth/auth.module';
 import { AlertasModule } from 'src/modules/alerta/alerta.module';
