@@ -1,1 +1,1 @@
-export * from './cobertura.repository';
+export * from './cobertura.repository.drizzle';
