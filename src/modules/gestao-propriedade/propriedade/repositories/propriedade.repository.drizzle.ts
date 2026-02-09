@@ -49,9 +49,9 @@ export class PropriedadeRepositoryDrizzle {
         .values({
           nome: createPropriedadeDto.nome,
           cnpj: createPropriedadeDto.cnpj,
-          idEndereco: createPropriedadeDto.id_endereco,
+          idEndereco: createPropriedadeDto.idEndereco,
           pAbcb: createPropriedadeDto.p_abcb,
-          tipoManejo: createPropriedadeDto.tipo_manejo,
+          tipoManejo: createPropriedadeDto.tipoManejo,
           idDono,
         })
         .returning();
@@ -175,9 +175,9 @@ export class PropriedadeRepositoryDrizzle {
 
       if (updatePropriedadeDto.nome !== undefined) updateData.nome = updatePropriedadeDto.nome;
       if (updatePropriedadeDto.cnpj !== undefined) updateData.cnpj = updatePropriedadeDto.cnpj;
-      if (updatePropriedadeDto.id_endereco !== undefined) updateData.idEndereco = updatePropriedadeDto.id_endereco;
+      if (updatePropriedadeDto.idEndereco !== undefined) updateData.idEndereco = updatePropriedadeDto.idEndereco;
       if (updatePropriedadeDto.p_abcb !== undefined) updateData.pAbcb = updatePropriedadeDto.p_abcb;
-      if (updatePropriedadeDto.tipo_manejo !== undefined) updateData.tipoManejo = updatePropriedadeDto.tipo_manejo;
+      if (updatePropriedadeDto.tipoManejo !== undefined) updateData.tipoManejo = updatePropriedadeDto.tipoManejo;
 
       const [propriedadeAtualizada] = await this.databaseService.db
         .update(propriedade)

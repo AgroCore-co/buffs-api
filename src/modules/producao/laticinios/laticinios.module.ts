@@ -4,12 +4,12 @@ import { LaticiniosController } from './laticinios.controller';
 import { LoggerModule } from '../../../core/logger/logger.module';
 import { AuthModule } from '../../auth/auth.module';
 import { DatabaseModule } from '../../../core/database/database.module';
-import { LaticiniosRepository } from './repositories';
+import { LaticiniosRepositoryDrizzle } from './repositories';
 
 @Module({
   imports: [LoggerModule, AuthModule, DatabaseModule],
   controllers: [LaticiniosController],
-  providers: [LaticiniosService, LaticiniosRepository],
+  providers: [LaticiniosService, LaticiniosRepositoryDrizzle],
   exports: [LaticiniosService],
 })
 export class LaticiniosModule {}

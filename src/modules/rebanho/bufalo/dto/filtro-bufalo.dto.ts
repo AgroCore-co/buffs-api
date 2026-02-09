@@ -11,7 +11,7 @@ export class FiltroBufaloDto {
   })
   @IsUUID()
   @IsOptional()
-  id_raca?: string;
+  idRaca?: string;
 
   @ApiProperty({
     description: 'Sexo do búfalo (M ou F)',
@@ -31,7 +31,7 @@ export class FiltroBufaloDto {
   })
   @IsEnum(NivelMaturidade)
   @IsOptional()
-  nivel_maturidade?: NivelMaturidade;
+  nivelMaturidade?: NivelMaturidade;
 
   @ApiProperty({
     description: 'Status do búfalo (true para ativo, false para inativo)',

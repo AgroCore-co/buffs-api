@@ -5,126 +5,104 @@ import { medicacoes } from 'src/database/schema';
 import { CreateMedicacaoDto } from '../dto/create-medicacao.dto';
 import { UpdateMedicacaoDto } from '../dto/update-medicacao.dto';
 
+/**
+ * Repository para operações de Medicamentos usando Drizzle ORM.
+ */
 @Injectable()
 export class MedicamentosRepositoryDrizzle {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async create(dto: CreateMedicacaoDto) {
+  /**
+   * Busca todas as medicações ordenadas por data de criação
+   */
+  async findAll() {
+    return await this.databaseService.db.query.medicacoes.findMany({
+      where: (table, { isNull }) => isNull(table.deletedAt),
+      orderBy: [desc(medicacoes.createdAt)],
+    });
+  }
+
+  async findById(id: string) {
+    const [result] = await this.databaseService.db
+      .select()
+      .from(medicacoes)
+      .where(and(eq(medicacoes.idMedicacao, id), isNull(medicacoes.deletedAt)))
+      .limit(1);
+    return result || null;
+  }
+
+  /**
+   * Busca medicações de uma propriedade específica
+   */
+  async findByPropriedade(idPropriedade: string) {
+    return await this.databaseService.db.query.medicacoes.findMany({
+      where: and(eq(medicacoes.idPropriedade, idPropriedade), isNull(medicacoes.deletedAt)),
+      orderBy: [desc(medicacoes.createdAt)],
+    });
+  }
+
+  /**
+   * Cria medicação a partir do DTO
+   */
+  async createFromDto(dto: CreateMedicacaoDto) {
     try {
       const [result] = await this.databaseService.db
         .insert(medicacoes)
         .values({
-          idPropriedade: dto.id_propriedade,
-          tipoTratamento: dto.tipo_tratamento,
+          idPropriedade: dto.idPropriedade,
+          tipoTratamento: dto.tipoTratamento,
           medicacao: dto.medicacao,
           descricao: dto.descricao,
         })
         .returning();
-
       return result;
     } catch (error) {
-      throw new InternalServerErrorException(`Erro ao criar medicação: ${error.message}`);
+      throw new InternalServerErrorException(`[MedicamentosRepository] Erro ao criar: ${error.message}`);
     }
   }
 
-  async findAll() {
-    try {
-      const result = await this.databaseService.db.query.medicacoes.findMany({
-        where: isNull(medicacoes.deletedAt),
-        orderBy: [desc(medicacoes.createdAt)],
-      });
+  /**
+   * Atualiza medicação a partir do DTO
+   */
+  async updateFromDto(idMedicacao: string, dto: UpdateMedicacaoDto) {
+    const updateData: Record<string, any> = {
+      updatedAt: sql`now()`,
+    };
 
-      return result;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar medicações: ${error.message}`);
-    }
+    if (dto.idPropriedade !== undefined) updateData.idPropriedade = dto.idPropriedade;
+    if (dto.tipoTratamento !== undefined) updateData.tipoTratamento = dto.tipoTratamento;
+    if (dto.medicacao !== undefined) updateData.medicacao = dto.medicacao;
+    if (dto.descricao !== undefined) updateData.descricao = dto.descricao;
+
+    const [result] = await this.databaseService.db.update(medicacoes).set(updateData).where(eq(medicacoes.idMedicacao, idMedicacao)).returning();
+    return result || null;
   }
 
-  async findByPropriedade(idPropriedade: string) {
-    try {
-      const result = await this.databaseService.db.query.medicacoes.findMany({
-        where: and(eq(medicacoes.idPropriedade, idPropriedade), isNull(medicacoes.deletedAt)),
-        orderBy: [desc(medicacoes.createdAt)],
-      });
-
-      return result;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar medicações da propriedade: ${error.message}`);
-    }
+  async softDelete(id: string) {
+    const [result] = await this.databaseService.db
+      .update(medicacoes)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(medicacoes.idMedicacao, id))
+      .returning();
+    return result || null;
   }
 
-  async findById(idMedicacao: string) {
-    try {
-      const result = await this.databaseService.db.query.medicacoes.findFirst({
-        where: and(eq(medicacoes.idMedicacao, idMedicacao), isNull(medicacoes.deletedAt)),
-      });
-
-      return result || null;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar medicação: ${error.message}`);
-    }
-  }
-
-  async update(idMedicacao: string, dto: UpdateMedicacaoDto) {
-    try {
-      const updateData: Record<string, any> = {
-        updatedAt: sql`now()`,
-      };
-
-      if (dto.id_propriedade !== undefined) updateData.idPropriedade = dto.id_propriedade;
-      if (dto.tipo_tratamento !== undefined) updateData.tipoTratamento = dto.tipo_tratamento;
-      if (dto.medicacao !== undefined) updateData.medicacao = dto.medicacao;
-      if (dto.descricao !== undefined) updateData.descricao = dto.descricao;
-
-      const [result] = await this.databaseService.db
-        .update(medicacoes)
-        .set(updateData)
-        .where(and(eq(medicacoes.idMedicacao, idMedicacao), isNull(medicacoes.deletedAt)))
-        .returning();
-
-      return result;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao atualizar medicação: ${error.message}`);
-    }
-  }
-
-  async softDelete(idMedicacao: string) {
-    try {
-      const [result] = await this.databaseService.db
-        .update(medicacoes)
-        .set({ deletedAt: sql`now()` })
-        .where(and(eq(medicacoes.idMedicacao, idMedicacao), isNull(medicacoes.deletedAt)))
-        .returning();
-
-      return result;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao deletar medicação: ${error.message}`);
-    }
-  }
-
-  async restore(idMedicacao: string) {
-    try {
-      const [result] = await this.databaseService.db
-        .update(medicacoes)
-        .set({ deletedAt: null })
-        .where(eq(medicacoes.idMedicacao, idMedicacao))
-        .returning();
-
-      return result;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao restaurar medicação: ${error.message}`);
-    }
+  async restore(id: string) {
+    const [result] = await this.databaseService.db.update(medicacoes).set({ deletedAt: null }).where(eq(medicacoes.idMedicacao, id)).returning();
+    return result || null;
   }
 
   async findAllWithDeleted() {
-    try {
-      const result = await this.databaseService.db.query.medicacoes.findMany({
-        orderBy: [desc(medicacoes.createdAt)],
-      });
+    return await this.databaseService.db.query.medicacoes.findMany({
+      orderBy: [desc(medicacoes.createdAt)],
+    });
+  }
 
-      return result;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar medicações com deletadas: ${error.message}`);
-    }
+  async create(data: any) {
+    return this.createFromDto(data);
+  }
+
+  async update(id: string, data: any) {
+    return this.updateFromDto(id, data);
   }
 }

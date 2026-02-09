@@ -19,7 +19,7 @@ export class UsuarioRepositoryDrizzle {
       telefone: createUsuarioDto.telefone,
       email,
       cargo: Cargo.PROPRIETARIO,
-      idEndereco: createUsuarioDto.id_endereco,
+      idEndereco: createUsuarioDto.idEndereco,
     };
 
     const [novoUsuario] = await this.db.db.insert(usuario).values(data).returning();
@@ -148,8 +148,8 @@ export class UsuarioRepositoryDrizzle {
     if (updateUsuarioDto.telefone !== undefined) {
       data.telefone = updateUsuarioDto.telefone;
     }
-    if (updateUsuarioDto.id_endereco !== undefined) {
-      data.idEndereco = updateUsuarioDto.id_endereco;
+    if (updateUsuarioDto.idEndereco !== undefined) {
+      data.idEndereco = updateUsuarioDto.idEndereco;
     }
 
     const [usuarioAtualizado] = await this.db.db.update(usuario).set(data).where(eq(usuario.idUsuario, idUsuario)).returning();

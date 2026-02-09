@@ -5,12 +5,12 @@ import { UpdateRetiradaDto } from './dto/update-retirada.dto';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse } from '../../../core/utils/pagination.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
-import { RetiradaRepository } from './repositories';
+import { RetiradaRepositoryDrizzle } from './repositories';
 
 @Injectable()
 export class RetiradaService implements ISoftDelete {
   constructor(
-    private readonly repository: RetiradaRepository,
+    private readonly repository: RetiradaRepositoryDrizzle,
     private readonly logger: LoggerService,
   ) {}
 
@@ -19,7 +19,7 @@ export class RetiradaService implements ISoftDelete {
       module: 'RetiradaService',
       method: 'create',
       funcionarioId: id_funcionario,
-      industriaId: dto.id_industria,
+      industriaId: dto.idIndustria,
     });
 
     try {

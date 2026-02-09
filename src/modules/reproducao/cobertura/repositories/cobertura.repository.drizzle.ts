@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { eq, and, desc, count, isNull } from 'drizzle-orm';
-import { dadosreproducao, bufalo } from '../../../../database/schema';
+import { eq, and, desc, count, isNull, sql } from 'drizzle-orm';
+import { dadosreproducao } from '../../../../database/schema';
 
 /**
  * Repository para queries de coberturas usando Drizzle ORM.
@@ -25,16 +25,16 @@ export class CoberturaRepositoryDrizzle {
 
       // Mapeia snake_case (DTO) → camelCase (schema)
       const mappedData = {
-        idOvulo: data.id_doadora,
-        idSemen: data.id_semen,
-        idBufala: data.id_bufala,
-        idBufalo: data.id_bufalo,
-        tipoInseminacao: data.tipo_inseminacao,
+        idOvulo: data.idDoadora,
+        idSemen: data.idSemen,
+        idBufala: data.idBufala,
+        idBufalo: data.idBufalo,
+        tipoInseminacao: data.tipoInseminacao,
         status: data.status,
-        tipoParto: data.tipo_parto,
-        dtEvento: data.dt_evento,
+        tipoParto: data.tipoParto,
+        dtEvento: data.dtEvento,
         ocorrencia: data.ocorrencia,
-        idPropriedade: data.id_propriedade,
+        idPropriedade: data.idPropriedade,
       };
 
       const result = await db.insert(dadosreproducao).values(mappedData).returning();
@@ -46,15 +46,27 @@ export class CoberturaRepositoryDrizzle {
 
   /**
    * Busca todas as coberturas com paginação
+   * Ordenação: prioridade por status (Em andamento → Confirmada → Falha) + data recente
    */
   async findAll(offset: number, limit: number) {
     try {
       const db = this.databaseService.db;
 
+      // Definir prioridade de status usando SQL CASE
+      const statusPriority = sql`
+        CASE ${dadosreproducao.status}
+          WHEN 'Em andamento' THEN 1
+          WHEN 'Confirmada' THEN 2
+          WHEN 'Falha' THEN 3
+          WHEN 'Concluída' THEN 4
+          ELSE 5
+        END
+      `;
+
       const [data, totalResult] = await Promise.all([
         db.query.dadosreproducao.findMany({
           where: isNull(dadosreproducao.deletedAt),
-          orderBy: [desc(dadosreproducao.dtEvento)],
+          orderBy: [statusPriority, desc(dadosreproducao.dtEvento)],
           limit,
           offset,
           with: {
@@ -90,15 +102,27 @@ export class CoberturaRepositoryDrizzle {
 
   /**
    * Busca coberturas por propriedade com paginação
+   * Ordenação: prioridade por status (Em andamento → Confirmada → Falha) + data recente
    */
   async findByPropriedade(idPropriedade: string, offset: number, limit: number) {
     try {
       const db = this.databaseService.db;
 
+      // Definir prioridade de status usando SQL CASE
+      const statusPriority = sql`
+        CASE ${dadosreproducao.status}
+          WHEN 'Em andamento' THEN 1
+          WHEN 'Confirmada' THEN 2
+          WHEN 'Falha' THEN 3
+          WHEN 'Concluída' THEN 4
+          ELSE 5
+        END
+      `;
+
       const [data, totalResult] = await Promise.all([
         db.query.dadosreproducao.findMany({
           where: and(eq(dadosreproducao.idPropriedade, idPropriedade), isNull(dadosreproducao.deletedAt)),
-          orderBy: [desc(dadosreproducao.dtEvento)],
+          orderBy: [statusPriority, desc(dadosreproducao.dtEvento)],
           limit,
           offset,
           with: {
@@ -194,16 +218,16 @@ export class CoberturaRepositoryDrizzle {
       // Mapeia snake_case (DTO) → camelCase (schema), apenas campos fornecidos
       const mappedData: any = {};
 
-      if (data.id_doadora !== undefined) mappedData.idOvulo = data.id_doadora;
-      if (data.id_semen !== undefined) mappedData.idSemen = data.id_semen;
-      if (data.id_bufala !== undefined) mappedData.idBufala = data.id_bufala;
-      if (data.id_bufalo !== undefined) mappedData.idBufalo = data.id_bufalo;
-      if (data.tipo_inseminacao !== undefined) mappedData.tipoInseminacao = data.tipo_inseminacao;
+      if (data.idDoadora !== undefined) mappedData.idOvulo = data.idDoadora;
+      if (data.idSemen !== undefined) mappedData.idSemen = data.idSemen;
+      if (data.idBufala !== undefined) mappedData.idBufala = data.idBufala;
+      if (data.idBufalo !== undefined) mappedData.idBufalo = data.idBufalo;
+      if (data.tipoInseminacao !== undefined) mappedData.tipoInseminacao = data.tipoInseminacao;
       if (data.status !== undefined) mappedData.status = data.status;
-      if (data.tipo_parto !== undefined) mappedData.tipoParto = data.tipo_parto;
-      if (data.dt_evento !== undefined) mappedData.dtEvento = data.dt_evento;
+      if (data.tipoParto !== undefined) mappedData.tipoParto = data.tipoParto;
+      if (data.dtEvento !== undefined) mappedData.dtEvento = data.dtEvento;
       if (data.ocorrencia !== undefined) mappedData.ocorrencia = data.ocorrencia;
-      if (data.id_propriedade !== undefined) mappedData.idPropriedade = data.id_propriedade;
+      if (data.idPropriedade !== undefined) mappedData.idPropriedade = data.idPropriedade;
 
       mappedData.updatedAt = new Date().toISOString();
 

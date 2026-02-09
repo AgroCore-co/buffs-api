@@ -4,14 +4,14 @@ import { IsNotFutureDate } from '../../../../core/validators';
 
 export class CreateProducaoDiariaDto {
   @ApiProperty({ example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', description: 'ID da propriedade onde o estoque está localizado' })
-  @IsUUID('4', { message: 'O id_propriedade deve ser um UUID válido' })
-  @IsNotEmpty({ message: 'O id_propriedade é obrigatório' })
-  id_propriedade: string;
+  @IsUUID('4', { message: 'O idPropriedade deve ser um UUID válido' })
+  @IsNotEmpty({ message: 'O idPropriedade é obrigatório' })
+  idPropriedade: string;
 
   @ApiProperty({ example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', description: 'ID do usuário que registrou o estoque' })
-  @IsUUID('4', { message: 'O id_usuario deve ser um UUID válido' })
-  @IsNotEmpty({ message: 'O id_usuario é obrigatório' })
-  id_usuario: string;
+  @IsUUID('4', { message: 'O idUsuario deve ser um UUID válido' })
+  @IsNotEmpty({ message: 'O idUsuario é obrigatório' })
+  idUsuario: string;
 
   @ApiProperty({ example: 1200.75, description: 'Quantidade de leite em estoque (em litros)' })
   @IsNumber({}, { message: 'A quantidade deve ser um número' })
@@ -23,7 +23,7 @@ export class CreateProducaoDiariaDto {
   @IsDateString({}, { message: 'A data de registro deve estar no formato ISO 8601 válido' })
   @IsNotFutureDate({ message: 'A data de registro não pode ser no futuro' })
   @IsOptional()
-  dt_registro?: string;
+  dtRegistro?: string;
 
   @ApiProperty({ example: 'Tanque principal resfriado a 4°C.', description: 'Observações sobre o estoque', required: false })
   @IsString({ message: 'A observação deve ser uma string' })

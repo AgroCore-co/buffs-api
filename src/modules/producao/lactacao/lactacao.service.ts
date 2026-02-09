@@ -8,7 +8,7 @@ import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.d
 import { createPaginatedResponse, calculatePaginationParams } from '../../../core/utils/pagination.utils';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
-import { LactacaoRepository } from './repositories';
+import { LactacaoRepositoryDrizzle } from './repositories';
 import { BufaloRepositoryDrizzle } from '../../rebanho/bufalo/repositories/bufalo.repository.drizzle';
 import { GrupoRepositoryDrizzle } from '../../rebanho/grupo/repositories/grupo.repository.drizzle';
 import { PropriedadeRepositoryDrizzle } from '../../gestao-propriedade/propriedade/repositories/propriedade.repository.drizzle';
@@ -16,7 +16,7 @@ import { PropriedadeRepositoryDrizzle } from '../../gestao-propriedade/proprieda
 @Injectable()
 export class LactacaoService implements ISoftDelete {
   constructor(
-    private readonly cicloRepository: LactacaoRepository,
+    private readonly cicloRepository: LactacaoRepositoryDrizzle,
     private readonly bufaloRepository: BufaloRepositoryDrizzle,
     private readonly grupoRepository: GrupoRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryDrizzle,
@@ -209,12 +209,12 @@ export class LactacaoService implements ISoftDelete {
     this.logger.log('Iniciando criação de ciclo de lactação', {
       module: 'LactacaoService',
       method: 'create',
-      bufalaId: dto.id_bufala,
-      dtParto: dto.dt_parto,
+      bufalaId: dto.idBufala,
+      dtParto: dto.dtParto,
     });
 
-    const dt_secagem_prevista = this.computeSecagemPrevista(dto.dt_parto, dto.padrao_dias);
-    const status = this.computeStatus(dto.dt_secagem_real);
+    const dt_secagem_prevista = this.computeSecagemPrevista(dto.dtParto, dto.padraoDias);
+    const status = this.computeStatus(dto.dtSecagemReal);
 
     this.logger.log('Calculando datas e status do ciclo', {
       module: 'LactacaoService',
@@ -231,7 +231,7 @@ export class LactacaoService implements ISoftDelete {
       });
 
       // Buscar dados da búfala para verificar alertas
-      const bufalaData = await this.bufaloRepository.findById(dto.id_bufala);
+      const bufalaData = await this.bufaloRepository.findById(dto.idBufala);
 
       if (bufalaData) {
         await this.verificarAlertasCiclo(data, bufalaData);
@@ -241,14 +241,14 @@ export class LactacaoService implements ISoftDelete {
         module: 'CicloLactacaoService',
         method: 'create',
         cicloId: data.idCicloLactacao,
-        bufalaId: dto.id_bufala,
+        bufalaId: dto.idBufala,
       });
       return formatDateFields(data);
     } catch (error) {
       this.logger.logError(error, {
         module: 'CicloLactacaoService',
         method: 'create',
-        bufalaId: dto.id_bufala,
+        bufalaId: dto.idBufala,
       });
       throw new InternalServerErrorException(`Falha ao criar ciclo de lactação: ${error.message}`);
     }
@@ -295,13 +295,47 @@ export class LactacaoService implements ISoftDelete {
     try {
       const { registros, total } = await this.cicloRepository.listarPorPropriedade(id_propriedade, page, limitValue);
 
-      // Transformar a resposta para aplanar os dados da búfala
-      const enrichedData = registros.map((ciclo: any) => ({
-        ...ciclo,
-        bufala_nome: ciclo.bufala?.nome || null,
-        bufala_brinco: ciclo.bufala?.brinco || null,
-        bufala: undefined, // remover o objeto aninhado
-      }));
+      // Otimização: buscar todos os ciclos ativos em uma única query (evita N+1)
+      const bufalaIds = registros.map((ciclo: any) => ciclo.idBufala).filter(Boolean);
+      const ciclosAtivosMap = new Map<string, string>();
+
+      if (bufalaIds.length > 0) {
+        const uniqueBufalaIds = [...new Set(bufalaIds)];
+        const ciclosAtivos = await this.cicloRepository.buscarCiclosAtivosPorBufalas(uniqueBufalaIds);
+
+        // Mapear idBufala -> idCicloLactacao do ciclo ativo
+        for (const [idBufala, ciclo] of ciclosAtivos.entries()) {
+          ciclosAtivosMap.set(idBufala, ciclo.idCicloLactacao);
+        }
+      }
+
+      // Transformar a resposta para enriquecer os dados
+      const enrichedData = registros.map((ciclo: any) => {
+        const diasEmLactacao = this.calcularDiasEmLactacao(ciclo.dtParto, ciclo.dtSecagemReal);
+        const isCicloAtual = ciclosAtivosMap.get(ciclo.idBufala) === ciclo.idCicloLactacao;
+
+        return {
+          idCicloLactacao: ciclo.idCicloLactacao,
+          idBufala: ciclo.idBufala,
+          idPropriedade: ciclo.idPropriedade,
+          dtParto: ciclo.dtParto,
+          padraoDias: ciclo.padraoDias,
+          dtSecagemPrevista: ciclo.dtSecagemPrevista,
+          dtSecagemReal: ciclo.dtSecagemReal,
+          status: ciclo.status,
+          observacao: ciclo.observacao,
+          createdAt: ciclo.createdAt,
+          updatedAt: ciclo.updatedAt,
+          deletedAt: ciclo.deletedAt,
+          diasEmLactacao,
+          cicloAtual: isCicloAtual ? 1 : 0,
+          bufala: {
+            nome: ciclo.bufalo?.nome || null,
+            brinco: ciclo.bufalo?.brinco || null,
+            raca: ciclo.bufalo?.raca?.nome || null,
+          },
+        };
+      });
 
       this.logger.log(`Busca concluída - ${registros.length} ciclos encontrados (página ${page})`, {
         module: 'CicloLactacaoService',
@@ -354,10 +388,10 @@ export class LactacaoService implements ISoftDelete {
 
     const current = await this.findOne(id_ciclo_lactacao);
 
-    const dt_parto = dto.dt_parto ?? current.dtParto;
-    const padrao_dias = dto.padrao_dias ?? current.padraoDias;
+    const dt_parto = dto.dtParto ?? current.dtParto;
+    const padrao_dias = dto.padraoDias ?? current.padraoDias;
     const dt_secagem_prevista = this.computeSecagemPrevista(dt_parto, padrao_dias);
-    const status = this.computeStatus(dto.dt_secagem_real ?? current.dtSecagemReal);
+    const status = this.computeStatus(dto.dtSecagemReal ?? current.dtSecagemReal);
 
     this.logger.log('Recalculando datas e status do ciclo', {
       module: 'CicloLactacaoService',

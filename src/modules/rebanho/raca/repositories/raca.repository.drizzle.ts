@@ -1,85 +1,98 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { eq, and, isNull, desc, asc } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { raca } from '../../../../database/schema';
 import { CreateRacaDto } from '../dto/create-raca.dto';
 import { UpdateRacaDto } from '../dto/update-raca.dto';
-import { LoggerService } from '../../../../core/logger/logger.service';
 
+/**
+ * Repository para operações de Raça usando Drizzle ORM.
+ */
 @Injectable()
 export class RacaRepositoryDrizzle {
-  constructor(
-    private readonly databaseService: DatabaseService,
-    private readonly logger: LoggerService,
-  ) {}
+  constructor(private readonly databaseService: DatabaseService) {}
 
-  async create(createRacaDto: CreateRacaDto) {
+  /**
+   * Busca todas as raças ordenadas por nome
+   */
+  async findAll() {
+    return await this.databaseService.db.query.raca.findMany({
+      where: (table, { isNull }) => isNull(table.deletedAt),
+      orderBy: [asc(raca.nome)],
+    });
+  }
+
+  /**
+   * Busca raça por ID (apenas registros ativos)
+   */
+  async findById(id: string) {
+    return (
+      (await this.databaseService.db.query.raca.findFirst({
+        where: (table, { eq, and, isNull }) => and(eq(table.idRaca, id), isNull(table.deletedAt)),
+      })) || null
+    );
+  }
+
+  /**
+   * Busca raça por ID incluindo soft-deleted (para restore)
+   */
+  async findByIdWithDeleted(id: string) {
+    const [result] = await this.databaseService.db.select().from(raca).where(eq(raca.idRaca, id)).limit(1);
+    return result || null;
+  }
+
+  /**
+   * Cria raça a partir do DTO
+   */
+  async createFromDto(createRacaDto: CreateRacaDto) {
     try {
-      const [novaRaca] = await this.databaseService.db
+      const [result] = await this.databaseService.db
         .insert(raca)
         .values({
           nome: createRacaDto.nome,
         })
         .returning();
-      return novaRaca;
+      return result;
     } catch (error) {
-      this.logger.logError(error, { repository: 'RacaRepositoryDrizzle', method: 'create' });
-      throw new InternalServerErrorException(`Erro ao criar raça: ${error.message}`);
+      throw new InternalServerErrorException(`[RacaRepository] Erro ao criar raça: ${error.message}`);
     }
   }
 
-  async findAll() {
-    try {
-      return await this.databaseService.db.query.raca.findMany({
-        where: isNull(raca.deletedAt),
-        orderBy: [asc(raca.nome)],
-      });
-    } catch (error) {
-      this.logger.logError(error, { repository: 'RacaRepositoryDrizzle', method: 'findAll' });
-      throw new InternalServerErrorException(`Erro ao buscar raças: ${error.message}`);
-    }
+  /**
+   * Atualiza raça a partir do DTO
+   */
+  async updateFromDto(id: string, updateRacaDto: UpdateRacaDto) {
+    const data: any = { updatedAt: new Date().toISOString() };
+    if (updateRacaDto.nome) data.nome = updateRacaDto.nome;
+
+    const [result] = await this.databaseService.db.update(raca).set(data).where(eq(raca.idRaca, id)).returning();
+    return result || null;
   }
 
-  async findById(id: string) {
-    try {
-      return await this.databaseService.db.query.raca.findFirst({
-        where: and(eq(raca.idRaca, id), isNull(raca.deletedAt)),
-      });
-    } catch (error) {
-      this.logger.logError(error, { repository: 'RacaRepositoryDrizzle', method: 'findById' });
-      throw new InternalServerErrorException(`Erro ao buscar raça: ${error.message}`);
-    }
-  }
-
-  async update(id: string, updateRacaDto: UpdateRacaDto) {
-    try {
-      const data: any = { updatedAt: new Date().toISOString() };
-      if (updateRacaDto.nome) data.nome = updateRacaDto.nome;
-
-      const [racaAtualizada] = await this.databaseService.db.update(raca).set(data).where(eq(raca.idRaca, id)).returning();
-
-      return racaAtualizada;
-    } catch (error) {
-      this.logger.logError(error, { repository: 'RacaRepositoryDrizzle', method: 'update' });
-      throw new InternalServerErrorException(`Erro ao atualizar raça: ${error.message}`);
-    }
-  }
-
-  async remove(id: string) {
-    try {
-      const [racaDeletada] = await this.databaseService.db
-        .update(raca)
-        .set({ deletedAt: new Date().toISOString() })
-        .where(eq(raca.idRaca, id))
-        .returning();
-      return racaDeletada;
-    } catch (error) {
-      this.logger.logError(error, { repository: 'RacaRepositoryDrizzle', method: 'remove' });
-      throw new InternalServerErrorException(`Erro ao deletar raça: ${error.message}`);
-    }
-  }
-
+  /**
+   * Soft delete de raça
+   */
   async softDelete(id: string) {
-    return this.remove(id);
+    const [result] = await this.databaseService.db.update(raca).set({ deletedAt: new Date().toISOString() }).where(eq(raca.idRaca, id)).returning();
+    return result || null;
+  }
+
+  async restore(id: string) {
+    const [result] = await this.databaseService.db.update(raca).set({ deletedAt: null }).where(eq(raca.idRaca, id)).returning();
+    return result || null;
+  }
+
+  async findAllWithDeleted() {
+    return await this.databaseService.db.query.raca.findMany({
+      orderBy: [asc(raca.nome)],
+    });
+  }
+
+  async create(data: any) {
+    return this.createFromDto(data);
+  }
+
+  async update(id: string, data: any) {
+    return this.updateFromDto(id, data);
   }
 }

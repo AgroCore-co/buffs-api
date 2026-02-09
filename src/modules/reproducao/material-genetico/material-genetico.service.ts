@@ -22,12 +22,12 @@ export class MaterialGeneticoService implements ISoftDelete {
 
     try {
       const dadosLimpos = {
-        idPropriedade: createMaterialGeneticoDto.id_propriedade,
+        idPropriedade: createMaterialGeneticoDto.idPropriedade,
         tipo: createMaterialGeneticoDto.tipo,
         origem: createMaterialGeneticoDto.origem,
-        ...(createMaterialGeneticoDto.id_bufalo_origem && { idBufaloOrigem: createMaterialGeneticoDto.id_bufalo_origem }),
+        ...(createMaterialGeneticoDto.idBufaloOrigem && { idBufaloOrigem: createMaterialGeneticoDto.idBufaloOrigem }),
         ...(createMaterialGeneticoDto.fornecedor && { fornecedor: createMaterialGeneticoDto.fornecedor }),
-        dataColeta: createMaterialGeneticoDto.data_coleta,
+        dataColeta: createMaterialGeneticoDto.dataColeta,
       };
 
       this.logger.debug('Dados preparados para inserção', { module, method, dadosLimpos });
@@ -55,7 +55,7 @@ export class MaterialGeneticoService implements ISoftDelete {
       const { page = 1, limit = 10 } = paginationDto;
       const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
-      const result = await this.materialRepo.findAll(offset, limitValue);
+      const result = await this.materialRepo.findAllPaginated(offset, limitValue);
 
       this.logger.log('Materiais genéticos encontrados', { module, method, count: result.data.length, page });
 
@@ -105,12 +105,12 @@ export class MaterialGeneticoService implements ISoftDelete {
 
     try {
       const cleanedDto = {
-        ...(dto.id_propriedade && { idPropriedade: dto.id_propriedade }),
+        ...(dto.idPropriedade && { idPropriedade: dto.idPropriedade }),
         ...(dto.tipo && { tipo: dto.tipo }),
         ...(dto.origem && { origem: dto.origem }),
-        ...(dto.id_bufalo_origem !== undefined && { idBufaloOrigem: dto.id_bufalo_origem }),
+        ...(dto.idBufaloOrigem !== undefined && { idBufaloOrigem: dto.idBufaloOrigem }),
         ...(dto.fornecedor !== undefined && { fornecedor: dto.fornecedor }),
-        ...(dto.data_coleta && { dataColeta: dto.data_coleta }),
+        ...(dto.dataColeta && { dataColeta: dto.dataColeta }),
       };
 
       this.logger.debug('Dados preparados para atualização', { module, method, cleanedDto });

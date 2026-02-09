@@ -27,7 +27,7 @@ export class DadosZootecnicosService implements ISoftDelete {
     const internalUserId = await UserHelper.getInternalUserId(this.databaseService, auth_uuid);
 
     // Inserir no repository
-    const data = await this.repository.create(dto, id_bufalo, internalUserId);
+    const data = await this.repository.createFromDto(dto, id_bufalo, internalUserId);
 
     return formatDateFields(data);
   }
@@ -63,7 +63,7 @@ export class DadosZootecnicosService implements ISoftDelete {
   async update(id_zootec: string, dto: UpdateDadoZootecnicoDto) {
     await this.findOne(id_zootec);
 
-    const data = await this.repository.update(id_zootec, dto);
+    const data = await this.repository.updateFromDto(id_zootec, dto);
 
     return formatDateFields(data);
   }

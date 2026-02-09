@@ -88,7 +88,7 @@ export class RecomendacaoFemeaDto {
     format: 'uuid',
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
   })
-  id_bufalo: string;
+  idBufalo: string;
 
   @ApiProperty({
     description: 'Nome cadastrado da búfala',
@@ -106,7 +106,7 @@ export class RecomendacaoFemeaDto {
     description: 'Idade em meses',
     example: 52,
   })
-  idade_meses: number;
+  idadeMeses: number;
 
   @ApiProperty({
     description: 'Nome da raça',
@@ -176,7 +176,7 @@ export class RecomendacaoMachoDto {
     format: 'uuid',
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
   })
-  id_bufalo: string;
+  idBufalo: string;
 
   @ApiProperty({
     description: 'Nome cadastrado do búfalo',
@@ -194,7 +194,7 @@ export class RecomendacaoMachoDto {
     description: 'Idade em meses',
     example: 60,
   })
-  idade_meses: number;
+  idadeMeses: number;
 
   @ApiProperty({
     description: 'Nome da raça',

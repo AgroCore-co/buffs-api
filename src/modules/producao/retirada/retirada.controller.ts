@@ -39,12 +39,12 @@ export class RetiradaController {
   @ApiBody({ type: CreateRetiradaDto })
   @ApiResponse({ status: 201, description: 'Coleta registrada com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos ou estoque insuficiente.' })
-  create(@Body() dto: CreateRetiradaDto, @User('sub') id_funcionario: string) {
+  create(@Body() dto: CreateRetiradaDto, @User('id_usuario') id_funcionario: string) {
     this.logger.logApiRequest('POST', '/retiradas', undefined, {
       module: 'RetiradaController',
       method: 'create',
       funcionarioId: id_funcionario,
-      industriaId: dto.id_industria,
+      industriaId: dto.idIndustria,
     });
     return this.service.create(dto, id_funcionario);
   }

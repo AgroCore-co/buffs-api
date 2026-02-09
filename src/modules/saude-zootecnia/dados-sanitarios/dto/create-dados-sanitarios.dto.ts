@@ -4,15 +4,15 @@ import { IsBoolean, IsDateString, IsUUID, IsNumber, IsOptional, IsString, MaxLen
 export class CreateDadosSanitariosDto {
   @ApiProperty({ description: 'ID do búfalo atendido', example: '<UUID>' })
   @IsUUID()
-  id_bufalo: string;
+  idBufalo: string;
 
   @ApiProperty({ description: 'ID da medicação aplicada', example: '<UUID>' })
   @IsUUID()
-  id_medicao: string;
+  idMedicao: string;
 
   @ApiProperty({ description: 'Data de aplicação', example: '2025-02-10' })
   @IsDateString()
-  dt_aplicacao: string;
+  dtAplicacao: string;
 
   @ApiProperty({ description: 'Dosagem aplicada', example: 15.5 })
   @IsNumber()
@@ -37,5 +37,5 @@ export class CreateDadosSanitariosDto {
   @ApiProperty({ description: 'Data de retorno (se houver)', example: '2025-03-10', required: false })
   @IsDateString()
   @IsOptional()
-  dt_retorno?: string;
+  dtRetorno?: string;
 }

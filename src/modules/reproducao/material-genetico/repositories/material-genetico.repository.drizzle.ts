@@ -19,94 +19,22 @@ export class MaterialGeneticoRepositoryDrizzle {
    * Cria novo material genético
    * Mapeia snake_case (DTO) → camelCase (schema)
    */
-  async create(data: any) {
+  async createFromDto(data: any) {
     try {
-      const db = this.databaseService.db;
-
-      // Mapeia snake_case (DTO) → camelCase (schema)
-      const mappedData = {
-        tipo: data.tipo,
-        origem: data.origem,
-        idBufaloOrigem: data.id_bufalo_origem,
-        fornecedor: data.fornecedor,
-        dataColeta: data.data_coleta,
-        idPropriedade: data.id_propriedade,
-      };
-
-      const result = await db.insert(materialgenetico).values(mappedData).returning();
-      return result[0];
+      const results: any = await this.databaseService.db
+        .insert(materialgenetico)
+        .values({
+          tipo: data.tipo,
+          origem: data.origem,
+          idBufaloOrigem: data.idBufaloOrigem,
+          fornecedor: data.fornecedor,
+          dataColeta: data.dataColeta,
+          idPropriedade: data.idPropriedade,
+        })
+        .returning();
+      return results[0];
     } catch (error) {
-      throw new InternalServerErrorException(`Erro ao criar material genético: ${error.message}`);
-    }
-  }
-
-  /**
-   * Busca todos os materiais genéticos com paginação
-   */
-  async findAll(offset: number, limit: number) {
-    try {
-      const db = this.databaseService.db;
-
-      const [data, totalResult] = await Promise.all([
-        db.query.materialgenetico.findMany({
-          where: isNull(materialgenetico.deletedAt),
-          orderBy: [desc(materialgenetico.createdAt)],
-          limit,
-          offset,
-        }),
-        db.select({ count: count() }).from(materialgenetico).where(isNull(materialgenetico.deletedAt)),
-      ]);
-
-      return {
-        data,
-        total: totalResult[0]?.count || 0,
-      };
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar materiais genéticos: ${error.message}`);
-    }
-  }
-
-  /**
-   * Busca materiais genéticos por propriedade com paginação
-   */
-  async findByPropriedade(idPropriedade: string, offset: number, limit: number) {
-    try {
-      const db = this.databaseService.db;
-
-      const [data, totalResult] = await Promise.all([
-        db.query.materialgenetico.findMany({
-          where: and(eq(materialgenetico.idPropriedade, idPropriedade), isNull(materialgenetico.deletedAt)),
-          orderBy: [desc(materialgenetico.createdAt)],
-          limit,
-          offset,
-        }),
-        db
-          .select({ count: count() })
-          .from(materialgenetico)
-          .where(and(eq(materialgenetico.idPropriedade, idPropriedade), isNull(materialgenetico.deletedAt))),
-      ]);
-
-      return {
-        data,
-        total: totalResult[0]?.count || 0,
-      };
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar materiais por propriedade: ${error.message}`);
-    }
-  }
-
-  /**
-   * Busca material genético por ID
-   */
-  async findById(idMaterial: string) {
-    try {
-      const result = await this.databaseService.db.query.materialgenetico.findFirst({
-        where: and(eq(materialgenetico.idMaterial, idMaterial), isNull(materialgenetico.deletedAt)),
-      });
-
-      return result || null;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar material genético: ${error.message}`);
+      throw new InternalServerErrorException(`[MaterialGeneticoRepository] Erro ao criar: ${error.message}`);
     }
   }
 
@@ -114,76 +42,110 @@ export class MaterialGeneticoRepositoryDrizzle {
    * Atualiza material genético
    * Mapeia snake_case (DTO) → camelCase (schema)
    */
-  async update(idMaterial: string, data: any) {
-    try {
-      const db = this.databaseService.db;
+  async updateFromDto(idMaterial: string, data: any) {
+    const mappedData: any = {};
 
-      // Mapeia snake_case (DTO) → camelCase (schema), apenas campos fornecidos
-      const mappedData: any = {};
+    if (data.tipo !== undefined) mappedData.tipo = data.tipo;
+    if (data.origem !== undefined) mappedData.origem = data.origem;
+    if (data.idBufaloOrigem !== undefined) mappedData.idBufaloOrigem = data.idBufaloOrigem;
+    if (data.fornecedor !== undefined) mappedData.fornecedor = data.fornecedor;
+    if (data.dataColeta !== undefined) mappedData.dataColeta = data.dataColeta;
+    if (data.idPropriedade !== undefined) mappedData.idPropriedade = data.idPropriedade;
 
-      if (data.tipo !== undefined) mappedData.tipo = data.tipo;
-      if (data.origem !== undefined) mappedData.origem = data.origem;
-      if (data.id_bufalo_origem !== undefined) mappedData.idBufaloOrigem = data.id_bufalo_origem;
-      if (data.fornecedor !== undefined) mappedData.fornecedor = data.fornecedor;
-      if (data.data_coleta !== undefined) mappedData.dataColeta = data.data_coleta;
-      if (data.id_propriedade !== undefined) mappedData.idPropriedade = data.id_propriedade;
+    const [result] = await this.databaseService.db
+      .update(materialgenetico)
+      .set(mappedData)
+      .where(eq(materialgenetico.idMaterial, idMaterial))
+      .returning();
+    return result || null;
+  }
 
-      mappedData.updatedAt = new Date().toISOString();
-
-      const result = await db.update(materialgenetico).set(mappedData).where(eq(materialgenetico.idMaterial, idMaterial)).returning();
-
-      return result[0] || null;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao atualizar material genético: ${error.message}`);
-    }
+  async findById(id: string) {
+    const [result] = await this.databaseService.db
+      .select()
+      .from(materialgenetico)
+      .where(and(eq(materialgenetico.idMaterial, id), isNull(materialgenetico.deletedAt)))
+      .limit(1);
+    return result || null;
   }
 
   /**
-   * Soft delete: marca material como removido
+   * Busca todos os materiais genéticos com paginação
+   * Retorna formato {data, total} para compatibilidade com service
    */
-  async softDelete(idMaterial: string) {
-    try {
-      const db = this.databaseService.db;
+  async findAllPaginated(offset: number, limit: number) {
+    const db = this.databaseService.db;
 
-      const result = await db
-        .update(materialgenetico)
-        .set({ deletedAt: new Date().toISOString() })
-        .where(eq(materialgenetico.idMaterial, idMaterial))
-        .returning();
+    const [data, totalResult] = await Promise.all([
+      db.query.materialgenetico.findMany({
+        where: isNull(materialgenetico.deletedAt),
+        orderBy: [desc(materialgenetico.createdAt)],
+        limit,
+        offset,
+      }),
+      db.select({ count: count() }).from(materialgenetico).where(isNull(materialgenetico.deletedAt)),
+    ]);
 
-      return result[0];
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao remover material genético: ${error.message}`);
-    }
+    return {
+      data,
+      total: totalResult[0]?.count || 0,
+    };
   }
 
   /**
-   * Restaura material genético removido
+   * Busca materiais genéticos por propriedade com paginação
    */
-  async restore(idMaterial: string) {
-    try {
-      const db = this.databaseService.db;
+  async findByPropriedade(idPropriedade: string, offset: number, limit: number) {
+    const db = this.databaseService.db;
 
-      const result = await db.update(materialgenetico).set({ deletedAt: null }).where(eq(materialgenetico.idMaterial, idMaterial)).returning();
+    const [data, totalResult] = await Promise.all([
+      db.query.materialgenetico.findMany({
+        where: and(eq(materialgenetico.idPropriedade, idPropriedade), isNull(materialgenetico.deletedAt)),
+        orderBy: [desc(materialgenetico.createdAt)],
+        limit,
+        offset,
+      }),
+      db
+        .select({ count: count() })
+        .from(materialgenetico)
+        .where(and(eq(materialgenetico.idPropriedade, idPropriedade), isNull(materialgenetico.deletedAt))),
+    ]);
 
-      return result[0];
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao restaurar material genético: ${error.message}`);
-    }
+    return {
+      data,
+      total: totalResult[0]?.count || 0,
+    };
   }
 
-  /**
-   * Busca todos os materiais incluindo removidos
-   */
+  async softDelete(id: string) {
+    const [result] = await this.databaseService.db
+      .update(materialgenetico)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(materialgenetico.idMaterial, id))
+      .returning();
+    return result || null;
+  }
+
+  async restore(id: string) {
+    const [result] = await this.databaseService.db
+      .update(materialgenetico)
+      .set({ deletedAt: null })
+      .where(eq(materialgenetico.idMaterial, id))
+      .returning();
+    return result || null;
+  }
+
   async findAllWithDeleted() {
-    try {
-      const result = await this.databaseService.db.query.materialgenetico.findMany({
-        orderBy: [desc(materialgenetico.deletedAt), desc(materialgenetico.createdAt)],
-      });
+    return await this.databaseService.db.query.materialgenetico.findMany({
+      orderBy: [desc(materialgenetico.createdAt)],
+    });
+  }
 
-      return result;
-    } catch (error) {
-      throw new InternalServerErrorException(`Erro ao buscar materiais: ${error.message}`);
-    }
+  async create(data: any) {
+    return this.createFromDto(data);
+  }
+
+  async update(id: string, data: any) {
+    return this.updateFromDto(id, data);
   }
 }

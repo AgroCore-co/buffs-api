@@ -8,6 +8,30 @@ import { VacinacaoRepositoryDrizzle } from './repositories';
 import { DatabaseService } from '../../../core/database/database.service';
 import { UserHelper } from '../../../core/utils';
 
+/**
+ * Serviço de gerenciamento de vacinações aplicadas em búfalos.
+ *
+ * Este serviço gerencia o registro de vacinações, incluindo:
+ * - Registro de aplicação de vacinas
+ * - Controle de dosagem e unidade de medida
+ * - Gestão de datas de aplicação e retorno
+ * - Vinculação com medicações cadastradas
+ * - Soft-delete para manter histórico
+ *
+ * **Persistência:**
+ * Os dados são armazenados na tabela `dadossanitarios` com tipo 'vacinação'.
+ *
+ * **Campos Principais:**
+ * - idMedicacao: Referência à vacina cadastrada
+ * - dtAplicacao: Data de aplicação da vacina
+ * - dosagem: Quantidade aplicada
+ * - unidade_medida: ml, mg, etc.
+ * - necessita_retorno: Se requer reforço
+ * - dtRetorno: Data programada para reforço
+ *
+ * @class VacinacaoService
+ * @implements {ISoftDelete}
+ */
 @Injectable()
 export class VacinacaoService implements ISoftDelete {
   constructor(
@@ -17,7 +41,18 @@ export class VacinacaoService implements ISoftDelete {
   ) {}
 
   /**
-   * Método create para vacinação (usa tabela dadossanitarios)
+   * Registra nova vacinação para um búfalo.
+   *
+   * **Fluxo:**
+   * 1. Busca ID interno do usuário autenticado
+   * 2. Cria registro na tabela dadossanitarios
+   * 3. Formata campos de data para padronização
+   *
+   * @param dto - Dados da vacinação (idMedicacao, dtAplicacao, dosagem, etc.)
+   * @param id_bufalo - ID do búfalo que recebeu a vacina
+   * @param auth_uuid - UUID do usuário autenticado (do JWT)
+   * @returns Registro de vacinação criado com datas formatadas
+   * @throws {NotFoundException} Se medicação ou búfalo não existir
    */
   async create(dto: CreateVacinacaoDto, id_bufalo: string, auth_uuid: string) {
     // Buscar ID interno do usuário via helper

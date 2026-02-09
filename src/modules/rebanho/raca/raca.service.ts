@@ -1,11 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { ISoftDelete } from '../../../core/interfaces';
 import { CreateRacaDto } from './dto/create-raca.dto';
 import { UpdateRacaDto } from './dto/update-raca.dto';
 import { RacaRepositoryDrizzle } from './repositories/raca.repository.drizzle';
 
 @Injectable()
-export class RacaService {
+export class RacaService implements ISoftDelete {
   constructor(
     private readonly racaRepository: RacaRepositoryDrizzle,
     private readonly logger: LoggerService,
@@ -49,12 +50,53 @@ export class RacaService {
   }
 
   async remove(id: string) {
-    this.logger.log('Iniciando remoção de raça', { module: 'RacaService', method: 'remove', racaId: id });
+    return this.softDelete(id);
+  }
+
+  async softDelete(id: string) {
+    this.logger.log('Iniciando remoção de raça', { module: 'RacaService', method: 'softDelete', racaId: id });
 
     await this.findOne(id);
-    await this.racaRepository.softDelete(id);
+    const raca = await this.racaRepository.softDelete(id);
 
-    this.logger.log('Raça removida com sucesso', { module: 'RacaService', method: 'remove', racaId: id });
-    return { message: 'Raça deletada com sucesso.' };
+    this.logger.log('Raça removida com sucesso', { module: 'RacaService', method: 'softDelete', racaId: id });
+    return {
+      message: 'Raça removida com sucesso (soft delete)',
+      data: raca,
+    };
+  }
+
+  async restore(id: string) {
+    this.logger.log('Iniciando restauração de raça', { module: 'RacaService', method: 'restore', racaId: id });
+
+    const raca = await this.racaRepository.findByIdWithDeleted(id);
+
+    if (!raca) {
+      this.logger.warn('Raça não encontrada para restauração', { module: 'RacaService', method: 'restore', racaId: id });
+      throw new NotFoundException('Raça não encontrada.');
+    }
+
+    if (!raca.deletedAt) {
+      this.logger.warn('Tentativa de restaurar raça não removida', { module: 'RacaService', method: 'restore', racaId: id });
+      throw new BadRequestException('Esta raça não está removida.');
+    }
+
+    const racaRestaurada = await this.racaRepository.restore(id);
+
+    this.logger.log('Raça restaurada com sucesso', { module: 'RacaService', method: 'restore', racaId: id });
+    return {
+      message: 'Raça restaurada com sucesso',
+      data: racaRestaurada,
+    };
+  }
+
+  async findAllWithDeleted() {
+    this.logger.log('Iniciando busca de todas as raças (incluindo removidas)', { module: 'RacaService', method: 'findAllWithDeleted' });
+    const racas = await this.racaRepository.findAllWithDeleted();
+    this.logger.log(`Busca de raças concluída - ${racas.length} raças encontradas (incluindo removidas)`, {
+      module: 'RacaService',
+      method: 'findAllWithDeleted',
+    });
+    return racas;
   }
 }

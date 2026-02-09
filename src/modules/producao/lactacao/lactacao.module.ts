@@ -7,12 +7,12 @@ import { RebanhoModule } from '../../rebanho/rebanho.module';
 import { GestaoPropriedadeModule } from '../../gestao-propriedade/gestao-propriedade.module';
 import { LactacaoController } from './lactacao.controller';
 import { LactacaoService } from './lactacao.service';
-import { LactacaoRepository } from './repositories';
+import { LactacaoRepositoryDrizzle } from './repositories';
 
 @Module({
   imports: [LoggerModule, AuthModule, AlertasModule, DatabaseModule, RebanhoModule, GestaoPropriedadeModule],
   controllers: [LactacaoController],
-  providers: [LactacaoService, LactacaoRepository],
-  exports: [LactacaoService, LactacaoRepository],
+  providers: [LactacaoService, LactacaoRepositoryDrizzle],
+  exports: [LactacaoService, LactacaoRepositoryDrizzle],
 })
 export class LactacaoModule {}

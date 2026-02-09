@@ -16,8 +16,13 @@ export class CoberturaValidatorDrizzle {
   constructor(private readonly databaseService: DatabaseService) {}
 
   /**
-   * Valida se fêmea já está prenha ou possui gestação em andamento.
+   * Valida se fêmea já possui cobertura em andamento.
    * Previne coberturas duplicadas enquanto há gestação ativa.
+   *
+   * **Regra de negócio:**
+   * - Bloqueia apenas se status = "Em andamento"
+   * - Permite se status = "Confirmada" (concluída com sucesso)
+   * - Permite se status = "Falha" (reprodução falhou, animal apto)
    */
   async validarGestacaoDuplicada(idBufala: string, dtEvento: string): Promise<void> {
     const coberturasAtivas = await this.databaseService.db
@@ -30,7 +35,7 @@ export class CoberturaValidatorDrizzle {
       .where(
         and(
           eq(dadosreproducao.idBufala, idBufala),
-          inArray(dadosreproducao.status, ['Em andamento', 'Confirmada']),
+          eq(dadosreproducao.status, 'Em andamento'), // Apenas "Em andamento" bloqueia
           isNull(dadosreproducao.deletedAt),
         ),
       )
@@ -40,7 +45,7 @@ export class CoberturaValidatorDrizzle {
       const gestacao = coberturasAtivas[0];
       const dataFormatada = gestacao.dtEvento ? new Date(gestacao.dtEvento).toLocaleDateString('pt-BR') : 'N/A';
       throw new BadRequestException(
-        `Fêmea já possui gestação ${gestacao.status?.toLowerCase() || 'ativa'} (Cobertura ID: ${gestacao.idReproducao}, Data: ${dataFormatada})`,
+        `Fêmea já possui gestação em andamento (Cobertura ID: ${gestacao.idReproducao}, Data: ${dataFormatada}). Conclua ou marque como falha antes de criar nova cobertura.`,
       );
     }
   }

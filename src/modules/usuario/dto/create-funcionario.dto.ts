@@ -68,5 +68,5 @@ export class CreateFuncionarioDto extends BaseUsuarioDto {
   @IsUUID('4', { message: 'ID da propriedade deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_propriedade?: string;
+  idPropriedade?: string;
 }

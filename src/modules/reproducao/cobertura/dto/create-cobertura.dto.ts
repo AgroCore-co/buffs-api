@@ -9,13 +9,19 @@ import { IsNotFutureDate } from '../../../../core/validators/date.validators';
 // - TE (Transferência de Embrião): Implantação de embrião em receptora
 // - Monta Natural: Acasalamento natural entre macho e fêmea
 const tiposInseminacao = ['IA', 'IATF', 'TE', 'Monta Natural'];
-const statusValidos = ['Em andamento', 'Confirmada', 'Falhou', 'Concluída'];
+
+// Status de Reprodução (Regras de Negócio):
+// - "Em andamento": Gestação ativa - BLOQUEIA nova cobertura
+// - "Confirmada": Reprodução concluída com sucesso - PERMITE nova cobertura
+// - "Falha": Reprodução sem sucesso, animal apto - PERMITE nova cobertura
+// - "Concluída": Status legado (equivalente a Confirmada)
+const statusValidos = ['Em andamento', 'Confirmada', 'Falha', 'Concluída'];
 
 export class CreateCoberturaDto {
   @ApiProperty({ description: 'ID da propriedade onde a cobertura foi realizada (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
   @IsUUID()
   @IsNotEmpty()
-  id_propriedade: string;
+  idPropriedade: string;
 
   @ApiProperty({
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -25,7 +31,7 @@ export class CreateCoberturaDto {
   @IsUUID()
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_semen?: string;
+  idSemen?: string;
 
   @ApiProperty({
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -35,7 +41,7 @@ export class CreateCoberturaDto {
   @IsUUID()
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_doadora?: string;
+  idDoadora?: string;
 
   @ApiProperty({
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -43,7 +49,7 @@ export class CreateCoberturaDto {
   })
   @IsUUID()
   @IsNotEmpty()
-  id_bufala: string;
+  idBufala: string;
 
   @ApiProperty({
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -53,7 +59,7 @@ export class CreateCoberturaDto {
   @IsUUID()
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_bufalo?: string;
+  idBufalo?: string;
 
   @ApiProperty({
     example: 'IA',
@@ -71,17 +77,27 @@ export class CreateCoberturaDto {
   @IsString()
   @IsNotEmpty()
   @IsIn(tiposInseminacao)
-  tipo_inseminacao: string;
+  tipoInseminacao: string;
 
   @ApiProperty({ example: '2025-08-18', description: 'Data do evento (inseminação ou monta)' })
   @IsDateString()
   @IsNotEmpty()
   @IsNotFutureDate({ message: 'A data do evento não pode estar no futuro' })
-  dt_evento: string;
+  dtEvento: string;
 
   @ApiProperty({
     example: 'Em andamento',
-    description: 'Status inicial do processo reprodutivo',
+    description: `Status inicial do processo reprodutivo:
+
+• Em andamento (padrão): Gestação ativa - impede criação de nova cobertura até ser concluída ou marcada como falha
+
+• Confirmada: Reprodução concluída com sucesso - permite nova cobertura futura
+
+• Falha: Reprodução sem sucesso, animal apto para nova tentativa - permite nova cobertura
+
+• Concluída: Status legado (equivalente a Confirmada)
+
+**Regra:** Apenas "Em andamento" bloqueia criação de nova cobertura.`,
     enum: statusValidos,
     required: false,
     default: 'Em andamento',

@@ -134,7 +134,7 @@ describe('BufaloService', () => {
         idMae: null,
       });
 
-      await expect(service.update('bufalo-123', { id_pai: 'bufalo-123' }, mockUser)).rejects.toThrow(BadRequestException);
+      await expect(service.update('bufalo-123', { idPai: 'bufalo-123' }, mockUser)).rejects.toThrow(BadRequestException);
     });
 
     it('deve rejeitar búfalo sendo mãe de si mesmo', async () => {
@@ -145,7 +145,7 @@ describe('BufaloService', () => {
         idMae: null,
       });
 
-      await expect(service.update('bufalo-123', { id_mae: 'bufalo-123' }, mockUser)).rejects.toThrow(BadRequestException);
+      await expect(service.update('bufalo-123', { idMae: 'bufalo-123' }, mockUser)).rejects.toThrow(BadRequestException);
     });
 
     it('deve rejeitar pai e mãe sendo o mesmo animal', async () => {
@@ -174,7 +174,7 @@ describe('BufaloService', () => {
       // Mock: bufalo-123 tem filho descendente-456
       bufaloRepo.findChildrenIds.mockResolvedValue([descendenteId]);
 
-      await expect(service.update(bufaloId, { id_pai: descendenteId }, mockUser)).rejects.toThrow(BadRequestException);
+      await expect(service.update(bufaloId, { idPai: descendenteId }, mockUser)).rejects.toThrow(BadRequestException);
     });
 
     it('deve rejeitar mãe que é descendente do búfalo', async () => {
@@ -190,7 +190,7 @@ describe('BufaloService', () => {
 
       bufaloRepo.findChildrenIds.mockResolvedValue([descendenteId]);
 
-      await expect(service.update(bufaloId, { id_mae: descendenteId }, mockUser)).rejects.toThrow(BadRequestException);
+      await expect(service.update(bufaloId, { idMae: descendenteId }, mockUser)).rejects.toThrow(BadRequestException);
     });
 
     it('deve aceitar genealogia válida', async () => {

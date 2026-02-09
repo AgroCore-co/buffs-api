@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { CreateLoteDto } from './dto/create-lote.dto';
 import { UpdateLoteDto } from './dto/update-lote.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
@@ -11,17 +12,9 @@ export class LoteService {
   constructor(
     private readonly loteRepo: LoteRepositoryDrizzle,
     private readonly propriedadeRepo: PropriedadeRepositoryDrizzle,
+    private readonly authHelper: AuthHelperService,
     private readonly logger: LoggerService,
   ) {}
-
-  private async getUserId(user: any): Promise<string> {
-    const perfilUsuario = await this.propriedadeRepo.buscarUsuarioPorEmail(user.email);
-
-    if (!perfilUsuario) {
-      throw new NotFoundException('Perfil de usuário não encontrado.');
-    }
-    return perfilUsuario.idUsuario;
-  }
 
   /**
    * Parse do campo geo_mapa (geometry/PostGIS)
@@ -73,12 +66,12 @@ export class LoteService {
   }
 
   async create(createLoteDto: CreateLoteDto, user: any) {
-    const userId = await this.getUserId(user);
-    await this.validateOwnership(createLoteDto.id_propriedade, userId);
+    const userId = await this.authHelper.getUserId(user);
+    await this.validateOwnership(createLoteDto.idPropriedade, userId);
 
     // Valida se o grupo pertence à mesma propriedade (se informado)
-    if (createLoteDto.id_grupo) {
-      await this.validateGrupoOwnership(createLoteDto.id_grupo, createLoteDto.id_propriedade);
+    if (createLoteDto.idGrupo) {
+      await this.validateGrupoOwnership(createLoteDto.idGrupo, createLoteDto.idPropriedade);
     }
 
     // geo_mapa é string (GeoJSON stringificado), será convertido para objeto no parseGeoMapa
@@ -89,7 +82,7 @@ export class LoteService {
   }
 
   async findAllByPropriedade(id_propriedade: string, user: any) {
-    const userId = await this.getUserId(user);
+    const userId = await this.authHelper.getUserId(user);
     await this.validateOwnership(id_propriedade, userId);
 
     const lotes = await this.loteRepo.buscarPorPropriedade(id_propriedade);
@@ -99,7 +92,7 @@ export class LoteService {
   }
 
   async findOne(id: string, user: any) {
-    const userId = await this.getUserId(user);
+    const userId = await this.authHelper.getUserId(user);
 
     const lote = await this.loteRepo.buscarPorId(id);
 
@@ -132,17 +125,17 @@ export class LoteService {
     const loteExistente = await this.findOne(id, user); // Valida a posse do lote que será atualizado
 
     // Determina a propriedade a ser validada (nova ou existente)
-    const propriedadeParaValidar = updateLoteDto.id_propriedade || loteExistente.idPropriedade;
+    const propriedadeParaValidar = updateLoteDto.idPropriedade || loteExistente.idPropriedade;
 
     // Se a propriedade estiver sendo alterada, valida a posse da nova propriedade
-    if (updateLoteDto.id_propriedade) {
-      const userId = await this.getUserId(user);
-      await this.validateOwnership(updateLoteDto.id_propriedade, userId);
+    if (updateLoteDto.idPropriedade) {
+      const userId = await this.authHelper.getUserId(user);
+      await this.validateOwnership(updateLoteDto.idPropriedade, userId);
     }
 
     // Valida se o grupo pertence à mesma propriedade (se informado)
-    if (updateLoteDto.id_grupo !== undefined) {
-      await this.validateGrupoOwnership(updateLoteDto.id_grupo, propriedadeParaValidar);
+    if (updateLoteDto.idGrupo !== undefined) {
+      await this.validateGrupoOwnership(updateLoteDto.idGrupo, propriedadeParaValidar);
     }
 
     // geo_mapa é atualizado como string (geometry/PostGIS), será convertido para objeto no parseGeoMapa

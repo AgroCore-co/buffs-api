@@ -9,14 +9,14 @@ export class UpdateGrupoBufaloDto {
   @IsArray({ message: 'Os IDs dos búfalos devem ser um array' })
   @ArrayMinSize(1, { message: 'Pelo menos um búfalo deve ser selecionado' })
   @IsUUID('4', { each: true, message: 'Todos os IDs devem ser UUIDs válidos' })
-  ids_bufalos: string[];
+  idsBufalos: string[];
 
   @ApiProperty({
     description: 'ID do novo grupo de manejo para estes animais.',
     example: 'b8c4a72d-1234-4567-8901-234567890123',
   })
-  @IsUUID('4', { message: 'O id_novo_grupo deve ser um UUID válido' })
-  id_novo_grupo: string;
+  @IsUUID('4', { message: 'O idNovoGrupo deve ser um UUID válido' })
+  idNovoGrupo: string;
 
   @ApiProperty({
     description: 'Motivo da mudança de grupo (opcional).',

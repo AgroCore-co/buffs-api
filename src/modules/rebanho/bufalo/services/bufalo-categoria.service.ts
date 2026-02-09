@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CategoriaABCBUtil } from '../utils/categoria-abcb.util';
 import { CategoriaABCB } from '../dto/categoria-abcb.dto';
-import { ArvoreGenealogicaNode } from '../../../reproducao/genealogia/genealogia.service';
+import { ArvoreGenealogicaDto } from '../../../reproducao/genealogia/dto';
 
 /**
  * Serviço de domínio para lógica de categoria ABCB.
@@ -29,7 +29,7 @@ export class BufaloCategoriaService {
    * @param propriedadeParticipaABCB Se a propriedade participa da ABCB
    * @returns Categoria ABCB calculada
    */
-  processarCategoriaABCB(arvoreGenealogica: ArvoreGenealogicaNode, propriedadeParticipaABCB: boolean): CategoriaABCB {
+  processarCategoriaABCB(arvoreGenealogica: ArvoreGenealogicaDto, propriedadeParticipaABCB: boolean): CategoriaABCB {
     try {
       const categoria = CategoriaABCBUtil.calcularCategoria(arvoreGenealogica, propriedadeParticipaABCB);
 
@@ -78,12 +78,12 @@ export class BufaloCategoriaService {
    * @param arvoreGenealogica Árvore genealógica do animal
    * @returns Número de gerações puras (0-4)
    */
-  contarGeracoesPuras(arvoreGenealogica: ArvoreGenealogicaNode): number {
-    if (!arvoreGenealogica?.id_raca) {
+  contarGeracoesPuras(arvoreGenealogica: ArvoreGenealogicaDto): number {
+    if (!arvoreGenealogica?.idRaca) {
       return 0;
     }
 
-    const racaAlvo = arvoreGenealogica.id_raca;
+    const racaAlvo = arvoreGenealogica.idRaca;
 
     // Verifica nível por nível
     if (!this.verificarNivel(arvoreGenealogica, racaAlvo, 1)) return 0;
@@ -102,9 +102,9 @@ export class BufaloCategoriaService {
    * @param nivel Nível a verificar (1-4)
    * @returns true se o nível é puro
    */
-  private verificarNivel(arvore: ArvoreGenealogicaNode | null | undefined, racaAlvo: string, nivel: number): boolean {
+  private verificarNivel(arvore: ArvoreGenealogicaDto | null | undefined, racaAlvo: string, nivel: number): boolean {
     if (nivel === 0) return true;
-    if (!arvore?.id_raca || arvore.id_raca !== racaAlvo) return false;
+    if (!arvore?.idRaca || arvore.idRaca !== racaAlvo) return false;
     if (nivel > 1 && (!arvore.pai || !arvore.mae)) return false;
 
     return this.verificarNivel(arvore.pai, racaAlvo, nivel - 1) && this.verificarNivel(arvore.mae, racaAlvo, nivel - 1);
@@ -117,7 +117,7 @@ export class BufaloCategoriaService {
    * @param propriedadeParticipaABCB Se participa da ABCB
    * @returns Informações completas de categoria
    */
-  obterInformacoesCategoria(arvoreGenealogica: ArvoreGenealogicaNode, propriedadeParticipaABCB: boolean) {
+  obterInformacoesCategoria(arvoreGenealogica: ArvoreGenealogicaDto, propriedadeParticipaABCB: boolean) {
     const categoria = this.processarCategoriaABCB(arvoreGenealogica, propriedadeParticipaABCB);
     const geracoesPuras = this.contarGeracoesPuras(arvoreGenealogica);
     const elegivel = this.isElegivelABCB(categoria);

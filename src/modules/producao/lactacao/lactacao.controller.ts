@@ -38,7 +38,7 @@ export class LactacaoController {
     this.logger.logApiRequest('POST', '/lactacao', undefined, {
       module: 'LactacaoController',
       method: 'create',
-      bufalaId: dto.id_bufala,
+      bufalaId: dto.idBufala,
     });
     return this.service.create(dto);
   }

@@ -65,7 +65,7 @@ export class SignUpFuncionarioDto {
   @IsUUID('4', { message: 'ID do endereço deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_endereco?: string;
+  idEndereco?: string;
 
   @ApiProperty({
     description: 'ID da propriedade onde o funcionário irá trabalhar (UUID)',
@@ -75,5 +75,5 @@ export class SignUpFuncionarioDto {
   @IsUUID('4', { message: 'ID da propriedade deve ser um UUID válido' })
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  id_propriedade?: string;
+  idPropriedade?: string;
 }

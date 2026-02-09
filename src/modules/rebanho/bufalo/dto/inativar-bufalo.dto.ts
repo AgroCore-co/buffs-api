@@ -43,7 +43,7 @@ export class InativarBufaloDto {
   @IsDate()
   @IsNotEmpty({ message: 'A data de baixa é obrigatória' })
   @IsNotFutureDate({ message: 'A data de baixa não pode estar no futuro' })
-  data_baixa: Date;
+  dataBaixa: Date;
 
   @ApiProperty({
     description: 'Motivo da inativação. Deve ser claro e específico para rastreabilidade.',
@@ -59,5 +59,5 @@ export class InativarBufaloDto {
   @IsString()
   @IsNotEmpty({ message: 'O motivo da inativação é obrigatório' })
   @MaxLength(255, { message: 'O motivo deve ter no máximo 255 caracteres' })
-  motivo_inativo: string;
+  motivoInativo: string;
 }

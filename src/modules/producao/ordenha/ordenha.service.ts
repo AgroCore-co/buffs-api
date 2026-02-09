@@ -8,6 +8,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { CreateDadosLactacaoDto } from './dto/create-ordenha.dto';
 import { UpdateDadosLactacaoDto } from './dto/update-dados-lactacao.dto';
 import { AlertasService } from '../../alerta/alerta.service';
@@ -18,9 +19,8 @@ import { ResumoProducaoBufalaDto } from './dto/resumo-producao-bufala.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
 import { OrdenhaRepository } from './repositories';
-import { UsuarioRepositoryDrizzle } from '../../usuario/repositories/usuario.repository.drizzle';
 import { BufaloRepositoryDrizzle } from '../../rebanho/bufalo/repositories/bufalo.repository.drizzle';
-import { LactacaoRepository } from '../lactacao/repositories';
+import { LactacaoRepositoryDrizzle } from '../lactacao/repositories';
 import { PropriedadeRepositoryDrizzle } from '../../gestao-propriedade/propriedade/repositories/propriedade.repository.drizzle';
 
 @Injectable()
@@ -29,26 +29,14 @@ export class OrdenhaService implements ISoftDelete {
 
   constructor(
     private readonly controleRepository: OrdenhaRepository,
-    private readonly usuarioRepository: UsuarioRepositoryDrizzle,
+    private readonly authHelper: AuthHelperService,
     private readonly bufaloRepository: BufaloRepositoryDrizzle,
-    private readonly cicloRepository: LactacaoRepository,
+    private readonly cicloRepository: LactacaoRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryDrizzle,
     private readonly alertasService: AlertasService,
     private readonly geminiService: GeminiService,
     private readonly customLogger: LoggerService,
   ) {}
-
-  /**
-   * Método privado para obter o ID do usuário a partir do token.
-   */
-  private async getUserId(user: any): Promise<string> {
-    const perfilUsuario = await this.usuarioRepository.buscarPorEmail(user.email);
-
-    if (!perfilUsuario) {
-      throw new NotFoundException('Perfil de usuário não encontrado.');
-    }
-    return perfilUsuario.idUsuario;
-  }
 
   /**
    * Cria um registro de lactação, associando-o ao usuário autenticado.
@@ -58,11 +46,11 @@ export class OrdenhaService implements ISoftDelete {
     this.customLogger.log('Iniciando criação de registro de lactação', {
       module: 'OrdenhaService',
       method: 'create',
-      bufalaId: createDto.id_bufala,
-      dtOrdenha: createDto.dt_ordenha,
+      bufalaId: createDto.idBufala,
+      dtOrdenha: createDto.dtOrdenha,
     });
 
-    const idUsuario = await this.getUserId(user);
+    const idUsuario = await this.authHelper.getUserId(user);
     this.customLogger.log('ID do usuário obtido com sucesso', {
       module: 'OrdenhaService',
       method: 'create',
@@ -71,14 +59,14 @@ export class OrdenhaService implements ISoftDelete {
 
     try {
       // Check if bufala exists
-      const bufala = await this.bufaloRepository.findById(createDto.id_bufala);
+      const bufala = await this.bufaloRepository.findById(createDto.idBufala);
       if (!bufala) {
         this.customLogger.warn('Búfala não encontrada', {
           module: 'OrdenhaService',
           method: 'create',
-          bufalaId: createDto.id_bufala,
+          bufalaId: createDto.idBufala,
         });
-        throw new BadRequestException(`A búfala com id ${createDto.id_bufala} não foi encontrada.`);
+        throw new BadRequestException(`A búfala com id ${createDto.idBufala} não foi encontrada.`);
       }
 
       const lactacaoData = await this.controleRepository.criar(createDto, idUsuario);
@@ -101,7 +89,7 @@ export class OrdenhaService implements ISoftDelete {
       this.customLogger.logError(error, {
         module: 'OrdenhaService',
         method: 'create',
-        bufalaId: createDto.id_bufala,
+        bufalaId: createDto.idBufala,
       });
       throw new InternalServerErrorException('Falha ao criar o dado de lactação.');
     }
@@ -110,7 +98,7 @@ export class OrdenhaService implements ISoftDelete {
   private async criarAlertaOcorrencia(dto: CreateDadosLactacaoDto, idLactacao: string, user: any) {
     try {
       // Buscar dados da búfala para o alerta
-      const bufala = await this.bufaloRepository.findById(dto.id_bufala);
+      const bufala = await this.bufaloRepository.findById(dto.idBufala);
       const nomeBufala = bufala?.nome || 'Desconhecida';
       const grupoNome = bufala?.grupo?.nomeGrupo || 'Não informado';
       const propriedadeNome = bufala?.propriedade?.nome || 'Não informada';
@@ -126,10 +114,10 @@ export class OrdenhaService implements ISoftDelete {
       }
 
       const alertaDto: CreateAlertaDto = {
-        animal_id: dto.id_bufala,
+        animal_id: dto.idBufala,
         grupo: grupoNome,
         localizacao: propriedadeNome,
-        id_propriedade: dto.id_propriedade,
+        id_propriedade: dto.idPropriedade,
         motivo: `Ocorrência na ordenha: ${dto.ocorrencia}`,
         nicho: NichoAlerta.MANEJO,
         data_alerta: new Date().toISOString().split('T')[0],
@@ -224,7 +212,7 @@ export class OrdenhaService implements ISoftDelete {
       page,
       limit,
     });
-    const idUsuario = await this.getUserId(user);
+    const idUsuario = await this.authHelper.getUserId(user);
 
     // Etapa 1: Verificar se a búfala existe e se o usuário tem permissão para vê-la.
     const bufalaData = await this.bufaloRepository.findById(id_bufala);
@@ -298,7 +286,7 @@ export class OrdenhaService implements ISoftDelete {
       lactacaoId: id,
     });
 
-    const idUsuario = await this.getUserId(user);
+    const idUsuario = await this.authHelper.getUserId(user);
 
     const data = await this.controleRepository.buscarPorId(id);
 
@@ -448,7 +436,7 @@ export class OrdenhaService implements ISoftDelete {
       limit,
     });
 
-    const idUsuario = await this.getUserId(user);
+    const idUsuario = await this.authHelper.getUserId(user);
 
     // Verificar se o ciclo existe e se o usuário tem permissão
     const cicloData = await this.cicloRepository.buscarPorId(id_ciclo_lactacao);
@@ -544,10 +532,10 @@ export class OrdenhaService implements ISoftDelete {
       const count = ciclosBufala.length;
 
       resultado.push({
-        id_bufalo: bufala.idBufalo,
+        idBufalo: bufala.idBufalo,
         nome: bufala.nome,
         brinco: bufala.brinco || 'Sem brinco',
-        idade_meses: idadeMeses,
+        idadeMeses: idadeMeses,
         raca: nomeRaca,
         classificacao: '', // Será calculado após obter a média do rebanho
         ciclo_atual: {

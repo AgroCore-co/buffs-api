@@ -21,14 +21,14 @@ export class VacinacaoRepositoryDrizzle {
    */
   async create(dto: CreateVacinacaoDto, idBufalo: string, idUsuario: string) {
     const sanitarioDto = {
-      id_bufalo: idBufalo,
-      id_medicao: dto.id_medicacao,
-      dt_aplicacao: dto.dt_aplicacao,
+      idBufalo: idBufalo,
+      idMedicao: dto.idMedicacao,
+      dtAplicacao: dto.dtAplicacao,
       dosagem: dto.dosagem || 0,
       unidade_medida: dto.unidade_medida || 'ml',
       doenca: dto.doenca || 'Vacinação Preventiva',
       necessita_retorno: dto.necessita_retorno || false,
-      dt_retorno: dto.dt_retorno,
+      dtRetorno: dto.dtRetorno,
     };
 
     return this.dadosSanitariosRepository.create(sanitarioDto, idUsuario, sanitarioDto.doenca);
@@ -68,13 +68,13 @@ export class VacinacaoRepositoryDrizzle {
    */
   async update(idSanit: string, dto: UpdateVacinacaoDto) {
     const updateDto = {
-      id_medicao: dto.id_medicacao,
-      dt_aplicacao: dto.dt_aplicacao,
+      idMedicao: dto.idMedicacao,
+      dtAplicacao: dto.dtAplicacao,
       dosagem: dto.dosagem,
       unidade_medida: dto.unidade_medida,
       doenca: dto.doenca,
       necessita_retorno: dto.necessita_retorno,
-      dt_retorno: dto.dt_retorno,
+      dtRetorno: dto.dtRetorno,
     };
 
     return this.dadosSanitariosRepository.update(idSanit, updateDto, updateDto.doenca);

@@ -41,7 +41,7 @@ export class FemeaDisponivelReproducaoDto {
     format: 'uuid',
     example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
   })
-  id_bufalo: string;
+  idBufalo: string;
 
   /**
    * Nome de registro da búfala.
@@ -71,7 +71,7 @@ export class FemeaDisponivelReproducaoDto {
     minimum: 18,
     example: 36,
   })
-  idade_meses: number;
+  idadeMeses: number;
 
   /**
    * Nome da raça conforme cadastro.
