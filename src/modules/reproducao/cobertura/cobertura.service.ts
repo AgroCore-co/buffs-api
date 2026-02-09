@@ -30,7 +30,7 @@ import {
   estatisticasRebanho,
 } from './utils/reproducao-queries-drizzle.util';
 import { calcularIdadeEmMeses, determinarStatusFemea } from './utils/reproducao-helpers.util';
-import { CoberturaRepositoryDrizzle } from './repositories/cobertura.repository';
+import { CoberturaRepositoryDrizzle } from './repositories';
 import { mapCoberturaResponse, mapCoberturasResponse } from './mappers/cobertura.mapper';
 
 @Injectable()
