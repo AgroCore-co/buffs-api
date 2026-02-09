@@ -8,7 +8,7 @@ import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.d
 import { createPaginatedResponse, calculatePaginationParams } from '../../../core/utils/pagination.utils';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
-import { LactacaoRepository } from './repositories';
+import { LactacaoRepositoryDrizzle } from './repositories';
 import { BufaloRepositoryDrizzle } from '../../rebanho/bufalo/repositories/bufalo.repository.drizzle';
 import { GrupoRepositoryDrizzle } from '../../rebanho/grupo/repositories/grupo.repository.drizzle';
 import { PropriedadeRepositoryDrizzle } from '../../gestao-propriedade/propriedade/repositories/propriedade.repository.drizzle';
@@ -16,7 +16,7 @@ import { PropriedadeRepositoryDrizzle } from '../../gestao-propriedade/proprieda
 @Injectable()
 export class LactacaoService implements ISoftDelete {
   constructor(
-    private readonly cicloRepository: LactacaoRepository,
+    private readonly cicloRepository: LactacaoRepositoryDrizzle,
     private readonly bufaloRepository: BufaloRepositoryDrizzle,
     private readonly grupoRepository: GrupoRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryDrizzle,
@@ -295,20 +295,18 @@ export class LactacaoService implements ISoftDelete {
     try {
       const { registros, total } = await this.cicloRepository.listarPorPropriedade(id_propriedade, page, limitValue);
 
-      // Buscar todos os ciclos ativos para determinar qual é o ciclo atual de cada búfala
+      // Otimização: buscar todos os ciclos ativos em uma única query (evita N+1)
       const bufalaIds = registros.map((ciclo: any) => ciclo.idBufala).filter(Boolean);
       const ciclosAtivosMap = new Map<string, string>();
 
       if (bufalaIds.length > 0) {
         const uniqueBufalaIds = [...new Set(bufalaIds)];
-        await Promise.all(
-          uniqueBufalaIds.map(async (idBufala) => {
-            const cicloAtivo = await this.cicloRepository.buscarCicloAtivo(idBufala);
-            if (cicloAtivo) {
-              ciclosAtivosMap.set(idBufala, cicloAtivo.idCicloLactacao);
-            }
-          }),
-        );
+        const ciclosAtivos = await this.cicloRepository.buscarCiclosAtivosPorBufalas(uniqueBufalaIds);
+
+        // Mapear idBufala -> idCicloLactacao do ciclo ativo
+        for (const [idBufala, ciclo] of ciclosAtivos.entries()) {
+          ciclosAtivosMap.set(idBufala, ciclo.idCicloLactacao);
+        }
       }
 
       // Transformar a resposta para enriquecer os dados

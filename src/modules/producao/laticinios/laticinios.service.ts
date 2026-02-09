@@ -4,12 +4,12 @@ import { CreateLaticiniosDto } from './dto/create-laticinios.dto';
 import { UpdateLaticiniosDto } from './dto/update-laticinios.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces';
-import { LaticiniosRepository } from './repositories';
+import { LaticiniosRepositoryDrizzle } from './repositories';
 
 @Injectable()
 export class LaticiniosService implements ISoftDelete {
   constructor(
-    private readonly repository: LaticiniosRepository,
+    private readonly repository: LaticiniosRepositoryDrizzle,
     private readonly logger: LoggerService,
   ) {}
 

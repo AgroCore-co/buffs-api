@@ -113,17 +113,17 @@ export class SimulacaoService {
    * @throws {InternalServerErrorException} Se API de IA estiver indisponível
    */
   async encontrarMachosCompativeis(dto: EncontrarMachosCompativeisDto, user: any) {
-    const { idFemea, max_consanguinidade } = dto;
+    const { idFemea, maxConsanguinidade } = dto;
 
     const femea = await this.bufaloService.findOne(idFemea, user);
 
     try {
-      console.log(`Buscando machos compatíveis para fêmea ID: ${idFemea} com consanguinidade máxima: ${max_consanguinidade}%`);
+      console.log(`Buscando machos compatíveis para fêmea ID: ${idFemea} com consanguinidade máxima: ${maxConsanguinidade}%`);
 
       const response = await firstValueFrom(
         this.httpService.get(`${this.iaApiUrl}/machos-compatíveis/${idFemea}`, {
           params: {
-            max_consanguinidade: max_consanguinidade,
+            max_consanguinidade: maxConsanguinidade,
           },
         }),
       );

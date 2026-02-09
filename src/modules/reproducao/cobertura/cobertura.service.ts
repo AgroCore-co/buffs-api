@@ -30,7 +30,7 @@ import {
   estatisticasRebanho,
 } from './utils/reproducao-queries-drizzle.util';
 import { calcularIdadeEmMeses, determinarStatusFemea } from './utils/reproducao-helpers.util';
-import { CoberturaRepositoryDrizzle } from './repositories/cobertura.repository.drizzle';
+import { CoberturaRepositoryDrizzle } from './repositories/cobertura.repository';
 import { mapCoberturaResponse, mapCoberturasResponse } from './mappers/cobertura.mapper';
 
 @Injectable()
@@ -393,7 +393,7 @@ export class CoberturaService implements ISoftDelete {
       const incluir =
         filtro === 'todas' ||
         (filtro === 'solteiras' && !ultimaCobertura) ||
-        (filtro === 'vazias' && ultimaCobertura?.status === 'Falhou') ||
+        (filtro === 'vazias' && ultimaCobertura?.status === 'Falha') ||
         (filtro === 'aptas' && statusReprodutivo === 'Disponível');
 
       if (!incluir) continue;

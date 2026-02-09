@@ -1,13 +1,21 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { coleta, industria } from '../../../../database/schema';
 import { CreateRetiradaDto, UpdateRetiradaDto } from '../dto';
 
+/**
+ * Repository Drizzle para operações de Coleta/Retirada de Leite.
+ * Isola queries do Drizzle da lógica de negócio.
+ */
 @Injectable()
-export class RetiradaRepository {
+export class RetiradaRepositoryDrizzle {
   constructor(private readonly databaseService: DatabaseService) {}
 
+  /**
+   * Cria nova coleta de leite
+   * @throws {BadRequestException} Se FK não existir (funcionário, indústria ou propriedade)
+   */
   async criar(createDto: CreateRetiradaDto, idFuncionario: string) {
     try {
       const [novaColeta] = await this.databaseService.db
@@ -24,23 +32,26 @@ export class RetiradaRepository {
         .returning();
       return novaColeta;
     } catch (error) {
-      // Foreign key violation
+      // Foreign key violation - indica dados inválidos do cliente
       if (error.cause?.code === '23503') {
         const detail = error.cause.detail || '';
         if (detail.includes('id_funcionario')) {
-          throw new InternalServerErrorException(`Funcionário com ID ${idFuncionario} não existe no sistema`);
+          throw new BadRequestException(`Funcionário com ID ${idFuncionario} não existe no sistema`);
         }
         if (detail.includes('id_industria')) {
-          throw new InternalServerErrorException(`Indústria com ID ${createDto.idIndustria} não existe no sistema`);
+          throw new BadRequestException(`Indústria com ID ${createDto.idIndustria} não existe no sistema`);
         }
         if (detail.includes('id_propriedade')) {
-          throw new InternalServerErrorException(`Propriedade com ID ${createDto.idPropriedade} não existe no sistema`);
+          throw new BadRequestException(`Propriedade com ID ${createDto.idPropriedade} não existe no sistema`);
         }
       }
       throw new InternalServerErrorException(`[RetiradaRepository] Erro ao criar coleta: ${error.message}`);
     }
   }
 
+  /**
+   * Lista todas as coletas com paginação (apenas registros ativos)
+   */
   async listarTodas(page: number, limit: number) {
     const offset = (page - 1) * limit;
 
@@ -55,6 +66,9 @@ export class RetiradaRepository {
     return { registros, total: count };
   }
 
+  /**
+   * Lista coletas de uma propriedade com join na indústria
+   */
   async listarPorPropriedade(idPropriedade: string, page: number, limit: number) {
     const offset = (page - 1) * limit;
 
@@ -95,6 +109,9 @@ export class RetiradaRepository {
     return { aprovadas, rejeitadas };
   }
 
+  /**
+   * Busca coleta por ID (apenas registros ativos)
+   */
   async buscarPorId(idColeta: string) {
     const resultado = await this.databaseService.db
       .select()
@@ -105,6 +122,9 @@ export class RetiradaRepository {
     return resultado.length > 0 ? resultado[0] : null;
   }
 
+  /**
+   * Atualiza coleta existente
+   */
   async atualizar(idColeta: string, updateDto: UpdateRetiradaDto) {
     const data: Record<string, any> = {
       updatedAt: sql`now()`,
@@ -126,6 +146,9 @@ export class RetiradaRepository {
     return coletaAtualizada;
   }
 
+  /**
+   * Soft delete de coleta
+   */
   async softDelete(idColeta: string) {
     const [resultado] = await this.databaseService.db
       .update(coleta)
@@ -136,12 +159,18 @@ export class RetiradaRepository {
     return resultado;
   }
 
+  /**
+   * Restaura coleta soft-deleted
+   */
   async restaurar(idColeta: string) {
     const [resultado] = await this.databaseService.db.update(coleta).set({ deletedAt: null }).where(eq(coleta.idColeta, idColeta)).returning();
 
     return resultado;
   }
 
+  /**
+   * Lista todas as coletas incluindo soft-deleted
+   */
   async listarComDeletados() {
     return await this.databaseService.db.select().from(coleta).orderBy(desc(coleta.dtColeta));
   }

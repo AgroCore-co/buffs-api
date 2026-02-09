@@ -4,10 +4,17 @@ import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { industria } from '../../../../database/schema';
 import { CreateLaticiniosDto, UpdateLaticiniosDto } from '../dto';
 
+/**
+ * Repository Drizzle para operações de Laticínios/Indústrias.
+ * Isola queries do Drizzle da lógica de negócio.
+ */
 @Injectable()
-export class LaticiniosRepository {
-  constructor(private readonly db: DatabaseService) {}
+export class LaticiniosRepositoryDrizzle {
+  constructor(private readonly databaseService: DatabaseService) {}
 
+  /**
+   * Cria nova indústria/laticínio
+   */
   async criar(createDto: CreateLaticiniosDto) {
     const data = {
       nome: createDto.nome,
@@ -17,12 +24,15 @@ export class LaticiniosRepository {
       idPropriedade: createDto.idPropriedade,
     };
 
-    const [novaIndustria] = await this.db.db.insert(industria).values(data).returning();
+    const [novaIndustria] = await this.databaseService.db.insert(industria).values(data).returning();
     return novaIndustria;
   }
 
+  /**
+   * Lista todas as indústrias (apenas registros ativos)
+   */
   async listarTodas() {
-    return await this.db.db
+    return await this.databaseService.db
       .select({
         idIndustria: industria.idIndustria,
         nome: industria.nome,
@@ -39,8 +49,11 @@ export class LaticiniosRepository {
       .orderBy(desc(industria.createdAt));
   }
 
+  /**
+   * Lista indústrias de uma propriedade específica
+   */
   async listarPorPropriedade(idPropriedade: string) {
-    return await this.db.db
+    return await this.databaseService.db
       .select({
         idIndustria: industria.idIndustria,
         nome: industria.nome,
@@ -57,8 +70,11 @@ export class LaticiniosRepository {
       .orderBy(desc(industria.createdAt));
   }
 
+  /**
+   * Busca indústria por ID (apenas registros ativos)
+   */
   async buscarPorId(idIndustria: string) {
-    const resultado = await this.db.db
+    const resultado = await this.databaseService.db
       .select({
         idIndustria: industria.idIndustria,
         nome: industria.nome,
@@ -77,6 +93,9 @@ export class LaticiniosRepository {
     return resultado.length > 0 ? resultado[0] : null;
   }
 
+  /**
+   * Atualiza indústria existente
+   */
   async atualizar(idIndustria: string, updateDto: UpdateLaticiniosDto) {
     const data: Record<string, any> = {
       updatedAt: sql`now()`,
@@ -88,7 +107,7 @@ export class LaticiniosRepository {
     if (updateDto.observacao !== undefined) data.observacao = updateDto.observacao;
     if (updateDto.idPropriedade !== undefined) data.idPropriedade = updateDto.idPropriedade;
 
-    const [industriaAtualizada] = await this.db.db
+    const [industriaAtualizada] = await this.databaseService.db
       .update(industria)
       .set(data)
       .where(and(eq(industria.idIndustria, idIndustria), isNull(industria.deletedAt)))
@@ -97,8 +116,11 @@ export class LaticiniosRepository {
     return industriaAtualizada;
   }
 
+  /**
+   * Soft delete de indústria
+   */
   async softDelete(idIndustria: string) {
-    const [resultado] = await this.db.db
+    const [resultado] = await this.databaseService.db
       .update(industria)
       .set({ deletedAt: sql`now()` })
       .where(and(eq(industria.idIndustria, idIndustria), isNull(industria.deletedAt)))
@@ -107,14 +129,24 @@ export class LaticiniosRepository {
     return resultado;
   }
 
+  /**
+   * Restaura indústria soft-deleted
+   */
   async restaurar(idIndustria: string) {
-    const [resultado] = await this.db.db.update(industria).set({ deletedAt: null }).where(eq(industria.idIndustria, idIndustria)).returning();
+    const [resultado] = await this.databaseService.db
+      .update(industria)
+      .set({ deletedAt: null })
+      .where(eq(industria.idIndustria, idIndustria))
+      .returning();
 
     return resultado;
   }
 
+  /**
+   * Lista todas as indústrias incluindo soft-deleted
+   */
   async listarComDeletados() {
-    return await this.db.db
+    return await this.databaseService.db
       .select({
         idIndustria: industria.idIndustria,
         nome: industria.nome,

@@ -69,7 +69,7 @@ export class RacaService implements ISoftDelete {
   async restore(id: string) {
     this.logger.log('Iniciando restauração de raça', { module: 'RacaService', method: 'restore', racaId: id });
 
-    const raca = await this.racaRepository.findById(id);
+    const raca = await this.racaRepository.findByIdWithDeleted(id);
 
     if (!raca) {
       this.logger.warn('Raça não encontrada para restauração', { module: 'RacaService', method: 'restore', racaId: id });

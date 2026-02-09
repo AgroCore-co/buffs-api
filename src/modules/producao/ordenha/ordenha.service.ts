@@ -20,7 +20,7 @@ import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/dat
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
 import { OrdenhaRepository } from './repositories';
 import { BufaloRepositoryDrizzle } from '../../rebanho/bufalo/repositories/bufalo.repository.drizzle';
-import { LactacaoRepository } from '../lactacao/repositories';
+import { LactacaoRepositoryDrizzle } from '../lactacao/repositories';
 import { PropriedadeRepositoryDrizzle } from '../../gestao-propriedade/propriedade/repositories/propriedade.repository.drizzle';
 
 @Injectable()
@@ -31,7 +31,7 @@ export class OrdenhaService implements ISoftDelete {
     private readonly controleRepository: OrdenhaRepository,
     private readonly authHelper: AuthHelperService,
     private readonly bufaloRepository: BufaloRepositoryDrizzle,
-    private readonly cicloRepository: LactacaoRepository,
+    private readonly cicloRepository: LactacaoRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryDrizzle,
     private readonly alertasService: AlertasService,
     private readonly geminiService: GeminiService,

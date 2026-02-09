@@ -29,7 +29,7 @@ export class SimulacaoController {
     type: 'string',
   })
   @ApiQuery({
-    name: 'max_consanguinidade',
+    name: 'maxConsanguinidade',
     description: 'Consanguinidade máxima aceitável em %',
     example: 6.25,
     required: false,
@@ -61,11 +61,11 @@ export class SimulacaoController {
   @ApiResponse({ status: 404, description: 'Fêmea não encontrada ou não pertence a este usuário.' })
   @ApiResponse({ status: 400, description: 'ID fornecido não é de uma fêmea.' })
   @ApiResponse({ status: 500, description: 'Erro interno do servidor ou serviço de IA indisponível.' })
-  encontrarMachosCompativeis(@Param('id_femea') id_femea: string, @Query('max_consanguinidade') max_consanguinidade: string, @User() user: any) {
+  encontrarMachosCompativeis(@Param('id_femea') id_femea: string, @Query('maxConsanguinidade') maxConsanguinidade: string, @User() user: any) {
     return this.simulacaoService.encontrarMachosCompativeis(
       {
         idFemea: id_femea,
-        max_consanguinidade: max_consanguinidade ? parseFloat(max_consanguinidade) : 6.25,
+        maxConsanguinidade: maxConsanguinidade ? parseFloat(maxConsanguinidade) : 6.25,
       },
       user,
     );

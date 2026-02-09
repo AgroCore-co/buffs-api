@@ -13,9 +13,9 @@ const tiposInseminacao = ['IA', 'IATF', 'TE', 'Monta Natural'];
 // Status de Reprodução (Regras de Negócio):
 // - "Em andamento": Gestação ativa - BLOQUEIA nova cobertura
 // - "Confirmada": Reprodução concluída com sucesso - PERMITE nova cobertura
-// - "Falhou": Reprodução sem sucesso, animal apto - PERMITE nova cobertura
+// - "Falha": Reprodução sem sucesso, animal apto - PERMITE nova cobertura
 // - "Concluída": Status legado (equivalente a Confirmada)
-const statusValidos = ['Em andamento', 'Confirmada', 'Falhou', 'Concluída'];
+const statusValidos = ['Em andamento', 'Confirmada', 'Falha', 'Concluída'];
 
 export class CreateCoberturaDto {
   @ApiProperty({ description: 'ID da propriedade onde a cobertura foi realizada (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
@@ -93,7 +93,7 @@ export class CreateCoberturaDto {
 
 • Confirmada: Reprodução concluída com sucesso - permite nova cobertura futura
 
-• Falhou: Reprodução sem sucesso, animal apto para nova tentativa - permite nova cobertura
+• Falha: Reprodução sem sucesso, animal apto para nova tentativa - permite nova cobertura
 
 • Concluída: Status legado (equivalente a Confirmada)
 

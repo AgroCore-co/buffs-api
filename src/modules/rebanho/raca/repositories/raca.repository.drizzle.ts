@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { asc, eq, isNull } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { raca } from '../../../../database/schema';
 import { CreateRacaDto } from '../dto/create-raca.dto';
 import { UpdateRacaDto } from '../dto/update-raca.dto';
@@ -23,9 +23,20 @@ export class RacaRepositoryDrizzle {
   }
 
   /**
-   * Busca raça por ID
+   * Busca raça por ID (apenas registros ativos)
    */
   async findById(id: string) {
+    return (
+      (await this.databaseService.db.query.raca.findFirst({
+        where: (table, { eq, and, isNull }) => and(eq(table.idRaca, id), isNull(table.deletedAt)),
+      })) || null
+    );
+  }
+
+  /**
+   * Busca raça por ID incluindo soft-deleted (para restore)
+   */
+  async findByIdWithDeleted(id: string) {
     const [result] = await this.databaseService.db.select().from(raca).where(eq(raca.idRaca, id)).limit(1);
     return result || null;
   }

@@ -19,5 +19,5 @@ export class EncontrarMachosCompativeisDto {
   @Min(0, { message: 'A consanguinidade máxima deve ser maior ou igual a 0' })
   @Max(100, { message: 'A consanguinidade máxima deve ser menor ou igual a 100' })
   @Transform(({ value }) => parseFloat(value))
-  max_consanguinidade?: number = 6.25;
+  maxConsanguinidade?: number = 6.25;
 }

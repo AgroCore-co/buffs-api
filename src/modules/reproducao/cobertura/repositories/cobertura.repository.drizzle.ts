@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
 import { eq, and, desc, count, isNull, sql } from 'drizzle-orm';
-import { dadosreproducao, bufalo } from '../../../../database/schema';
+import { dadosreproducao } from '../../../../database/schema';
 
 /**
  * Repository para queries de coberturas usando Drizzle ORM.
@@ -46,7 +46,7 @@ export class CoberturaRepositoryDrizzle {
 
   /**
    * Busca todas as coberturas com paginação
-   * Ordenação: prioridade por status (Em andamento → Confirmada → Falhou) + data recente
+   * Ordenação: prioridade por status (Em andamento → Confirmada → Falha) + data recente
    */
   async findAll(offset: number, limit: number) {
     try {
@@ -57,7 +57,7 @@ export class CoberturaRepositoryDrizzle {
         CASE ${dadosreproducao.status}
           WHEN 'Em andamento' THEN 1
           WHEN 'Confirmada' THEN 2
-          WHEN 'Falhou' THEN 3
+          WHEN 'Falha' THEN 3
           WHEN 'Concluída' THEN 4
           ELSE 5
         END
@@ -102,7 +102,7 @@ export class CoberturaRepositoryDrizzle {
 
   /**
    * Busca coberturas por propriedade com paginação
-   * Ordenação: prioridade por status (Em andamento → Confirmada → Falhou) + data recente
+   * Ordenação: prioridade por status (Em andamento → Confirmada → Falha) + data recente
    */
   async findByPropriedade(idPropriedade: string, offset: number, limit: number) {
     try {
@@ -113,7 +113,7 @@ export class CoberturaRepositoryDrizzle {
         CASE ${dadosreproducao.status}
           WHEN 'Em andamento' THEN 1
           WHEN 'Confirmada' THEN 2
-          WHEN 'Falhou' THEN 3
+          WHEN 'Falha' THEN 3
           WHEN 'Concluída' THEN 4
           ELSE 5
         END
