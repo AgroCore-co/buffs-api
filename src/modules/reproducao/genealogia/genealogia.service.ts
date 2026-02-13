@@ -62,7 +62,7 @@ export class GenealogiaService {
    * Constrói árvore genealógica completa com informações detalhadas
    * Usado pelo módulo de reprodução para visualização
    */
-  async construirArvoreCompleta(bufaloId: string, geracoes: number = 4): Promise<any> {
+  async construirArvoreCompleta(bufaloId: string, geracoes = 4): Promise<any> {
     const bufalo = await this.genealogiaRepo.findBufaloById(bufaloId);
 
     if (!bufalo) return null;
@@ -98,7 +98,7 @@ export class GenealogiaService {
    * Constrói árvore genealógica simplificada para cálculo de categoria ABCB
    * Usado pelo módulo de rebanho para categorização
    */
-  async construirArvoreParaCategoria(bufaloId: string, geracao: number = 1): Promise<ArvoreGenealogicaDto | null> {
+  async construirArvoreParaCategoria(bufaloId: string, geracao = 1): Promise<ArvoreGenealogicaDto | null> {
     const bufalo = await this.genealogiaRepo.findBufaloWithParents(bufaloId);
 
     if (!bufalo) return null;
@@ -140,7 +140,7 @@ export class GenealogiaService {
     idRaca: string | null,
     idPai: string | null | undefined,
     idMae: string | null | undefined,
-    geracao: number = 1,
+    geracao = 1,
   ): Promise<ArvoreGenealogicaDto | null> {
     // Cria o nó raiz com os dados fornecidos
     const arvore: ArvoreGenealogicaDto = {
