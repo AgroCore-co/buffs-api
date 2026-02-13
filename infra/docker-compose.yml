@@ -1,0 +1,126 @@
+version: '3.8'
+
+# ========================================
+# BUFFS API - Infraestrutura Local
+# ========================================
+# Este arquivo contém todos os serviços necessários para
+# rodar a aplicação completa em ambiente de desenvolvimento.
+#
+# Comandos úteis:
+#   - Subir todos os serviços:     docker-compose -f infra/docker-compose.yml up -d
+#   - Ver logs:                    docker-compose -f infra/docker-compose.yml logs -f
+#   - Parar todos:                 docker-compose -f infra/docker-compose.yml down
+#   - Parar e limpar volumes:      docker-compose -f infra/docker-compose.yml down -v
+# ========================================
+
+services:
+  # ========================================
+  # RabbitMQ - Message Broker
+  # ========================================
+  # Sistema de mensageria para processamento assíncrono de alertas,
+  # notificações e integração com IA.
+  #
+  # Portas:
+  #   - 5672:  AMQP Protocol (conexão da aplicação)
+  #   - 15672: Management UI (http://localhost:15672)
+  #
+  # Credenciais:
+  #   - User: admin
+  #   - Pass: admin
+  # ========================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: buffs-rabbitmq
+    hostname: buffs-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+      RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit log_levels [{connection,error}]"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_logs:/var/log/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - buffs-network
+
+  # ========================================
+  # PostgreSQL - Database (opcional)
+  # ========================================
+  # Descomente se quiser rodar PostgreSQL localmente
+  # ao invés de usar Supabase remoto.
+  #
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: buffs-postgres
+  #   hostname: buffs-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_DB: buffs_db
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: unless-stopped
+  #   networks:
+  #     - buffs-network
+
+  # ========================================
+  # Redis - Cache (opcional)
+  # ========================================
+  # Descomente se quiser usar Redis ao invés de
+  # cache em memória do NestJS.
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: buffs-redis
+  #   hostname: buffs-redis
+  #   ports:
+  #     - "6379:6379"
+  #   command: redis-server --appendonly yes
+  #   volumes:
+  #     - redis_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
+  #   restart: unless-stopped
+  #   networks:
+  #     - buffs-network
+
+# ========================================
+# Volumes Persistentes
+# ========================================
+volumes:
+  rabbitmq_data:
+    driver: local
+  rabbitmq_logs:
+    driver: local
+  # postgres_data:
+  #   driver: local
+  # redis_data:
+  #   driver: local
+
+# ========================================
+# Network
+# ========================================
+networks:
+  buffs-network:
+    driver: bridge
+    name: buffs-network
