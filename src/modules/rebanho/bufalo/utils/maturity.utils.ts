@@ -39,7 +39,7 @@ export class BufaloMaturityUtils {
    * - Vaca: após primeira cria (geralmente 3 anos)
    * - Touro: machos reprodutores a partir de 24 meses
    */
-  static determineMaturityLevel(birthDate: Date, sexo: SexoBufalo, hasOffspring: boolean = false): NivelMaturidade {
+  static determineMaturityLevel(birthDate: Date, sexo: SexoBufalo, hasOffspring = false): NivelMaturidade {
     const ageInMonths = this.calculateAgeInMonths(birthDate);
 
     // Bezerro: 0-12 meses
@@ -89,7 +89,7 @@ export class BufaloMaturityUtils {
   /**
    * Obtém informações detalhadas sobre a maturidade do búfalo
    */
-  static getMaturityInfo(birthDate: Date, sexo: SexoBufalo, hasOffspring: boolean = false) {
+  static getMaturityInfo(birthDate: Date, sexo: SexoBufalo, hasOffspring = false) {
     const ageInMonths = this.calculateAgeInMonths(birthDate);
     const ageInYears = this.calculateAgeInYears(birthDate);
     const maturityLevel = this.determineMaturityLevel(birthDate, sexo, hasOffspring);

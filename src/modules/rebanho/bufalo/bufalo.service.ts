@@ -90,7 +90,7 @@ export class BufaloService implements ISoftDelete {
   private async validateBufaloAccess(bufaloId: string, userId: string): Promise<void> {
     const bufalo = await this.bufaloRepo.findById(bufaloId);
 
-    if (!bufalo || !bufalo.idPropriedade) {
+    if (!bufalo?.idPropriedade) {
       throw new NotFoundException(`Búfalo com ID ${bufaloId} não encontrado.`);
     }
 
@@ -726,7 +726,7 @@ export class BufaloService implements ISoftDelete {
     // Verifica se está deletado
     const bufalo = await this.bufaloRepo.findById(id);
 
-    if (!bufalo || !bufalo.deletedAt) {
+    if (!bufalo?.deletedAt) {
       throw new BadRequestException('Este búfalo não está removido.');
     }
 

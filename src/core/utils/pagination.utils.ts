@@ -16,7 +16,7 @@ export function createPaginatedResponse<T>(data: T[], total: number, page: numbe
   };
 }
 
-export function calculatePaginationParams(page: number = 1, limit: number = 10) {
+export function calculatePaginationParams(page = 1, limit = 10) {
   const offset = (page - 1) * limit;
   return { offset, limit };
 }

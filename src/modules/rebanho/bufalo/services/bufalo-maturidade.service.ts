@@ -57,7 +57,7 @@ export class BufaloMaturidadeService {
       return 0;
     }
 
-    const atualizacoes: Array<{ id_bufalo: string; nivel_maturidade: NivelMaturidade }> = [];
+    const atualizacoes: { id_bufalo: string; nivel_maturidade: NivelMaturidade }[] = [];
 
     for (const bufalo of bufalos) {
       try {

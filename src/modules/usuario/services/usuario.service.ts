@@ -270,7 +270,7 @@ export class UsuarioService {
       throw new InternalServerErrorException(`Erro Auth: ${authErr.message}`);
     }
 
-    const authId = created.user?.id as string;
+    const authId = created.user?.id;
 
     // 2) Inserir o perfil na tabela Usuario
     const perfil = await this.usuarioRepository.criarFuncionario({

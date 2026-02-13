@@ -59,7 +59,7 @@ export class MovLoteService {
 
       const registroAtual = await this.movLoteRepository.findRegistroAtual(idGrupo);
 
-      let loteAnterior = null;
+      const loteAnterior = null;
 
       if (registroAtual) {
         this.logger.log(`[REGISTRO_ENCONTRADO] Grupo ${idGrupo} atualmente no lote ${registroAtual.idLoteAtual} desde ${registroAtual.dtEntrada}`);

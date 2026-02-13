@@ -81,7 +81,7 @@ export class AlimentacaoDefService {
   async findOne(id_aliment_def: string) {
     const { data, error } = await this.alimentacaoDefRepo.findOne(id_aliment_def);
     if (error || !data) throw new NotFoundException('Alimentação definida não encontrada.');
-    return formatDateFields(data!);
+    return formatDateFields(data);
   }
 
   async update(id: string, updateAlimentacaoDefDto: UpdateAlimentacaoDefDto) {

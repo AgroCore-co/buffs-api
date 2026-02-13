@@ -48,7 +48,7 @@ export class BufaloValidationUtils {
   /**
    * Valida se o intervalo entre datas é razoável
    */
-  static validateDateInterval(startDate: Date, endDate: Date, minDays: number = 0, maxDays: number = 3650): boolean {
+  static validateDateInterval(startDate: Date, endDate: Date, minDays = 0, maxDays = 3650): boolean {
     if (!startDate || !endDate) return true;
 
     const start = new Date(startDate);

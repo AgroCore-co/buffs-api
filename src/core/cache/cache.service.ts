@@ -77,7 +77,7 @@ export class CacheService {
   /**
    * Padrão cache-aside - buscar ou executar função
    */
-  async getOrSet<T>(key: string, fetchFunction: () => Promise<T>, ttl: number = 300000): Promise<T> {
+  async getOrSet<T>(key: string, fetchFunction: () => Promise<T>, ttl = 300000): Promise<T> {
     try {
       let data = await this.get<T>(key);
 

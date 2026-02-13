@@ -19,7 +19,7 @@ export class IsNotFutureDateConstraint implements ValidatorConstraintInterface {
 }
 
 export function IsNotFutureDate(validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       target: object.constructor,
       propertyName: propertyName,
@@ -59,7 +59,7 @@ export class MaxAgeConstraint implements ValidatorConstraintInterface {
 }
 
 export function MaxAge(maxYears: number, validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       target: object.constructor,
       propertyName: propertyName,
@@ -100,7 +100,7 @@ export class MinAgeConstraint implements ValidatorConstraintInterface {
 }
 
 export function MinAge(minMonths: number, validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       target: object.constructor,
       propertyName: propertyName,
@@ -134,7 +134,7 @@ export class IsAfterDateConstraint implements ValidatorConstraintInterface {
 }
 
 export function IsAfterDate(startDateField: string, validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       target: object.constructor,
       propertyName: propertyName,
@@ -172,7 +172,7 @@ export class MaxDateIntervalConstraint implements ValidatorConstraintInterface {
 }
 
 export function MaxDateInterval(startDateField: string, maxDays: number, validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       target: object.constructor,
       propertyName: propertyName,
@@ -210,7 +210,7 @@ export class MinDateIntervalConstraint implements ValidatorConstraintInterface {
 }
 
 export function MinDateInterval(startDateField: string, minDays: number, validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       target: object.constructor,
       propertyName: propertyName,

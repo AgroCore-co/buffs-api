@@ -380,7 +380,7 @@ export class AlertasScheduler implements OnModuleInit {
    * Busca todas as propriedades ativas do sistema.
    * @returns Array de propriedades com id_propriedade e nome
    */
-  private async getPropriedadesAtivas(): Promise<Array<{ id_propriedade: string; nome: string }>> {
+  private async getPropriedadesAtivas(): Promise<{ id_propriedade: string; nome: string }[]> {
     try {
       const propriedades = await this.databaseService.db.query.propriedade.findMany({
         where: isNull(propriedade.deletedAt),

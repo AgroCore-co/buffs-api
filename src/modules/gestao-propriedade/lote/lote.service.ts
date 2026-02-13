@@ -21,7 +21,7 @@ export class LoteService {
    * Converte string GeoJSON para objeto JavaScript para o frontend usar com mapas
    */
   private parseGeoMapa(lote: any): any {
-    if (lote && lote.geoMapa && typeof lote.geoMapa === 'string') {
+    if (lote?.geoMapa && typeof lote.geoMapa === 'string') {
       try {
         lote.geoMapa = JSON.parse(lote.geoMapa);
       } catch (error) {
