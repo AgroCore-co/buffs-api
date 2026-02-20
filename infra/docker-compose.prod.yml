@@ -1,0 +1,83 @@
+version: '3.8'
+
+# ========================================
+# BUFFS API - Infraestrutura de Produção (EC2)
+# ========================================
+# Uso:
+#   cd /home/ec2-user/buffs-api
+#   docker-compose -f infra/docker-compose.prod.yml up -d --build
+#
+# Variáveis de ambiente lidas do .env na raiz do projeto.
+# IMPORTANTE: RABBITMQ_URL deve ser amqp://admin:admin@rabbitmq:5672
+#             (hostname interno Docker, não localhost)
+# ========================================
+
+services:
+  # ========================================
+  # RabbitMQ - Message Broker
+  # ========================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: buffs-rabbitmq
+    hostname: buffs-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - buffs-network
+
+  # ========================================
+  # Buffs API - NestJS
+  # ========================================
+  buffs-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: buffs-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - ../.env
+    environment:
+      # Sobrescreve RABBITMQ_URL para usar hostname interno Docker
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
+      NODE_ENV: production
+      # buffs-ia roda no host na porta 8000
+      IA_API_URL: http://host.docker.internal:8000
+    extra_hosts:
+      # Permite acessar serviços do host (ex: buffs-ia na porta 8000)
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - buffs-network
+
+# ========================================
+# Volumes Persistentes
+# ========================================
+volumes:
+  rabbitmq_data:
+    driver: local
+
+# ========================================
+# Network Interna
+# ========================================
+networks:
+  buffs-network:
+    driver: bridge
+    name: buffs-network-prod
