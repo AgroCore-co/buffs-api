@@ -16,15 +16,15 @@ jobs:
 
       - name: Criar pacote para deploy
         run: |
-          tar -czf deploy.tar.gz \
+          tar -czf /tmp/deploy.tar.gz \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='.env' \
             --exclude='dist' \
             --exclude='coverage' \
             --exclude='logs' \
-            --exclude='deploy.tar.gz' \
             .
+          mv /tmp/deploy.tar.gz deploy.tar.gz
 
       - name: Copiar pacote para EC2
         uses: appleboy/scp-action@v0.1.7
