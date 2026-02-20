@@ -91,6 +91,9 @@ jobs:
             # Verificar .env obrigatório
             [ ! -f .env ] && echo "ERRO: .env não encontrado na EC2" && exit 1
 
+            # Parar containers antigos ANTES de limpar (libera as imagens em uso)
+            docker-compose -f infra/docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+
             # Liberar espaço em disco antes de carregar a imagem
             echo "Limpando espaço em disco..."
             docker image prune -af 2>/dev/null || true
@@ -103,14 +106,8 @@ jobs:
             docker load < /home/ec2-user/buffs-api-image.tar.gz
             rm /home/ec2-user/buffs-api-image.tar.gz
 
-            # Parar containers antigos (se existirem)
-            docker-compose -f infra/docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
-
             # Subir todos os serviços (sem --build, usa imagem já carregada)
             docker-compose -f infra/docker-compose.prod.yml up -d
-
-            # Limpar imagens antigas não utilizadas
-            docker image prune -f
 
             # Aguardar a API inicializar
             echo "Aguardando API inicializar..."
