@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.github
+.env
+.env.*
+*.log
+logs/
+coverage/
+.nyc_output
+.eslintcache
+*.md
+infra/docker-compose.yml
+test/

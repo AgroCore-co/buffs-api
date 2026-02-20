@@ -23,7 +23,7 @@ export class AlertaConsumer {
    * Processa mensagens de alerta vindas da fila RabbitMQ.
    * Apenas valida, mapeia e repassa para o AlertaService.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+
   @RabbitSubscribe({
     exchange: RabbitMQConfig.EXCHANGE,
     routingKey: RabbitMQConfig.ALERTA_ROUTING_KEY,
