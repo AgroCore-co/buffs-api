@@ -1,55 +1,74 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * Informações sobre ancestral comum na análise genealógica
+ * Dados dos pais retornados pela IA.
  */
-export class AncestralComumDto {
-  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID do ancestral comum' })
-  idBufalo: string;
+export class PaisDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID do pai', nullable: true })
+  paiId: string | null;
 
-  @ApiProperty({ example: 'Potente', description: 'Nome do ancestral' })
-  nome: string;
-
-  @ApiProperty({ example: 2, description: 'Gerações até o pai' })
-  geracoesAtePai: number;
-
-  @ApiProperty({ example: 3, description: 'Gerações até a mãe' })
-  geracoesAteMae: number;
-
-  @ApiProperty({ example: 3.125, description: 'Contribuição para consanguinidade em %' })
-  contribuicaoConsanguinidade: number;
+  @ApiProperty({ example: '234e5678-e89b-12d3-a456-426614174001', description: 'ID da mãe', nullable: true })
+  maeId: string | null;
 }
 
 /**
- * Resposta da análise genealógica completa de um búfalo
+ * Resumo agregado retornado pela IA (quantidades de ancestrais/descendentes).
+ */
+export class ResumoGenealogicoDto {
+  @ApiProperty({ example: 10, description: 'Total de ancestrais identificados' })
+  totalAncestrais: number;
+
+  @ApiProperty({ example: 4, description: 'Total de descendentes identificados' })
+  totalDescendentes: number;
+
+  @ApiProperty({ example: 3, description: 'Número de gerações de ancestrais retornadas' })
+  geracoesAncestrais: number;
+
+  @ApiProperty({ example: 2, description: 'Número de gerações de descendentes retornadas' })
+  geracoesDescendentes: number;
+}
+
+/**
+ * Resposta da análise genealógica completa de um búfalo, alinhada ao payload atual da IA.
  */
 export class AnaliseGenealogicaDto {
   @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID do búfalo analisado' })
   idBufalo: string;
 
-  @ApiProperty({ example: 'Valente', description: 'Nome do búfalo' })
-  nome?: string;
+  @ApiProperty({ example: 'M', enum: ['M', 'F'], description: 'Sexo do búfalo' })
+  sexo: string;
 
-  @ApiProperty({ example: 3.125, description: 'Coeficiente de consanguinidade em %' })
+  @ApiProperty({ example: 3.12, description: 'Coeficiente de consanguinidade em %' })
   consanguinidade: number;
 
-  @ApiProperty({ example: 'BAIXO', enum: ['BAIXO', 'MODERADO', 'ALTO', 'CRÍTICO'], description: 'Nível de risco genético' })
+  @ApiProperty({ example: 'Baixo', enum: ['Baixo', 'Moderado', 'Alto', 'Extremo'], description: 'Nível de risco genético' })
   riscoGenetico: string;
 
-  @ApiProperty({ example: 4, description: 'Número de gerações analisadas' })
-  geracoesAnalisadas: number;
+  @ApiProperty({ example: 'Consanguinidade < 3.125% - Risco baixo', description: 'Descrição textual do risco' })
+  descricaoRisco: string;
 
-  @ApiProperty({ example: 6, description: 'Total de ancestrais identificados' })
-  totalAncestrais: number;
+  @ApiProperty({ example: false, description: 'Indica se o animal é fundador (sem pais cadastrados)' })
+  eFundador: boolean;
 
-  @ApiProperty({ type: [AncestralComumDto], description: 'Lista de ancestrais comuns identificados' })
-  ancestraisComuns: AncestralComumDto[];
+  @ApiProperty({ type: PaisDto, description: 'Pais conhecidos do búfalo' })
+  pais: PaisDto;
 
   @ApiProperty({
-    example: 'Animal com consanguinidade baixa. Adequado para reprodução sem restrições significativas.',
-    description: 'Recomendações baseadas na análise',
+    example: { geracao_1: ['pai-id', 'mae-id'], geracao_2: ['avo1', 'avo2'] },
+    description: 'Ancestrais organizados por geração',
+    type: Object,
   })
-  recomendacoes: string;
+  ancestrais: Record<string, string[]>;
+
+  @ApiProperty({
+    example: { geracao_1: ['filho1', 'filho2'] },
+    description: 'Descendentes organizados por geração',
+    type: Object,
+  })
+  descendentes: Record<string, string[]>;
+
+  @ApiProperty({ type: ResumoGenealogicoDto, description: 'Resumo agregado de ancestrais e descendentes' })
+  resumo: ResumoGenealogicoDto;
 }
 
 /**

@@ -24,7 +24,8 @@ export class GenealogiaIAService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly genealogiaRepo: GenealogiaRepositoryDrizzle,
   ) {
-    this.iaApiUrl = this.configService.get<string>('IA_API_URL') || 'http://localhost:8000';
+    // Mantém valor vindo do ambiente, mas garante um padrão alinhado ao env.example
+    this.iaApiUrl = this.configService.get<string>('IA_API_URL') || 'http://localhost:5001';
   }
 
   onModuleInit() {
