@@ -4,10 +4,11 @@ module.exports = {
       name: 'buffs-api',
       script: './dist/src/main.js',
       instances: 1,
-      exec_mode: 'cluster',
+      exec_mode: 'fork', // 'cluster' com instances:1 tem overhead extra; fork é mais leve
       autorestart: true,
       watch: false,
-      max_memory_restart: '1G',
+      max_memory_restart: '300M', // reinicia se ultrapassar 300 MB (era 1G, inútil em t3.micro)
+      node_args: '--max-old-space-size=256', // limita heap do V8 a 256 MB
       env_production: {
         NODE_ENV: 'production',
         PORT: 3001,

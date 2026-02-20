@@ -15,22 +15,29 @@ services:
   # RabbitMQ - Message Broker
   # ========================================
   rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    # OTIMIZAÇÃO: sem management plugin → economiza ~60-80 MB
+    image: rabbitmq:3.13-alpine
     container_name: buffs-rabbitmq
     hostname: buffs-rabbitmq
     restart: unless-stopped
     ports:
       - "5672:5672"
-      - "15672:15672"
+      # Porta 15672 removida: management UI desabilitado
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin
       RABBITMQ_DEFAULT_VHOST: /
+      # Limita uso de memória do RabbitMQ a 128 MB
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.15 -rabbit vm_memory_high_watermark_paging_ratio 0.75"
+    deploy:
+      resources:
+        limits:
+          memory: 150m
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 15s
+      interval: 30s
       timeout: 10s
       retries: 5
       start_period: 40s
@@ -41,6 +48,9 @@ services:
   # Buffs API - NestJS
   # ========================================
   buffs-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
     image: buffs-api:latest
     container_name: buffs-api
     restart: unless-stopped
@@ -54,6 +64,12 @@ services:
       NODE_ENV: production
       # buffs-ia roda no host na porta 8000
       IA_API_URL: http://host.docker.internal:8000
+      # Limita heap do Node.js a 256 MB
+      NODE_OPTIONS: "--max-old-space-size=256"
+    deploy:
+      resources:
+        limits:
+          memory: 350m
     extra_hosts:
       # Permite acessar serviços do host (ex: buffs-ia na porta 8000)
       - "host.docker.internal:host-gateway"
