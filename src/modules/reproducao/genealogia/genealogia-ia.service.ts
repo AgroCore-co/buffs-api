@@ -2,7 +2,8 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, timeout } from 'rxjs';
-import { AnaliseGenealogicaDto, MachosCompativeisDto } from '../dto';
+import { AnaliseGenealogicaDto, MachosCompativeisDto, MachoCompativelDto } from './dto';
+import { GenealogiaRepositoryDrizzle } from './repositories';
 
 /**
  * Service responsável pela integração com a IA para análises genealógicas.
@@ -21,6 +22,7 @@ export class GenealogiaIAService implements OnModuleInit {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly genealogiaRepo: GenealogiaRepositoryDrizzle,
   ) {
     this.iaApiUrl = this.configService.get<string>('IA_API_URL') || 'http://localhost:8000';
   }
@@ -93,9 +95,28 @@ export class GenealogiaIAService implements OnModuleInit {
           .pipe(timeout(this.requestTimeout)),
       );
 
-      this.logger.log(`Encontrados ${response.data.totalEncontrados} machos compatíveis ` + `para fêmea ${femeaId}`);
+      const iaData = response.data;
 
-      return response.data;
+      // Enriquecer: buscar nomes no banco em uma única query
+      const ids = (iaData.machosCompativeis ?? []).map((m: any) => m.idBufalo).filter(Boolean);
+      const nomesMap = await this.genealogiaRepo.findBufalosByIds(ids);
+
+      const machosEnriquecidos: MachoCompativelDto[] = (iaData.machosCompativeis ?? []).map((m: any) => ({
+        idBufalo: m.idBufalo,
+        nome: nomesMap.get(m.idBufalo) ?? 'Sem nome',
+        consanguinidadeEstimada: m.consanguinidadeProle,
+        riscoGenetico: (m.riscoConsanguinidade as string).toUpperCase(),
+        scoreCompatibilidade: Math.max(0, Math.round((100 - m.consanguinidadeProle * 10) * 100) / 100),
+      }));
+
+      this.logger.log(`Encontrados ${machosEnriquecidos.length} machos compatíveis para fêmea ${femeaId}`);
+
+      return {
+        femeaId: iaData.femeaId,
+        machosCompativeis: machosEnriquecidos,
+        totalEncontrados: machosEnriquecidos.length,
+        limiteConsanguinidade: iaData.limiteConsanguinidade,
+      };
     } catch (error) {
       return this.handleIAError(error, 'busca de machos compatíveis');
     }

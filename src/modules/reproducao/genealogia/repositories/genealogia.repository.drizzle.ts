@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { eq, or } from 'drizzle-orm';
+import { eq, inArray, or } from 'drizzle-orm';
 import { bufalo } from '../../../../database/schema';
 
 /**
@@ -78,5 +78,22 @@ export class GenealogiaRepositoryDrizzle {
     });
 
     return !!result;
+  }
+
+  /**
+   * Busca nome e ID de múltiplos búfalos em uma única query (batch lookup)
+   */
+  async findBufalosByIds(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+
+    const results = await this.databaseService.db.query.bufalo.findMany({
+      where: inArray(bufalo.idBufalo, ids),
+      columns: {
+        idBufalo: true,
+        nome: true,
+      },
+    });
+
+    return new Map(results.map((b) => [b.idBufalo, b.nome ?? 'Sem nome']));
   }
 }
