@@ -22,7 +22,7 @@ export class PropriedadeService {
       return formatDateFields(novaPropriedade);
     } catch (error) {
       // Verifica erro de chave estrangeira (endereço não existe)
-      if (error.message && error.message.includes('foreign key')) {
+      if (error.message?.includes('foreign key')) {
         throw new BadRequestException(`O endereço com id ${createPropriedadeDto.idEndereco} não foi encontrado.`);
       }
       console.error('Erro ao criar propriedade:', error);
@@ -81,7 +81,7 @@ export class PropriedadeService {
     // 2. Verifica se o usuário é funcionário vinculado à propriedade
     const vinculo = await this.propriedadeRepo.buscarVinculoFuncionario(id, userId);
 
-    if (vinculo && vinculo.propriedade) {
+    if (vinculo?.propriedade) {
       return formatDateFields(vinculo.propriedade);
     }
 

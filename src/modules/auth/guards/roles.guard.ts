@@ -17,7 +17,7 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    if (!user || !user.cargo) {
+    if (!user?.cargo) {
       throw new ForbiddenException('Usuário não possui cargo definido');
     }
 

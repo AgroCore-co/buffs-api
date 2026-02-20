@@ -51,7 +51,7 @@ export class AlertaProducaoService {
       }
 
       // Filtrar por propriedade se necessário
-      const producoesValidas = ids_bufalos ? producoes.filter((p: any) => ids_bufalos!.includes(p.idBufala)) : producoes;
+      const producoesValidas = ids_bufalos ? producoes.filter((p: any) => ids_bufalos.includes(p.idBufala)) : producoes;
 
       // Agrupar por búfala
       const producoesPorBufala = this.agruparProducoesPorBufala(producoesValidas);
@@ -61,7 +61,7 @@ export class AlertaProducaoService {
 
       for (const [id_bufala, listaProducoes] of Object.entries(producoesPorBufala)) {
         try {
-          const analise = this.analisarQuedaProducao(listaProducoes as any[], hoje);
+          const analise = this.analisarQuedaProducao(listaProducoes, hoje);
 
           if (analise.houveQueda && analise.percentualQueda >= AlertaConstants.QUEDA_PRODUCAO_PERCENTUAL_MINIMO) {
             const alertaCriado = await this.criarAlertaQuedaProducao(id_bufala, analise, hoje, id_propriedade);

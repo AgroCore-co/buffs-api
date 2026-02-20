@@ -6,6 +6,7 @@ export * from './dto';
 export * from './gemini';
 export * from './interfaces';
 export * from './logger';
+export * from './rabbitmq';
 export * from './services';
 export * from './supabase';
 export * from './utils';

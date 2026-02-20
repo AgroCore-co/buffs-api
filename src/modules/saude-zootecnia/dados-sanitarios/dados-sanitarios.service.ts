@@ -312,8 +312,8 @@ export class DadosSanitariosService implements ISoftDelete {
     }
 
     // 2. Normaliza cada doença e atualiza
-    const updates: Array<{ id: string; de: string; para: string }> = [];
-    const erros: Array<{ id: string; doenca_original: string; erro: string }> = [];
+    const updates: { id: string; de: string; para: string }[] = [];
+    const erros: { id: string; doenca_original: string; erro: string }[] = [];
 
     for (const registro of registrosComDoenca) {
       const doencaNormalizada = this.normalizeDoenca(registro.doenca || undefined);

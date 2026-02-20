@@ -16,25 +16,24 @@ export default [
   },
 
   // Configuração principal para arquivos TypeScript
-  {
-    files: ["**/*.ts"], // Aplica apenas a arquivos .ts
+  ...typescriptEslint.config({
+    files: ["**/*.ts"],
     extends: [
-      ...typescriptEslint.configs.recommendedTypeChecked, // <--- Usa as regras que precisam de tipos
+      ...typescriptEslint.configs.recommendedTypeChecked,
       ...typescriptEslint.configs.stylisticTypeChecked,
     ],
     languageOptions: {
       parserOptions: {
-        project: true, // <--- A MÁGICA ACONTECE AQUI!
+        project: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {
-      // Você pode desativar regras específicas aqui, se precisar
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unsafe-argument": "off", // Pode ser útil no início
-      "@typescript-eslint/no-unsafe-assignment": "off", // Pode ser útil no início
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
     },
-  },
+  }),
 
   // Desativa regras de estilo que entram em conflito com o Prettier
   prettierConfig,

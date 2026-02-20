@@ -1,10 +1,10 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, OnModuleInit } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { BufaloService } from '../../rebanho/bufalo/bufalo.service';
 import { SimularAcasalamentoDto } from './dto/simular-acasalamento.dto';
 import { EncontrarMachosCompativeisDto } from './dto/encontrar-machos-compativeis.dto';
 import { firstValueFrom } from 'rxjs';
-import { AnaliseGenealogicaDto } from './dto/analise-genealogica.dto';
+import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
 
 /**
  * Serviço de simulação e análise de acasalamentos usando IA.
@@ -33,14 +33,41 @@ import { AnaliseGenealogicaDto } from './dto/analise-genealogica.dto';
  * @see {@link https://docs.exemplo.com/ia-api} Documentação da API de IA
  */
 @Injectable()
-export class SimulacaoService {
+export class SimulacaoService implements OnModuleInit {
+  private readonly logger = new Logger(SimulacaoService.name);
   private readonly iaApiUrl = process.env.IA_API_URL;
 
   constructor(
     private readonly bufaloService: BufaloService,
     private readonly httpService: HttpService,
+    private readonly genealogiaRepo: GenealogiaRepositoryDrizzle,
   ) {}
 
+  /**
+   * Valida configuração ao inicializar o módulo
+   */
+  onModuleInit() {
+    if (!this.iaApiUrl) {
+      this.logger.error('❌ IA_API_URL não configurada no ambiente');
+      throw new Error('IA_API_URL é obrigatória para o módulo de simulação');
+    }
+    this.logger.log(`✅ Módulo Simulação inicializado - IA URL: ${this.iaApiUrl}`);
+  }
+
+  /**
+   * Simula acasalamento entre macho e fêmea usando IA.
+   *
+   * Previne potencial genético da cria, incluindo:
+   * - Peso ao nascer estimado
+   * - Produção de leite esperada (fêmeas)
+   * - Qualidade genética geral
+   * - Alertas de consanguinidade
+   *
+   * **Fluxo:**
+   * 1. Valida existência dos animais
+   * 2. Monta payload com IDs para API de IA
+   * 3. Envia requisição incluindo predição de fêmea
+   * 4. Retorna dados processados pela IA
   /**
    * Simula acasalamento entre macho e fêmea usando IA.
    *
@@ -65,28 +92,29 @@ export class SimulacaoService {
   async preverPotencial(dto: SimularAcasalamentoDto, user: any) {
     const { idMacho, idFemea } = dto;
 
-    // 1. A validação dos animais continua perfeita.
-    const macho = await this.bufaloService.findOne(idMacho, user);
-    const femea = await this.bufaloService.findOne(idFemea, user);
+    // Valida existência dos animais (lança exceção se não encontrar)
+    await Promise.all([this.bufaloService.findOne(idMacho, user), this.bufaloService.findOne(idFemea, user)]);
 
-    const payloadParaIA = {
-      id_macho: macho.idBufalo,
-      id_femea: femea.idBufalo,
-    };
-
-    // 2. A chamada para a API agora está correta e completa.
     try {
-      console.log('Enviando para a IA:', JSON.stringify(payloadParaIA, null, 2));
+      this.logger.debug(`Simulando acasalamento: Macho ${idMacho} x Fêmea ${idFemea}`);
+
+      const payloadParaIA = {
+        idMacho,
+        idFemea,
+      };
 
       const response = await firstValueFrom(
-        this.httpService.post(`${this.iaApiUrl}/simular-acasalamento`, payloadParaIA, { params: { incluir_predicao_femea: true } }),
+        this.httpService.post(`${this.iaApiUrl}/simular-acasalamento`, payloadParaIA, {
+          params: { incluir_predicao_femea: true },
+          headers: { 'x-user-id': user?.sub || user?.id || '' },
+          timeout: 30000,
+        }),
       );
 
-      console.log('Resposta da IA recebida com sucesso.');
+      this.logger.log(`✅ Simulação concluída - Consanguinidade: ${response.data.consanguinidadeProle}%`);
       return response.data;
     } catch (error) {
-      console.error('Erro ao chamar a API de IA:', error.response?.data || error.code || error.message);
-      throw new InternalServerErrorException('O serviço de predição está indisponível no momento.');
+      return this.handleIAError(error, 'simular acasalamento');
     }
   }
 
@@ -115,68 +143,72 @@ export class SimulacaoService {
   async encontrarMachosCompativeis(dto: EncontrarMachosCompativeisDto, user: any) {
     const { idFemea, maxConsanguinidade } = dto;
 
-    const femea = await this.bufaloService.findOne(idFemea, user);
+    // Valida existência da fêmea
+    await this.bufaloService.findOne(idFemea, user);
 
     try {
-      console.log(`Buscando machos compatíveis para fêmea ID: ${idFemea} com consanguinidade máxima: ${maxConsanguinidade}%`);
+      this.logger.debug(`Buscando machos compatíveis - Fêmea: ${idFemea}, Max: ${maxConsanguinidade}%`);
 
       const response = await firstValueFrom(
         this.httpService.get(`${this.iaApiUrl}/machos-compatíveis/${idFemea}`, {
-          params: {
-            max_consanguinidade: maxConsanguinidade,
-          },
+          params: { max_consanguinidade: maxConsanguinidade },
+          headers: { 'x-user-id': user?.sub || user?.id || '' },
+          timeout: 20000,
         }),
       );
 
-      console.log('Machos compatíveis encontrados com sucesso.');
-      return response.data;
+      const iaData = response.data;
+
+      // Enriquecer: buscar nomes no banco em uma única query
+      const ids = (iaData.machosCompativeis ?? []).map((m: any) => m.idBufalo).filter(Boolean);
+      const nomesMap = await this.genealogiaRepo.findBufalosByIds(ids);
+
+      const machosEnriquecidos = (iaData.machosCompativeis ?? []).map((m: any) => ({
+        idBufalo: m.idBufalo,
+        nome: nomesMap.get(m.idBufalo) ?? 'Sem nome',
+        consanguinidadeEstimada: m.consanguinidadeProle,
+        riscoGenetico: (m.riscoConsanguinidade as string).toUpperCase(),
+        scoreCompatibilidade: Math.max(0, Math.round((100 - m.consanguinidadeProle * 10) * 100) / 100),
+      }));
+
+      this.logger.log(`✅ ${machosEnriquecidos.length} machos compatíveis encontrados`);
+      return {
+        femeaId: iaData.femeaId,
+        machosCompativeis: machosEnriquecidos,
+        totalEncontrados: machosEnriquecidos.length,
+        limiteConsanguinidade: iaData.limiteConsanguinidade,
+      };
     } catch (error) {
-      console.error('Erro ao buscar machos compatíveis:', error.response?.data || error.code || error.message);
-      throw new InternalServerErrorException('O serviço de busca de machos compatíveis está indisponível no momento.');
+      return this.handleIAError(error, 'buscar machos compatíveis');
     }
   }
 
   /**
-   * Realiza análise genealógica completa de um búfalo usando IA.
-   *
-   * Calcula:
-   * - Coeficiente de consanguinidade (inbreeding coefficient)
-   * - Diversidade genética
-   * - Análise de pedigree até 4 gerações
-   * - Identificação de antepassados comuns
-   *
-   * **Timeout:**
-   * 60 segundos devido à complexidade do cálculo genealógico.
-   *
-   * **Casos de Uso:**
-   * - Validação de categoria ABCB
-   * - Planejamento de acasalamentos
-   * - Auditoria genética do rebanho
-   *
-   * @param dto - ID do búfalo para análise
-   * @param user - Usuário autenticado
-   * @returns Análise genealógica completa com índices calculados
-   * @throws {NotFoundException} Se búfalo não existir
-   * @throws {InternalServerErrorException} Se API de IA estiver indisponível ou timeout
+   * Tratamento centralizado de erros da API de IA
+   * @private
    */
-  async analiseGenealogica(dto: AnaliseGenealogicaDto, user: any) {
-    const { idBufalo } = dto;
+  private handleIAError(error: any, operation: string): never {
+    const errorDetails = error.response?.data || {};
+    const status = error.response?.status;
+    const message = errorDetails.detail || error.message;
 
-    const bufalo = await this.bufaloService.findOne(idBufalo, user);
+    this.logger.error(`❌ Erro ao ${operation}:`, {
+      status,
+      message,
+      url: error.config?.url,
+    });
 
-    try {
-      console.log('Realizando análise genealógica para a búfala: ' + bufalo.idBufalo);
-
-      const response = await firstValueFrom(
-        this.httpService.post(`${this.iaApiUrl}/analise-genealogica`, { id_bufalo: bufalo.idBufalo }, { timeout: 60000 }),
-      );
-
-      console.log('Análise genealógica feita com sucesso');
-
-      return response.data;
-    } catch (error) {
-      console.error('Erro ao efetuar análise genealógica:', error.response?.data || error.code || error.message);
-      throw new InternalServerErrorException('O serviço de análise genealógica está indisponível no momento.');
+    // Lança erro com mensagem apropriada baseada no status
+    if (status === 404) {
+      throw new InternalServerErrorException(`Recurso não encontrado na IA ao ${operation}`);
+    } else if (status === 400) {
+      throw new InternalServerErrorException(`Dados inválidos ao ${operation}: ${message}`);
+    } else if (error.code === 'ECONNREFUSED') {
+      throw new InternalServerErrorException('Serviço de IA indisponível. Verifique se está rodando.');
+    } else if (error.code === 'ETIMEDOUT') {
+      throw new InternalServerErrorException(`Timeout ao ${operation}. A operação demorou muito.`);
     }
+
+    throw new InternalServerErrorException(`Erro ao ${operation}. Tente novamente mais tarde.`);
   }
 }

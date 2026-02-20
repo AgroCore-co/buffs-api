@@ -122,7 +122,7 @@ export class BufaloRepositoryDrizzle {
       nome?: string;
     },
     pagination: { offset: number; limit: number },
-    orderBy: Array<{ field: string; ascending: boolean }> = [
+    orderBy: { field: string; ascending: boolean }[] = [
       { field: 'status', ascending: false },
       { field: 'dt_nascimento', ascending: true },
     ],
@@ -182,7 +182,7 @@ export class BufaloRepositoryDrizzle {
         const field = bufalo[fieldName];
         // Verifica se é uma coluna válida (não é função ou objeto Table)
         if (field && typeof field === 'object' && 'name' in field) {
-          orderByClause.push(order.ascending ? asc(field as any) : desc(field as any));
+          orderByClause.push(order.ascending ? asc(field) : desc(field));
         }
       }
 

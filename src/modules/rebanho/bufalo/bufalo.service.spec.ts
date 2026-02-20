@@ -9,12 +9,14 @@ import { BufaloFiltrosService } from './services/bufalo-filtros.service';
 import { GenealogiaService } from '../../reproducao/genealogia/genealogia.service';
 import { CacheService } from '../../../core/cache/cache.service';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 
 describe('BufaloService', () => {
   let service: BufaloService;
   let bufaloRepo: jest.Mocked<BufaloRepositoryDrizzle>;
   let usuarioPropriedadeRepo: jest.Mocked<UsuarioPropriedadeRepositoryDrizzle>;
   let cacheService: jest.Mocked<CacheService>;
+  let authHelper: jest.Mocked<AuthHelperService>;
 
   const mockUser = { email: 'test@example.com' };
   const mockUserId = 'user-123';
@@ -50,6 +52,7 @@ describe('BufaloService', () => {
           useValue: {
             construirArvoreGenealogica: jest.fn(),
             construirArvoreParaCategoria: jest.fn(),
+            construirArvoreParaCategoriaFromData: jest.fn(),
           },
         },
         {
@@ -73,6 +76,16 @@ describe('BufaloService', () => {
           },
         },
         {
+          provide: AuthHelperService,
+          useValue: {
+            getUserId: jest.fn(),
+            getUserPropriedades: jest.fn(),
+            invalidarCachePropriedades: jest.fn(),
+            hasAccessToPropriedade: jest.fn(),
+            validatePropriedadeAccess: jest.fn(),
+          },
+        },
+        {
           provide: CacheService,
           useValue: {
             get: jest.fn(),
@@ -93,6 +106,7 @@ describe('BufaloService', () => {
     bufaloRepo = module.get(BufaloRepositoryDrizzle);
     usuarioPropriedadeRepo = module.get(UsuarioPropriedadeRepositoryDrizzle);
     cacheService = module.get(CacheService);
+    authHelper = module.get(AuthHelperService);
   });
 
   it('should be defined', () => {
@@ -102,6 +116,9 @@ describe('BufaloService', () => {
   describe('Validação de Circularidade Genealógica', () => {
     beforeEach(() => {
       // Setup mocks para usuário e propriedade
+      authHelper.getUserId.mockResolvedValue(mockUserId);
+      authHelper.getUserPropriedades.mockResolvedValue([mockPropriedadeId]);
+      authHelper.validatePropriedadeAccess.mockResolvedValue();
       usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
       cacheService.get.mockResolvedValue([mockPropriedadeId]);
       usuarioPropriedadeRepo.buscarPropriedadePorId.mockResolvedValue({
@@ -114,9 +131,9 @@ describe('BufaloService', () => {
       const createDto = {
         nome: 'Test',
         sexo: 'M',
-        id_propriedade: mockPropriedadeId,
-        id_pai: 'bufalo-123', // Seria o mesmo ID após criação
-        id_mae: null,
+        idPropriedade: mockPropriedadeId,
+        idPai: 'bufalo-123', // Seria o mesmo ID após criação
+        idMae: null,
       };
 
       // Mock do create para retornar o ID
@@ -152,10 +169,16 @@ describe('BufaloService', () => {
       const createDto = {
         nome: 'Test',
         sexo: 'M',
-        id_propriedade: mockPropriedadeId,
-        id_pai: 'parent-123',
-        id_mae: 'parent-123', // Mesmo ID que o pai
+        idPropriedade: mockPropriedadeId,
+        idPai: 'parent-123',
+        idMae: 'parent-123', // Mesmo ID que o pai
       };
+
+      bufaloRepo.create.mockResolvedValue({
+        idBufalo: 'new-id',
+        brinco: 'TEST-001',
+        ...createDto,
+      } as any);
 
       await expect(service.create(createDto as any, mockUser)).rejects.toThrow(BadRequestException);
     });
@@ -197,9 +220,9 @@ describe('BufaloService', () => {
       const createDto = {
         nome: 'Cria',
         sexo: 'F',
-        id_propriedade: mockPropriedadeId,
-        id_pai: 'pai-123',
-        id_mae: 'mae-456',
+        idPropriedade: mockPropriedadeId,
+        idPai: 'pai-123',
+        idMae: 'mae-456',
       };
 
       bufaloRepo.findChildrenIds.mockResolvedValue([]); // Sem descendentes
@@ -230,6 +253,8 @@ describe('BufaloService', () => {
         { idBufalo: 'mae-2', brinco: 'M002', nome: 'Mae 2' },
       ];
 
+      authHelper.getUserId.mockResolvedValue(mockUserId);
+      authHelper.getUserPropriedades.mockResolvedValue([mockPropriedadeId]);
       usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
       cacheService.get.mockResolvedValue([mockPropriedadeId]);
 
@@ -254,6 +279,8 @@ describe('BufaloService', () => {
     it('deve lidar com búfalos sem pais', async () => {
       const mockBufalos = [{ idBufalo: '1', nome: 'Bufalo Sem Pais', idPai: null, idMae: null }];
 
+      authHelper.getUserId.mockResolvedValue(mockUserId);
+      authHelper.getUserPropriedades.mockResolvedValue([mockPropriedadeId]);
       usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
       cacheService.get.mockResolvedValue([mockPropriedadeId]);
 
@@ -274,59 +301,61 @@ describe('BufaloService', () => {
   });
 
   describe('Cache de Propriedades', () => {
-    it('deve cachear propriedades por 30 segundos', async () => {
-      usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
-      cacheService.get.mockResolvedValue(null); // Cache vazio
-
-      usuarioPropriedadeRepo.buscarPropriedadesComoDono.mockResolvedValue([{ idPropriedade: 'prop-1' }]);
-      usuarioPropriedadeRepo.buscarPropriedadesComoFuncionario.mockResolvedValue([{ idPropriedade: 'prop-2' }]);
+    it('deve buscar propriedades do usuário via authHelper', async () => {
+      authHelper.getUserId.mockResolvedValue(mockUserId);
+      authHelper.getUserPropriedades.mockResolvedValue(['prop-1', 'prop-2']);
 
       bufaloRepo.findWithFilters.mockResolvedValue({ data: [], error: null });
       bufaloRepo.countWithFilters.mockResolvedValue({ count: 0, error: null });
 
       await service.findAll(mockUser);
 
-      // Deve ter salvo no cache com TTL de 30000ms
-      expect(cacheService.set).toHaveBeenCalledWith(`user_props:${mockUserId}`, ['prop-1', 'prop-2'], 30000);
+      // Deve ter chamado getUserPropriedades do authHelper
+      expect(authHelper.getUserPropriedades).toHaveBeenCalledWith(mockUserId);
+      expect(bufaloRepo.findWithFilters).toHaveBeenCalled();
     });
 
-    it('deve usar cache quando disponível', async () => {
-      usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
-      cacheService.get.mockResolvedValue(['prop-cached']);
+    it('deve usar authHelper para buscar propriedades', async () => {
+      authHelper.getUserId.mockResolvedValue(mockUserId);
+      authHelper.getUserPropriedades.mockResolvedValue(['prop-cached']);
 
       bufaloRepo.findWithFilters.mockResolvedValue({ data: [], error: null });
       bufaloRepo.countWithFilters.mockResolvedValue({ count: 0, error: null });
 
       await service.findAll(mockUser);
 
-      // Não deve buscar do banco se tem cache
-      expect(usuarioPropriedadeRepo.buscarPropriedadesComoDono).not.toHaveBeenCalled();
-      expect(usuarioPropriedadeRepo.buscarPropriedadesComoFuncionario).not.toHaveBeenCalled();
+      // O authHelper gerencia o cache internamente
+      expect(authHelper.getUserPropriedades).toHaveBeenCalledWith(mockUserId);
     });
 
     it('deve invalidar cache de propriedades', async () => {
+      authHelper.invalidarCachePropriedades.mockResolvedValue();
       await service.invalidarCachePropriedades(mockUserId);
 
-      expect(cacheService.del).toHaveBeenCalledWith(`user_props:${mockUserId}`);
+      expect(authHelper.invalidarCachePropriedades).toHaveBeenCalledWith(mockUserId);
     });
   });
 
   describe('Validação de Acesso', () => {
     it('deve rejeitar acesso a búfalo de outra propriedade', async () => {
-      usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
-      cacheService.get.mockResolvedValue(['prop-allowed']);
+      authHelper.getUserId.mockResolvedValue(mockUserId);
+      authHelper.getUserPropriedades.mockResolvedValue(['prop-allowed']);
 
       bufaloRepo.findById.mockResolvedValue({
         idBufalo: 'bufalo-123',
         idPropriedade: 'prop-forbidden', // Propriedade diferente
       });
 
+      // Mock validatePropriedadeAccess para lançar NotFoundException
+      authHelper.validatePropriedadeAccess.mockRejectedValue(new NotFoundException('Você não tem acesso a esta propriedade.'));
+
       await expect(service.findOne('bufalo-123', mockUser)).rejects.toThrow(NotFoundException);
     });
 
     it('deve permitir acesso a búfalo da mesma propriedade', async () => {
-      usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
-      cacheService.get.mockResolvedValue([mockPropriedadeId]);
+      authHelper.getUserId.mockResolvedValue(mockUserId);
+      authHelper.getUserPropriedades.mockResolvedValue([mockPropriedadeId]);
+      authHelper.validatePropriedadeAccess.mockResolvedValue(); // Acesso permitido
 
       bufaloRepo.findById.mockResolvedValue({
         idBufalo: 'bufalo-123',

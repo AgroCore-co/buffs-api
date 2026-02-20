@@ -290,7 +290,7 @@ export class OrdenhaService implements ISoftDelete {
 
     const data = await this.controleRepository.buscarPorId(id);
 
-    if (!data || data.idUsuario !== idUsuario) {
+    if (data?.idUsuario !== idUsuario) {
       this.customLogger.warn('Registro de lactação não encontrado ou não pertence ao usuário', {
         module: 'OrdenhaService',
         method: 'findOne',
@@ -457,7 +457,7 @@ export class OrdenhaService implements ISoftDelete {
 
     const prop = await this.propriedadeRepository.findById(cicloData.idPropriedade);
 
-    if (!prop || prop.idDono !== idUsuario) {
+    if (prop?.idDono !== idUsuario) {
       this.customLogger.log('Usuário não autorizado a acessar este ciclo', {
         module: 'OrdenhaService',
         method: 'findAllByCiclo',

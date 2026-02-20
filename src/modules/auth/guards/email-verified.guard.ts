@@ -21,7 +21,7 @@ export class EmailVerifiedGuard implements CanActivate {
     const user = request.user;
 
     // Se usuário não está autenticado, deixa o AuthGuard lidar com isso
-    if (!user || !user.authId) {
+    if (!user?.authId) {
       return true;
     }
 

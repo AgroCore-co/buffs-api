@@ -48,7 +48,7 @@ export class OrdenhaController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Quantidade de registros por página (default: 20)' })
   @ApiResponse({ status: 200, description: 'Lista de registros retornada com sucesso.' })
-  findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 20) {
+  findAll(@Query('page') page = 1, @Query('limit') limit = 20) {
     this.logger.logApiRequest('GET', '/ordenhas', undefined, {
       module: 'OrdenhaController',
       method: 'findAll',
@@ -67,8 +67,8 @@ export class OrdenhaController {
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Quantidade de registros por página (default: 20)' })
   findAllByBufala(
     @Param('id_bufala', ParseUUIDPipe) id_bufala: string,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
     @User() user: any,
   ) {
     this.logger.logApiRequest('GET', `/ordenhas/bufala/${id_bufala}`, undefined, {
@@ -91,8 +91,8 @@ export class OrdenhaController {
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Quantidade de registros por página (default: 20)' })
   findAllByCiclo(
     @Param('id_ciclo_lactacao', ParseUUIDPipe) id_ciclo_lactacao: string,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
     @User() user: any,
   ) {
     this.logger.logApiRequest('GET', `/ordenhas/ciclo/${id_ciclo_lactacao}`, undefined, {

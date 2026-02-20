@@ -4,14 +4,15 @@ import { LoggerModule } from './logger/logger.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { CacheConfigModule } from './cache/cache.module';
 import { DatabaseModule } from './database/database.module';
+import { RabbitMQModule } from './rabbitmq/rabbitmq.module';
 import { UserMappingService } from './services/user-mapping.service';
 import { AuthHelperService } from './services/auth-helper.service';
 import { UsuarioModule } from '../modules/usuario/usuario.module';
 
 @Global()
 @Module({
-  imports: [GeminiModule, LoggerModule, SupabaseModule, CacheConfigModule, DatabaseModule, forwardRef(() => UsuarioModule)],
+  imports: [GeminiModule, LoggerModule, SupabaseModule, CacheConfigModule, DatabaseModule, RabbitMQModule, forwardRef(() => UsuarioModule)],
   providers: [UserMappingService, AuthHelperService],
-  exports: [GeminiModule, LoggerModule, SupabaseModule, CacheConfigModule, DatabaseModule, UserMappingService, AuthHelperService],
+  exports: [GeminiModule, LoggerModule, SupabaseModule, CacheConfigModule, DatabaseModule, RabbitMQModule, UserMappingService, AuthHelperService],
 })
 export class CoreModule {}

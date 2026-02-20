@@ -264,7 +264,7 @@ export class AlertasService {
   async findAll(
     tipo?: string,
     antecendencia?: number,
-    incluirVistos: boolean = false,
+    incluirVistos = false,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
     try {
@@ -365,7 +365,7 @@ export class AlertasService {
    */
   async findByPropriedade(
     id_propriedade: string,
-    incluirVistos: boolean = false,
+    incluirVistos = false,
     paginationDto: PaginationDto = {},
     nichos?: string[],
     prioridade?: string,

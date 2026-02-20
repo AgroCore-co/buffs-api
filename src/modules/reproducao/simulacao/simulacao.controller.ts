@@ -1,6 +1,6 @@
 import { Controller, Post, Body, UseGuards, Get, Param, Query } from '@nestjs/common';
 import { SimulacaoService } from './simulacao.service';
-import { SimularAcasalamentoDto, EncontrarMachosCompativeisDto, AnaliseGenealogicaDto } from './dto';
+import { SimularAcasalamentoDto, EncontrarMachosCompativeisDto } from './dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { User } from '../../auth/decorators/user.decorator';
@@ -69,15 +69,5 @@ export class SimulacaoController {
       },
       user,
     );
-  }
-
-  @Post('analise-genealogica')
-  @ApiOperation({ summary: 'Realiza uma análise genealógica completa de um búfalo e calcula o coeficiente de consanguinidade' })
-  @ApiResponse({ status: 200, description: 'Análise genealógica concluída com sucesso.' })
-  @ApiResponse({ status: 404, description: 'Búfalo não encontrado ou não pertence a este usuário.' })
-  @ApiResponse({ status: 400, description: 'ID inválido ou não informado.' })
-  @ApiResponse({ status: 500, description: 'Erro interno do servidor ou serviço de IA indisponível.' })
-  async analiseGenealogica(@Body() analiseGenealogicaDto: AnaliseGenealogicaDto, @User() user: any) {
-    return this.simulacaoService.analiseGenealogica(analiseGenealogicaDto, user);
   }
 }

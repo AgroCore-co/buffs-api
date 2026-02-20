@@ -222,7 +222,7 @@ export class ResumoProducaoBufalaDto {
       },
     },
   })
-  comparativo_ciclos: Array<{
+  comparativo_ciclos: {
     /** ID único do ciclo de lactação */
     id_ciclo_lactacao: string;
     /** Número do ciclo */
@@ -237,7 +237,7 @@ export class ResumoProducaoBufalaDto {
     media_diaria: number;
     /** Duração total (dias) */
     duracao_dias: number;
-  }>;
+  }[];
 
   /**
    * Dados agregados para renderização de gráfico de linha.
@@ -264,10 +264,10 @@ export class ResumoProducaoBufalaDto {
       },
     },
   })
-  grafico_producao: Array<{
+  grafico_producao: {
     /** Data (YYYY-MM-DD) */
     data: string;
     /** Total do dia (litros) */
     quantidade: number;
-  }>;
+  }[];
 }

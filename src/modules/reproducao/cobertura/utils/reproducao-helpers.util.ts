@@ -73,7 +73,7 @@ export function determinarStatusFemea(fp_prontidao: number, numeroCiclos: number
  * @param casasDecimais - Número de casas decimais (padrão: 1)
  * @returns Número formatado
  */
-export function formatarNumero(valor: number, casasDecimais: number = 1): number {
+export function formatarNumero(valor: number, casasDecimais = 1): number {
   const multiplicador = Math.pow(10, casasDecimais);
   return Math.round(valor * multiplicador) / multiplicador;
 }
@@ -86,7 +86,7 @@ export function formatarNumero(valor: number, casasDecimais: number = 1): number
  * @param mesesMaximo - Meses máximos no futuro (default: 0 = hoje)
  * @returns true se válida
  */
-export function validarDataNascimento(data: string | Date, mesesMinimo: number = -120, mesesMaximo: number = 0): boolean {
+export function validarDataNascimento(data: string | Date, mesesMinimo = -120, mesesMaximo = 0): boolean {
   const dataRef = typeof data === 'string' ? new Date(data) : data;
   const hoje = new Date();
 
