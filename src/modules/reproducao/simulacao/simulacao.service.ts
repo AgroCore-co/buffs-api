@@ -4,6 +4,7 @@ import { BufaloService } from '../../rebanho/bufalo/bufalo.service';
 import { SimularAcasalamentoDto } from './dto/simular-acasalamento.dto';
 import { EncontrarMachosCompativeisDto } from './dto/encontrar-machos-compativeis.dto';
 import { firstValueFrom } from 'rxjs';
+import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
 
 /**
  * Serviço de simulação e análise de acasalamentos usando IA.
@@ -39,6 +40,7 @@ export class SimulacaoService implements OnModuleInit {
   constructor(
     private readonly bufaloService: BufaloService,
     private readonly httpService: HttpService,
+    private readonly genealogiaRepo: GenealogiaRepositoryDrizzle,
   ) {}
 
   /**
@@ -104,6 +106,7 @@ export class SimulacaoService implements OnModuleInit {
       const response = await firstValueFrom(
         this.httpService.post(`${this.iaApiUrl}/simular-acasalamento`, payloadParaIA, {
           params: { incluir_predicao_femea: true },
+          headers: { 'x-user-id': user?.sub || user?.id || '' },
           timeout: 30000,
         }),
       );
@@ -149,12 +152,32 @@ export class SimulacaoService implements OnModuleInit {
       const response = await firstValueFrom(
         this.httpService.get(`${this.iaApiUrl}/machos-compatíveis/${idFemea}`, {
           params: { max_consanguinidade: maxConsanguinidade },
+          headers: { 'x-user-id': user?.sub || user?.id || '' },
           timeout: 20000,
         }),
       );
 
-      this.logger.log(`✅ ${response.data.totalEncontrados} machos compatíveis encontrados`);
-      return response.data;
+      const iaData = response.data;
+
+      // Enriquecer: buscar nomes no banco em uma única query
+      const ids = (iaData.machosCompativeis ?? []).map((m: any) => m.idBufalo).filter(Boolean);
+      const nomesMap = await this.genealogiaRepo.findBufalosByIds(ids);
+
+      const machosEnriquecidos = (iaData.machosCompativeis ?? []).map((m: any) => ({
+        idBufalo: m.idBufalo,
+        nome: nomesMap.get(m.idBufalo) ?? 'Sem nome',
+        consanguinidadeEstimada: m.consanguinidadeProle,
+        riscoGenetico: (m.riscoConsanguinidade as string).toUpperCase(),
+        scoreCompatibilidade: Math.max(0, Math.round((100 - m.consanguinidadeProle * 10) * 100) / 100),
+      }));
+
+      this.logger.log(`✅ ${machosEnriquecidos.length} machos compatíveis encontrados`);
+      return {
+        femeaId: iaData.femeaId,
+        machosCompativeis: machosEnriquecidos,
+        totalEncontrados: machosEnriquecidos.length,
+        limiteConsanguinidade: iaData.limiteConsanguinidade,
+      };
     } catch (error) {
       return this.handleIAError(error, 'buscar machos compatíveis');
     }

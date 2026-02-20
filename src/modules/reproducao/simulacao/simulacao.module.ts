@@ -5,6 +5,8 @@ import { BufaloModule } from '../../rebanho/bufalo/bufalo.module';
 import { HttpModule } from '@nestjs/axios';
 import { AuthModule } from '../../auth/auth.module';
 import { LoggerModule } from '../../../core/logger/logger.module';
+import { DatabaseModule } from '../../../core/database/database.module';
+import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
 
 @Module({
   imports: [
@@ -15,8 +17,9 @@ import { LoggerModule } from '../../../core/logger/logger.module';
     }),
     AuthModule,
     LoggerModule,
+    DatabaseModule,
   ],
   controllers: [SimulacaoController],
-  providers: [SimulacaoService],
+  providers: [SimulacaoService, GenealogiaRepositoryDrizzle],
 })
 export class SimulacaoModule {}
