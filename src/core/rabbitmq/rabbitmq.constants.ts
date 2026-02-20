@@ -1,6 +1,6 @@
 /**
- * Constantes para configuração do RabbitMQ.
- * Centraliza exchanges, queues, routing keys e configurações.
+ * Constantes GENÉRICAS para configuração do RabbitMQ.
+ * Configurações base que podem ser usadas por qualquer módulo.
  */
 
 export const RabbitMQConfig = {
@@ -17,72 +17,22 @@ export const RabbitMQConfig = {
   /**
    * Tipo de exchange (topic permite routing patterns flexíveis)
    */
-  EXCHANGE_TYPE: 'topic',
+  EXCHANGE_TYPE: 'topic' as const,
 
   /**
    * Configurações de durabilidade
    */
   DURABLE: true,
-} as const;
-
-/**
- * Definição de queues do sistema
- */
-export const RabbitMQQueues = {
-  /**
-   * Queue para notificações de alertas
-   */
-  ALERTS_NOTIFICATIONS: 'buffs.alerts.notifications',
 
   /**
-   * Queue para processamento de IA
+   * Queue para processamento de alertas
    */
-  ALERTS_AI: 'buffs.alerts.ai',
+  ALERTA_QUEUE: 'alerta.queue',
 
   /**
-   * Queue para mensagens falhadas (Dead Letter Queue)
+   * Routing key para geração de alertas
    */
-  DEAD_LETTER: 'buffs.alerts.failed',
-} as const;
-
-/**
- * Routing keys para publicação de mensagens
- */
-export const RabbitMQRoutingKeys = {
-  /**
-   * Alertas de qualquer nicho com qualquer prioridade
-   */
-  ALERT_ALL: 'alert.*.*',
-
-  /**
-   * Alertas de prioridade alta
-   */
-  ALERT_HIGH_PRIORITY: 'alert.*.ALTA',
-
-  /**
-   * Alertas de saúde
-   */
-  ALERT_HEALTH: 'alert.SAUDE.*',
-
-  /**
-   * Alertas de produção
-   */
-  ALERT_PRODUCTION: 'alert.PRODUCAO.*',
-
-  /**
-   * Alertas de reprodução
-   */
-  ALERT_REPRODUCTION: 'alert.REPRODUCAO.*',
-
-  /**
-   * Alertas de alimentação
-   */
-  ALERT_NUTRITION: 'alert.ALIMENTACAO.*',
-
-  /**
-   * Gerar routing key dinamicamente
-   */
-  generate: (nicho: string, prioridade: string) => `alert.${nicho}.${prioridade}`,
+  ALERTA_ROUTING_KEY: 'alerta.gerar',
 } as const;
 
 /**
