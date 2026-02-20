@@ -23,6 +23,7 @@ jobs:
             --exclude='dist' \
             --exclude='coverage' \
             --exclude='logs' \
+            --exclude='deploy.tar.gz' \
             .
 
       - name: Copiar pacote para EC2
