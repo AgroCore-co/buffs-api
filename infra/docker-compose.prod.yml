@@ -43,9 +43,7 @@ services:
   # Buffs API - NestJS
   # ========================================
   buffs-api:
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    image: buffs-api:latest
     container_name: buffs-api
     restart: unless-stopped
     ports:

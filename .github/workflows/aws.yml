@@ -14,7 +14,16 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Criar pacote para deploy
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build da imagem Docker
+        run: |
+          docker build -t buffs-api:latest .
+          docker save buffs-api:latest | gzip > /tmp/buffs-api-image.tar.gz
+          echo "Tamanho da imagem comprimida: $(du -sh /tmp/buffs-api-image.tar.gz | cut -f1)"
+
+      - name: Criar pacote do código-fonte
         run: |
           tar -czf /tmp/deploy.tar.gz \
             --exclude='.git' \
@@ -24,16 +33,17 @@ jobs:
             --exclude='coverage' \
             --exclude='logs' \
             .
-          mv /tmp/deploy.tar.gz deploy.tar.gz
+          cp /tmp/deploy.tar.gz deploy.tar.gz
+          cp /tmp/buffs-api-image.tar.gz buffs-api-image.tar.gz
 
-      - name: Copiar pacote para EC2
+      - name: Copiar arquivos para EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: 'deploy.tar.gz'
+          source: 'deploy.tar.gz,buffs-api-image.tar.gz'
           target: '/home/ec2-user/'
 
       - name: Deploy via Docker Compose
@@ -43,6 +53,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
+          command_timeout: 10m
           script: |
             set -e
             cd /home/ec2-user
@@ -52,7 +63,8 @@ jobs:
 
             # Instalar docker-compose se não existir
             if ! command -v docker-compose &> /dev/null; then
-              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              echo "Instalando docker-compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
             fi
 
@@ -79,11 +91,16 @@ jobs:
             # Verificar .env obrigatório
             [ ! -f .env ] && echo "ERRO: .env não encontrado na EC2" && exit 1
 
+            # Carregar imagem Docker pré-construída (evita buildx no servidor)
+            echo "Carregando imagem Docker..."
+            docker load < /home/ec2-user/buffs-api-image.tar.gz
+            rm /home/ec2-user/buffs-api-image.tar.gz
+
             # Parar containers antigos (se existirem)
             docker-compose -f infra/docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
 
-            # Build e subir todos os serviços
-            docker-compose -f infra/docker-compose.prod.yml up -d --build
+            # Subir todos os serviços (sem --build, usa imagem já carregada)
+            docker-compose -f infra/docker-compose.prod.yml up -d
 
             # Limpar imagens antigas não utilizadas
             docker image prune -f
@@ -93,6 +110,6 @@ jobs:
             sleep 15
 
             # Health check
-            curl -f http://localhost:3001/health || (docker-compose -f infra/docker-compose.prod.yml logs buffs-api && exit 1)
+            curl -f http://localhost:3001/health || (docker-compose -f infra/docker-compose.prod.yml logs --tail=50 buffs-api && exit 1)
 
             echo "✅ Deploy concluído com sucesso!"
