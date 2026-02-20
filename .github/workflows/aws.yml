@@ -89,6 +89,3 @@ jobs:
             curl -f http://localhost:3001/health || (docker compose -f infra/docker-compose.prod.yml logs buffs-api && exit 1)
 
             echo "✅ Deploy concluído com sucesso!"
-
-            echo "Deploy concluído com sucesso!"
-            pm2 status
