@@ -46,9 +46,9 @@ export class AlertaConsumer {
       }
 
       // Extrair informações com segurança
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+       
       const nomeGrupo = bufalo.grupo?.nomeGrupo as string | undefined;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+       
       const nomePropriedade = bufalo.propriedade?.nomePropriedade as string | undefined;
 
       // Mapear e criar o alerta

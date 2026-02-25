@@ -211,17 +211,17 @@ export class BufaloFiltrosService {
    * Busca búfalo por microchip (único).
    * Requer lista de propriedades que o usuário tem acesso.
    */
-  async buscarPorMicrochip(microchip: string, idPropriedades: string[]): Promise<any | null> {
+  async buscarPorMicrochip(microchip: string, idPropriedades: string[]): Promise<ReturnType<BufaloRepositoryDrizzle['findByMicrochip']>> {
     this.logger.debug(`Buscando búfalo por microchip: ${microchip}`);
-    return await this.bufaloRepo.findByMicrochip(microchip, idPropriedades);
+    return this.bufaloRepo.findByMicrochip(microchip, idPropriedades);
   }
 
   /**
    * Busca búfalo por ID.
    */
-  async buscarPorId(idBufalo: string): Promise<any | null> {
+  async buscarPorId(idBufalo: string): Promise<ReturnType<BufaloRepositoryDrizzle['findById']>> {
     this.logger.debug(`Buscando búfalo por ID: ${idBufalo}`);
-    return await this.bufaloRepo.findById(idBufalo);
+    return this.bufaloRepo.findById(idBufalo);
   }
 
   /**

@@ -198,14 +198,26 @@ export class SimulacaoService implements OnModuleInit {
       url: error.config?.url,
     });
 
-    // Lança erro com mensagem apropriada baseada no status
+    // Mapeia erros para respostas amigáveis ao frontend
     if (status === 404) {
       throw new InternalServerErrorException(`Recurso não encontrado na IA ao ${operation}`);
-    } else if (status === 400) {
-      throw new InternalServerErrorException(`Dados inválidos ao ${operation}: ${message}`);
-    } else if (error.code === 'ECONNREFUSED') {
+    }
+
+    if (status === 400 || status === 422) {
+      // Erros de negócio/validação da IA devem chegar ao front para exibição
+      throw new InternalServerErrorException({
+        message: `Dados inválidos ao ${operation}: ${message}`,
+        statusCode: status,
+        operation,
+        iaDetail: errorDetails,
+      });
+    }
+
+    if (error.code === 'ECONNREFUSED') {
       throw new InternalServerErrorException('Serviço de IA indisponível. Verifique se está rodando.');
-    } else if (error.code === 'ETIMEDOUT') {
+    }
+
+    if (error.code === 'ETIMEDOUT') {
       throw new InternalServerErrorException(`Timeout ao ${operation}. A operação demorou muito.`);
     }
 

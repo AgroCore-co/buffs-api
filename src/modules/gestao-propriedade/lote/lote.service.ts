@@ -88,7 +88,7 @@ export class LoteService {
     const lotes = await this.loteRepo.buscarPorPropriedade(id_propriedade);
 
     // Parseia cada lote da lista (geo_mapa já vem como objeto do Drizzle)
-    return formatDateFieldsArray(lotes.map(this.parseGeoMapa));
+    return formatDateFieldsArray(lotes.map((loteItem) => this.parseGeoMapa(loteItem)));
   }
 
   async findOne(id: string, user: any) {

@@ -320,4 +320,7 @@ Authorization: Bearer <access_token>
   console.log(`📚 Documentação Swagger: http://localhost:${port}/api`);
   console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
 }
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('Erro ao iniciar a aplicação', error);
+  process.exit(1);
+});
