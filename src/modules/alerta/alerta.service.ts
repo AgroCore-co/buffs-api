@@ -1,4 +1,5 @@
-import { Injectable, InternalServerErrorException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, Inject, InternalServerErrorException, NotFoundException, Logger } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { GeminiService } from 'src/core/gemini/gemini.service';
 import { CreateAlertaDto } from './dto/create-alerta.dto';
 import { PaginationDto } from '../../core/dto/pagination.dto';
@@ -6,6 +7,27 @@ import { PaginatedResponse } from '../../core/dto/pagination.dto';
 import { createPaginatedResponse, calculatePaginationParams } from '../../core/utils/pagination.utils';
 import { formatDateFields, formatDateFieldsArray } from '../../core/utils/date-formatter.utils';
 import { AlertaRepositoryDrizzle } from './repositories/alerta.repository.drizzle';
+import { RABBITMQ_SERVICE, RabbitMQPatterns } from 'src/core/rabbitmq/rabbitmq.constants';
+import { AlertaCriadoPayload } from './consumers/alertas.consumer';
+import { getErrorMessage } from 'src/core/utils/error.utils';
+
+interface AlertaFilter {
+  nicho?: string;
+  visto?: boolean;
+  dataInicio?: string;
+  dataFim?: string;
+  limit: number;
+  offset: number;
+}
+
+interface AlertaPropriedadeFilter {
+  idPropriedade: string;
+  visto?: boolean;
+  nichos?: string[];
+  prioridade?: string;
+  limit: number;
+  offset: number;
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -50,6 +72,7 @@ export class AlertasService {
   constructor(
     private readonly alertaRepo: AlertaRepositoryDrizzle,
     private readonly geminiService: GeminiService,
+    @Inject(RABBITMQ_SERVICE) private readonly rmqClient: ClientProxy,
   ) {}
 
   /**
@@ -62,34 +85,40 @@ export class AlertasService {
    */
   async create(createAlertaDto: CreateAlertaDto) {
     try {
-      // Se NÃO tem prioridade definida, usa IA para classificar
-      if (!createAlertaDto.prioridade) {
-        this.logger.log(`Classificando prioridade com IA para alerta do animal ${createAlertaDto.animal_id}`);
-
-        // Monta texto para IA analisar usando motivo + observacao
-        const textoParaIA = createAlertaDto.texto_ocorrencia_clinica || `${createAlertaDto.motivo}. ${createAlertaDto.observacao || ''}`.trim();
-
-        try {
-          createAlertaDto.prioridade = await this.geminiService.classificarPrioridadeOcorrencia(textoParaIA);
-          this.logger.log(`Prioridade classificada pela IA: ${createAlertaDto.prioridade}`);
-        } catch (iaError) {
-          // Se IA falhar, usa prioridade MEDIA como fallback
-          this.logger.error(`Erro ao classificar com IA, usando MEDIA como fallback: ${iaError.message}`);
-          createAlertaDto.prioridade = 'MEDIA' as any;
-        }
-      }
-
       // Remove texto_ocorrencia_clinica antes de inserir (campo não existe no banco)
       const { texto_ocorrencia_clinica, ...alertaParaInserir } = createAlertaDto;
 
       const { data, error } = await this.alertaRepo.create(alertaParaInserir);
 
       if (error || !data) {
-        console.error('Erro ao criar alerta:', error?.message);
-        throw new InternalServerErrorException(`Falha ao criar o alerta: ${error?.message}`);
+        console.error('Erro ao criar alerta:', getErrorMessage(error));
+        throw new InternalServerErrorException(`Falha ao criar o alerta: ${getErrorMessage(error)}`);
       }
+
+      // Publica evento no RabbitMQ — o consumer cuida de notificação + IA
+      try {
+        const payload: AlertaCriadoPayload = {
+          id_alerta: data.idAlerta,
+          nicho: data.nicho,
+          prioridade: data.prioridade,
+          titulo: data.motivo ?? 'Alerta',
+          descricao: data.observacao,
+          texto_ocorrencia_clinica: texto_ocorrencia_clinica ?? undefined,
+          data_ocorrencia: data.dataAlerta,
+          animal_id: data.animalId,
+          id_propriedade: data.idPropriedade,
+          grupo: data.grupo,
+        };
+
+        this.rmqClient.emit(RabbitMQPatterns.ALERTA_CRIADO, payload).subscribe({
+          error: (err: unknown) => this.logger.warn(`RabbitMQ indisponível. Alerta ${data.idAlerta} salvo apenas no banco: ${getErrorMessage(err)}`),
+        });
+      } catch {
+        this.logger.warn(`RabbitMQ indisponível. Alerta ${data.idAlerta} salvo apenas no banco.`);
+      }
+
       return formatDateFields(data, ['data_alerta']);
-    } catch (error) {
+    } catch (error: unknown) {
       throw error instanceof InternalServerErrorException ? error : new InternalServerErrorException('Ocorreu um erro inesperado ao criar o alerta.');
     }
   }
@@ -184,8 +213,8 @@ export class AlertasService {
         );
 
         if (searchError) {
-          console.error('Erro ao verificar alerta existente:', searchError.message);
-          throw new InternalServerErrorException(`Erro ao verificar alerta existente: ${searchError.message}`);
+          console.error('Erro ao verificar alerta existente:', getErrorMessage(searchError));
+          throw new InternalServerErrorException(`Erro ao verificar alerta existente: ${getErrorMessage(searchError)}`);
         }
 
         // Se existem alertas, pega o mais recente
@@ -224,7 +253,7 @@ export class AlertasService {
 
       // Se não existe, cria um novo alerta
       return await this.create(createAlertaDto);
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof InternalServerErrorException) {
         throw error;
       }
@@ -261,18 +290,13 @@ export class AlertasService {
    * @returns Resposta paginada contendo os alertas e metadados de paginação
    * @throws InternalServerErrorException - Se houver erro ao buscar ou contar alertas
    */
-  async findAll(
-    tipo?: string,
-    antecendencia?: number,
-    incluirVistos = false,
-    paginationDto: PaginationDto = {},
-  ): Promise<PaginatedResponse<any>> {
+  async findAll(tipo?: string, antecendencia?: number, incluirVistos = false, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
     try {
       const { page = 1, limit = 10 } = paginationDto;
       const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
       // Preparar filtros
-      const filters: any = {
+      const filters: AlertaFilter = {
         limit: limitValue,
         offset,
       };
@@ -297,19 +321,19 @@ export class AlertasService {
       // Contar total
       const { count, error: countError } = await this.alertaRepo.countAll(filters);
       if (countError) {
-        throw new InternalServerErrorException(`Falha ao contar alertas: ${countError.message}`);
+        throw new InternalServerErrorException(`Falha ao contar alertas: ${getErrorMessage(countError)}`);
       }
 
       // Buscar dados com paginação
       const { data, error } = await this.alertaRepo.findAll(filters);
 
       if (error) {
-        throw new InternalServerErrorException(`Falha ao buscar os alertas: ${error.message}`);
+        throw new InternalServerErrorException(`Falha ao buscar os alertas: ${getErrorMessage(error)}`);
       }
 
       const formattedData = formatDateFieldsArray(data, ['data_alerta']);
       return createPaginatedResponse(formattedData, count || 0, page, limitValue);
-    } catch (error) {
+    } catch (error: unknown) {
       throw error;
     }
   }
@@ -375,7 +399,7 @@ export class AlertasService {
       const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
       // Preparar filtros
-      const filters: any = {
+      const filters: AlertaPropriedadeFilter = {
         idPropriedade: id_propriedade,
         limit: limitValue,
         offset,
@@ -396,19 +420,19 @@ export class AlertasService {
       // Contar total
       const { count, error: countError } = await this.alertaRepo.countByPropriedade(filters);
       if (countError) {
-        throw new InternalServerErrorException(`Falha ao contar alertas da propriedade: ${countError.message}`);
+        throw new InternalServerErrorException(`Falha ao contar alertas da propriedade: ${getErrorMessage(countError)}`);
       }
 
       // Buscar dados com paginação
       const { data, error } = await this.alertaRepo.findByPropriedade(filters);
 
       if (error) {
-        throw new InternalServerErrorException(`Falha ao buscar alertas da propriedade: ${error.message}`);
+        throw new InternalServerErrorException(`Falha ao buscar alertas da propriedade: ${getErrorMessage(error)}`);
       }
 
       const formattedData = formatDateFieldsArray(data, ['data_alerta']);
       return createPaginatedResponse(formattedData, count || 0, page, limitValue);
-    } catch (error) {
+    } catch (error: unknown) {
       throw error;
     }
   }
@@ -423,10 +447,11 @@ export class AlertasService {
 
     if (error) {
       // Erro específico para quando o registro não é encontrado
-      if (error.code === 'PGRST116') {
+      const errorCode = (error as { code?: string })?.code;
+      if (errorCode === 'PGRST116') {
         throw new NotFoundException(`Alerta com ID ${id} não encontrado.`);
       }
-      throw new InternalServerErrorException(error.message);
+      throw new InternalServerErrorException(getErrorMessage(error));
     }
     return formatDateFields(data!, ['data_alerta']);
   }
@@ -467,10 +492,11 @@ export class AlertasService {
 
     if (error) {
       // Pode acontecer se o item for deletado entre a verificação e a atualização
-      if (error.code === 'PGRST116') {
+      const errorCode = (error as { code?: string })?.code;
+      if (errorCode === 'PGRST116') {
         throw new NotFoundException(`Alerta com ID ${id} não encontrado para atualização.`);
       }
-      throw new InternalServerErrorException(`Falha ao atualizar o status do alerta: ${error.message}`);
+      throw new InternalServerErrorException(`Falha ao atualizar o status do alerta: ${getErrorMessage(error)}`);
     }
     return formatDateFields(data!, ['data_alerta']);
   }
@@ -486,7 +512,7 @@ export class AlertasService {
     const { error } = await this.alertaRepo.remove(id);
 
     if (error) {
-      throw new InternalServerErrorException(`Falha ao remover o alerta: ${error.message}`);
+      throw new InternalServerErrorException(`Falha ao remover o alerta: ${getErrorMessage(error)}`);
     }
     // Retorno void para um status 204 No Content no controller
     return;
