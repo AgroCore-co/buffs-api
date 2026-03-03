@@ -82,7 +82,7 @@ export class PropriedadeService {
     const vinculo = await this.propriedadeRepo.buscarVinculoFuncionario(id, userId);
 
     if (vinculo?.propriedade) {
-      return formatDateFields(vinculo.propriedade);
+      return formatDateFields(vinculo.propriedade as Record<string, unknown>);
     }
 
     throw new NotFoundException(`Propriedade com ID ${id} não encontrada ou não pertence a este usuário.`);
