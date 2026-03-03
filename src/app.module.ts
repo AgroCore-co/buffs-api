@@ -14,6 +14,7 @@ import { ProducaoModule } from './modules/producao/producao.module';
 import { HealthModule } from './health/health.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AlertasModule } from './modules/alerta/alerta.module';
+import { AlertsConsumerModule } from './modules/alerta/consumers/alerts-consumer.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { AlertasModule } from './modules/alerta/alerta.module';
     HealthModule,
     DashboardModule,
     AlertasModule,
+    AlertsConsumerModule,
   ],
   controllers: [],
   providers: [],
