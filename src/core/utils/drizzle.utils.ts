@@ -17,13 +17,13 @@
  * });
  * // Resultado: { nome: 'João', idade: null, cidade: null }
  */
-export function sanitizeForDrizzle<T extends Record<string, any>>(obj: T): any {
-  const sanitized: any = {};
+export function sanitizeForDrizzle<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
 
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       // Converte undefined para null, mantém outros valores (inclusive null explícito)
-      sanitized[key] = obj[key] === undefined ? null : obj[key];
+      sanitized[key] = obj[key] ?? null;
     }
   }
 
@@ -45,7 +45,7 @@ export function sanitizeForDrizzle<T extends Record<string, any>>(obj: T): any {
  * });
  * // Resultado: { nome: 'João', cidade: 'SP' }
  */
-export function removeUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
+export function removeUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const cleaned = {} as Partial<T>;
 
   for (const key in obj) {

@@ -51,16 +51,16 @@ export function formatToSimpleDate(isoDate: string | null | undefined): string |
  * Formata campos de data automaticamente (dt_* → YYYY-MM-DD, *_at → dd/MM/yyyy HH:mm).
  * @example formatDateFields({ dt_registro: '2025-11-07T00:00:00Z' }) → { dt_registro: '2025-11-07' }
  */
-export function formatDateFields<T extends Record<string, any>>(record: T, dateFields?: string[], dateTimeFields?: string[]): T {
+export function formatDateFields<T extends Record<string, unknown>>(record: T, dateFields?: string[], dateTimeFields?: string[]): T {
   if (!record) return record;
 
-  const formatted: any = { ...record };
+  const formatted = { ...record } as Record<string, unknown>;
 
   // Formatar campos especificados como data simples
   if (dateFields) {
     dateFields.forEach((field) => {
       if (field in formatted) {
-        formatted[field] = formatToSimpleDate(formatted[field]);
+        formatted[field] = formatToSimpleDate(formatted[field] as string | null | undefined);
       }
     });
   } else {
@@ -76,7 +76,7 @@ export function formatDateFields<T extends Record<string, any>>(record: T, dateF
   if (dateTimeFields) {
     dateTimeFields.forEach((field) => {
       if (field in formatted) {
-        formatted[field] = formatToBrazilianDateTime(formatted[field]);
+        formatted[field] = formatToBrazilianDateTime(formatted[field] as string | null | undefined);
       }
     });
   } else {
@@ -94,7 +94,7 @@ export function formatDateFields<T extends Record<string, any>>(record: T, dateF
 /**
  * Aplica formatDateFields em array de registros.
  */
-export function formatDateFieldsArray<T extends Record<string, any>>(records: T[], dateFields?: string[], dateTimeFields?: string[]): T[] {
+export function formatDateFieldsArray<T extends Record<string, unknown>>(records: T[], dateFields?: string[], dateTimeFields?: string[]): T[] {
   if (!records || !Array.isArray(records)) return records;
   return records.map((record) => formatDateFields(record, dateFields, dateTimeFields));
 }
