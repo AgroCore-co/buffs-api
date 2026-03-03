@@ -30,7 +30,7 @@ export class AuthHelperService {
    * @returns ID do usuário
    * @throws NotFoundException se o perfil não for encontrado
    */
-  async getUserId(user: any): Promise<string> {
+  async getUserId(user: { email?: string }): Promise<string> {
     if (!user?.email) {
       throw new NotFoundException('Email do usuário não encontrado no token.');
     }
