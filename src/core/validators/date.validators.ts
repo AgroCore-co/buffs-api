@@ -5,15 +5,15 @@ import { registerDecorator, ValidationOptions, ValidationArguments, ValidatorCon
  */
 @ValidatorConstraint({ name: 'isNotFutureDate', async: false })
 export class IsNotFutureDateConstraint implements ValidatorConstraintInterface {
-  validate(date: any, args: ValidationArguments) {
+  validate(date: unknown, _args: ValidationArguments) {
     if (!date) return true; // Deixa @IsOptional() tratar
-    const inputDate = new Date(date);
+    const inputDate = new Date(date as string);
     const today = new Date();
     today.setHours(23, 59, 59, 999);
     return inputDate <= today;
   }
 
-  defaultMessage(args: ValidationArguments) {
+  defaultMessage(_args: ValidationArguments) {
     return 'A data não pode estar no futuro';
   }
 }
@@ -35,11 +35,11 @@ export function IsNotFutureDate(validationOptions?: ValidationOptions) {
  */
 @ValidatorConstraint({ name: 'maxAge', async: false })
 export class MaxAgeConstraint implements ValidatorConstraintInterface {
-  validate(birthDate: any, args: ValidationArguments) {
+  validate(birthDate: unknown, args: ValidationArguments) {
     if (!birthDate) return true;
 
-    const maxYears = args.constraints[0] || 50;
-    const birth = new Date(birthDate);
+    const maxYears = (args.constraints[0] as number) ?? 50;
+    const birth = new Date(birthDate as string);
     const now = new Date();
 
     let age = now.getFullYear() - birth.getFullYear();
@@ -53,7 +53,7 @@ export class MaxAgeConstraint implements ValidatorConstraintInterface {
   }
 
   defaultMessage(args: ValidationArguments) {
-    const maxYears = args.constraints[0] || 50;
+    const maxYears = (args.constraints[0] as number) ?? 50;
     return `A idade não pode ser superior a ${maxYears} anos`;
   }
 }
@@ -75,11 +75,11 @@ export function MaxAge(maxYears: number, validationOptions?: ValidationOptions) 
  */
 @ValidatorConstraint({ name: 'minAge', async: false })
 export class MinAgeConstraint implements ValidatorConstraintInterface {
-  validate(birthDate: any, args: ValidationArguments) {
+  validate(birthDate: unknown, args: ValidationArguments) {
     if (!birthDate) return true;
 
-    const minMonths = args.constraints[0];
-    const birth = new Date(birthDate);
+    const minMonths = args.constraints[0] as number;
+    const birth = new Date(birthDate as string);
     const now = new Date();
 
     const monthsDiff = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
@@ -116,15 +116,15 @@ export function MinAge(minMonths: number, validationOptions?: ValidationOptions)
  */
 @ValidatorConstraint({ name: 'isAfterDate', async: false })
 export class IsAfterDateConstraint implements ValidatorConstraintInterface {
-  validate(endDate: any, args: ValidationArguments) {
+  validate(endDate: unknown, args: ValidationArguments) {
     if (!endDate) return true;
 
-    const startDateField = args.constraints[0];
-    const startDate = (args.object as any)[startDateField];
+    const startDateField = args.constraints[0] as string;
+    const startDate = (args.object as Record<string, unknown>)[startDateField];
 
     if (!startDate) return true;
 
-    return new Date(endDate) > new Date(startDate);
+    return new Date(endDate as string) > new Date(startDate as string);
   }
 
   defaultMessage(args: ValidationArguments) {
@@ -150,16 +150,16 @@ export function IsAfterDate(startDateField: string, validationOptions?: Validati
  */
 @ValidatorConstraint({ name: 'maxDateInterval', async: false })
 export class MaxDateIntervalConstraint implements ValidatorConstraintInterface {
-  validate(endDate: any, args: ValidationArguments) {
+  validate(endDate: unknown, args: ValidationArguments) {
     if (!endDate) return true;
 
-    const startDateField = args.constraints[0];
-    const maxDays = args.constraints[1];
-    const startDate = (args.object as any)[startDateField];
+    const startDateField = args.constraints[0] as string;
+    const maxDays = args.constraints[1] as number;
+    const startDate = (args.object as Record<string, unknown>)[startDateField];
 
     if (!startDate) return true;
 
-    const diffTime = new Date(endDate).getTime() - new Date(startDate).getTime();
+    const diffTime = new Date(endDate as string).getTime() - new Date(startDate as string).getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     return diffDays <= maxDays;
@@ -188,16 +188,16 @@ export function MaxDateInterval(startDateField: string, maxDays: number, validat
  */
 @ValidatorConstraint({ name: 'minDateInterval', async: false })
 export class MinDateIntervalConstraint implements ValidatorConstraintInterface {
-  validate(endDate: any, args: ValidationArguments) {
+  validate(endDate: unknown, args: ValidationArguments) {
     if (!endDate) return true;
 
-    const startDateField = args.constraints[0];
-    const minDays = args.constraints[1];
-    const startDate = (args.object as any)[startDateField];
+    const startDateField = args.constraints[0] as string;
+    const minDays = args.constraints[1] as number;
+    const startDate = (args.object as Record<string, unknown>)[startDateField];
 
     if (!startDate) return true;
 
-    const diffTime = new Date(endDate).getTime() - new Date(startDate).getTime();
+    const diffTime = new Date(endDate as string).getTime() - new Date(startDate as string).getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     return diffDays >= minDays;

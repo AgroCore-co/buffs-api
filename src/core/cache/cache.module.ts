@@ -8,7 +8,7 @@ import { CacheService } from './cache.service';
   imports: [
     CacheModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
+      useFactory: (configService: ConfigService) => {
         const isProduction = configService.get('NODE_ENV') === 'production';
 
         return {

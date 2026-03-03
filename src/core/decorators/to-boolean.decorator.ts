@@ -6,7 +6,7 @@ import { Transform } from 'class-transformer';
  */
 export function ToBoolean() {
   return Transform(
-    ({ value, obj, key }) => {
+    ({ value, obj, key }: { value: unknown; obj: Record<string, unknown>; key: string }) => {
       // IMPORTANTE: usar obj[key] ao invés de value porque enableImplicitConversion
       // converte o value antes do Transform executar
       const rawValue = obj?.[key] ?? value;
