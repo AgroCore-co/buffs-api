@@ -8,6 +8,7 @@ import { AlertaClinicoService } from './services/alerta-clinico.service';
 import { DatabaseService } from '../../core/database/database.service';
 import { isNull } from 'drizzle-orm';
 import { propriedade } from '../../database/schema';
+import { getErrorMessage, getErrorStack } from 'src/core/utils/error.utils';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -46,8 +47,8 @@ export class AlertasScheduler implements OnModuleInit {
    */
   onModuleInit() {
     const now = new Date();
-    const timezone = process.env.TZ || 'UTC';
-    const ambiente = process.env.NODE_ENV || 'development';
+    const timezone = process.env.TZ ?? 'UTC';
+    const ambiente = process.env.NODE_ENV ?? 'development';
 
     this.logger.log('═══════════════════════════════════════════════════════════════');
     this.logger.log('ALERTAS SCHEDULER INICIALIZADO COM SUCESSO');
@@ -97,16 +98,16 @@ export class AlertasScheduler implements OnModuleInit {
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
           }
-        } catch (error) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
         }
       }
 
       const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
       this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
       this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -132,16 +133,16 @@ export class AlertasScheduler implements OnModuleInit {
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
           }
-        } catch (error) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
         }
       }
 
       const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
       this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
       this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -171,16 +172,16 @@ export class AlertasScheduler implements OnModuleInit {
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
           }
-        } catch (error) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
         }
       }
 
       const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
       this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
       this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -206,16 +207,16 @@ export class AlertasScheduler implements OnModuleInit {
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
           }
-        } catch (error) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
         }
       }
 
       const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
       this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
       this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -241,16 +242,16 @@ export class AlertasScheduler implements OnModuleInit {
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
           }
-        } catch (error) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
         }
       }
 
       const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
       this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
       this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -280,16 +281,16 @@ export class AlertasScheduler implements OnModuleInit {
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
           }
-        } catch (error) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
         }
       }
 
       const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
       this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
       this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -319,16 +320,16 @@ export class AlertasScheduler implements OnModuleInit {
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
           }
-        } catch (error) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
         }
       }
 
       const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
       this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
       this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -359,16 +360,16 @@ export class AlertasScheduler implements OnModuleInit {
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
           }
-        } catch (error) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
         }
       }
 
       const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
       this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
       this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -394,7 +395,7 @@ export class AlertasScheduler implements OnModuleInit {
         id_propriedade: p.idPropriedade,
         nome: p.nome,
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('❌ Erro crítico ao buscar propriedades:', error);
       return [];
     }
