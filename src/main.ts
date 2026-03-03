@@ -2,14 +2,38 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import * as dotenv from 'dotenv';
+import { RabbitMQQueues, DLX_EXCHANGE, RABBITMQ_DEFAULT_URL } from './core/rabbitmq/rabbitmq.constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['log', 'debug', 'error', 'verbose', 'warn'],
   });
   dotenv.config();
+
+  // ── RabbitMQ Microservice (Hybrid App) ────────────────────────────
+  const configService = app.get(ConfigService);
+  const rabbitmqUrl = configService.get<string>('RABBITMQ_URL', RABBITMQ_DEFAULT_URL);
+
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+    options: {
+      urls: [rabbitmqUrl],
+      queue: RabbitMQQueues.ALERTS,
+      queueOptions: {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': DLX_EXCHANGE,
+        },
+      },
+      noAck: false, // ack/nack manual para controle de resiliência
+      prefetchCount: 1,
+    },
+  });
+  // ──────────────────────────────────────────────────────────────────
 
   app.use(
     helmet({
@@ -313,11 +337,15 @@ Authorization: Bearer <access_token>
   // Graceful shutdown para AWS App Runner
   app.enableShutdownHooks();
 
+  // Iniciar consumers RabbitMQ + servidor HTTP
+  await app.startAllMicroservices();
+
   const port = process.env.PORT || 3001;
   await app.listen(port, '0.0.0.0');
 
   console.log(`🚀 API rodando em: http://0.0.0.0:${port}`);
   console.log(`📚 Documentação Swagger: http://localhost:${port}/api`);
   console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🐰 RabbitMQ consumer ativo na queue: ${RabbitMQQueues.ALERTS}`);
 }
 bootstrap();
