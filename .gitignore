@@ -7,6 +7,10 @@
 #Front para testes
 public
 
+
+#Uploads
+temp/uploads
+
 # Logs
 logs
 *.log

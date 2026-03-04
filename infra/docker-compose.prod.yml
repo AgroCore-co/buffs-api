@@ -64,6 +64,10 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+    volumes:
+      # Bind mount: compartilha uploads com o Worker Go
+      # No container: /app/temp/uploads → No host: ./temp/uploads
+      - ../temp/uploads:/app/temp/uploads
     networks:
       - buffs-network
 
