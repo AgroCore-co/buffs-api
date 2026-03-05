@@ -54,6 +54,28 @@ services:
       - buffs-network
 
   # ========================================
+  # Buffs ETL Worker - Go (opcional)
+  # ========================================
+  # Worker Go para processamento de planilhas XLSX.
+  # Descomente se quiser rodar o worker localmente.
+  # Requer que buffs-etl-worker esteja na pasta irmã.
+  #
+  # buffs-etl-worker:
+  #   build:
+  #     context: ../../buffs-etl-worker
+  #     dockerfile: Dockerfile
+  #   container_name: buffs-etl-worker
+  #   ports:
+  #     - "8081:8081"
+  #   env_file:
+  #     - ../.env
+  #   volumes:
+  #     - ../temp/uploads:/app/temp/uploads
+  #   restart: unless-stopped
+  #   networks:
+  #     - buffs-network
+
+  # ========================================
   # PostgreSQL - Database (opcional)
   # ========================================
   # Descomente se quiser rodar PostgreSQL localmente
