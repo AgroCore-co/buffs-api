@@ -91,6 +91,9 @@ Veja [env.example](env.example) para a lista completa. As obrigatórias:
 | `SUPABASE_JWT_SECRET` | JWT secret do Supabase (Settings > API) |
 | `GEMINI_API_KEY` | Chave da API Google Gemini |
 | `RABBITMQ_URL` | URL AMQP (padrão: `amqp://admin:admin@localhost:5672`) |
+| `IA_API_URL` | URL do serviço de predição de produção (buffs-ia) |
+| `ETL_BASE_URL` | URL do worker ETL Go (padrão: `http://localhost:8081`) |
+| `ETL_INTERNAL_KEY` | Chave interna (`X-Internal-Key`) para autenticar no ETL |
 | `PORT` | Porta da API (padrão: `3001`) |
 | `NODE_ENV` | `development` ou `production` |
 | `CORS_ORIGIN` | Origens permitidas, separadas por vírgula |
@@ -137,7 +140,9 @@ src/
 │   ├── alimentacao/             # Definições e registros de alimentação
 │   ├── auth/                    # Autenticação (signup, signin, refresh, signout)
 │   ├── dashboard/               # Métricas e indicadores por propriedade
+│   ├── data-ingestion/          # Importação/exportação de dados via ETL Worker (Go)
 │   ├── gestao-propriedade/      # Endereços, propriedades, lotes/piquetes
+│   ├── importacao/              # ⚠️  Deprecated — substituído por data-ingestion
 │   ├── producao/                # Lactação, ordenhas, produção diária, retiradas, laticínios
 │   ├── rebanho/                 # Búfalos, raças, grupos, movimentação de lotes
 │   ├── reproducao/              # Coberturas, material genético, genealogia, simulação
@@ -230,6 +235,30 @@ src/
 | DELETE | `/alertas/:id` | Remover |
 | POST | `/alertas/verificar/:id` | Verificação sob demanda (dispara domain services) |
 
+### Data Ingestion
+
+Importação e exportação de planilhas XLSX delegadas ao **buffs-etl-worker** (Go). Valida acesso à propriedade, tipo e tamanho do arquivo e aplica rate limit via Redis (10 req/hora por propriedade).
+
+**Importação** (`POST /propriedades/:propriedadeId/data-ingestion/{domínio}`)
+
+| Domínio | Rota | Descrição |
+|---------|------|-----------|
+| Leite | `POST /propriedades/:id/data-ingestion/leite` | Importar produção leiteira |
+| Pesagem | `POST /propriedades/:id/data-ingestion/pesagem` | Importar registros de pesagem |
+| Reprodução | `POST /propriedades/:id/data-ingestion/reproducao` | Importar eventos reprodutivos |
+
+**Exportação** (`GET /propriedades/:propriedadeId/data-ingestion/{domínio}/export`)
+
+| Domínio | Rota | Filtros disponíveis |
+|---------|------|---------------------|
+| Leite | `GET .../leite/export` | `de`, `ate` |
+| Pesagem | `GET .../pesagem/export` | `grupoId`, `maturidade`, `sexo`, `de`, `ate` |
+| Reprodução | `GET .../reproducao/export` | `tipo`, `de`, `ate` |
+
+**Status de job** (`GET /data-ingestion/jobs/:jobId`) — acompanha processamento assíncrono.
+
+> ⚠️ O módulo `importacao` está deprecado e será removido numa versão futura. Use `data-ingestion`.
+
 ### Dashboard (`/dashboard`)
 
 | Método | Rota | Descrição |
@@ -302,6 +331,7 @@ Todos os jobs rodam via `@nestjs/schedule` e iteram sobre todas as propriedades 
 | 00:00 | `verificarTratamentos` | Tratamentos sanitários com retorno agendado |
 | 00:00 | `handleMaturityUpdate` | Atualiza maturidade dos animais (Bezerro → Novilho → Vaca/Touro) |
 | 00:05 | `verificarNascimentos` | Nascimentos previstos nos próximos 30 dias |
+| 01:00 | `cleanTempUploads` | Remove arquivos de upload temporários com mais de 24h (`temp/uploads/`) |
 | 01:00 | `verificarCoberturaSemDiagnostico` | Coberturas sem diagnóstico há mais de 90 dias |
 | 02:00 | `verificarFemeasVazias` | Fêmeas vazias há mais de 180 dias |
 | 03:00 | `verificarVacinacoes` | Vacinações agendadas |
@@ -436,6 +466,9 @@ SUPABASE_KEY=...
 SUPABASE_JWT_SECRET=...
 GEMINI_API_KEY=...
 RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+IA_API_URL=http://host.docker.internal:8000
+ETL_BASE_URL=http://buffs-etl-worker:8081
+ETL_INTERNAL_KEY=...
 NODE_ENV=production
 PORT=3001
 CORS_ORIGIN=https://app.seudominio.com
