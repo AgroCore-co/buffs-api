@@ -15,7 +15,7 @@ import { HealthModule } from './health/health.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AlertasModule } from './modules/alerta/alerta.module';
 import { AlertsConsumerModule } from './modules/alerta/consumers/alerts-consumer.module';
-import { ImportacaoModule } from './modules/importacao/importacao.module';
+import { DataIngestionModule } from './modules/data-ingestion/data-ingestion.module';
 
 @Module({
   imports: [
@@ -41,7 +41,7 @@ import { ImportacaoModule } from './modules/importacao/importacao.module';
     DashboardModule,
     AlertasModule,
     AlertsConsumerModule,
-    ImportacaoModule,
+    DataIngestionModule,
   ],
   controllers: [],
   providers: [],
