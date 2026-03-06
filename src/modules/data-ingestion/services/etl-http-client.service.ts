@@ -5,7 +5,6 @@ import { firstValueFrom } from 'rxjs';
 import * as FormData from 'form-data';
 
 import { LoggerService } from '../../../core/logger/logger.service';
-import { getErrorMessage } from '../../../core/utils/error.utils';
 import { IEtlClient, EtlImportResult, EtlJobStatus, MulterFile } from '../interfaces';
 import { ExportFiltersDto } from '../dto';
 
@@ -23,16 +22,16 @@ export class EtlHttpClient implements IEtlClient {
     this.internalKey = this.configService.getOrThrow<string>('ETL_INTERNAL_KEY');
   }
 
-  async importLeite(propertyId: string, file: MulterFile): Promise<EtlImportResult> {
-    return this.sendImport(`/import/leite`, propertyId, file);
+  async importLeite(propertyId: string, userId: string, file: MulterFile): Promise<EtlImportResult> {
+    return this.sendImport(`/import/leite`, propertyId, userId, file);
   }
 
-  async importPesagem(propertyId: string, file: MulterFile): Promise<EtlImportResult> {
-    return this.sendImport(`/import/pesagem`, propertyId, file);
+  async importPesagem(propertyId: string, userId: string, file: MulterFile): Promise<EtlImportResult> {
+    return this.sendImport(`/import/pesagem`, propertyId, userId, file);
   }
 
-  async importReproducao(propertyId: string, file: MulterFile): Promise<EtlImportResult> {
-    return this.sendImport(`/import/reproducao`, propertyId, file);
+  async importReproducao(propertyId: string, userId: string, file: MulterFile): Promise<EtlImportResult> {
+    return this.sendImport(`/import/reproducao`, propertyId, userId, file);
   }
 
   async exportLeite(filters: ExportFiltersDto): Promise<Buffer> {
@@ -62,7 +61,7 @@ export class EtlHttpClient implements IEtlClient {
     return response.data;
   }
 
-  private async sendImport(path: string, propertyId: string, file: MulterFile): Promise<EtlImportResult> {
+  private async sendImport(path: string, propertyId: string, userId: string, file: MulterFile): Promise<EtlImportResult> {
     this.logger.log(`Enviando import para ETL: ${path}`, {
       module: 'EtlHttpClient',
       method: 'sendImport',
@@ -76,7 +75,6 @@ export class EtlHttpClient implements IEtlClient {
       filename: file.originalname,
       contentType: file.mimetype,
     });
-    form.append('propertyId', propertyId);
 
     const response = await firstValueFrom(
       this.httpService.post<EtlImportResult>(`${this.baseUrl}${path}`, form, {
@@ -84,6 +82,7 @@ export class EtlHttpClient implements IEtlClient {
           ...this.buildHeaders(),
           ...form.getHeaders(),
         },
+        params: { propriedadeId: propertyId, usuarioId: userId },
         timeout: 120_000,
       }),
     );
