@@ -49,9 +49,9 @@ export interface EtlJobStatus {
 }
 
 export interface IEtlClient {
-  importLeite(propertyId: string, file: MulterFile): Promise<EtlImportResult>;
-  importPesagem(propertyId: string, file: MulterFile): Promise<EtlImportResult>;
-  importReproducao(propertyId: string, file: MulterFile): Promise<EtlImportResult>;
+  importLeite(propertyId: string, userId: string, file: MulterFile): Promise<EtlImportResult>;
+  importPesagem(propertyId: string, userId: string, file: MulterFile): Promise<EtlImportResult>;
+  importReproducao(propertyId: string, userId: string, file: MulterFile): Promise<EtlImportResult>;
 
   exportLeite(filters: ExportFiltersDto): Promise<Buffer>;
   exportPesagem(filters: ExportFiltersDto): Promise<Buffer>;
