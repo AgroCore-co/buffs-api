@@ -36,7 +36,7 @@ export class LeitePipeline {
     await this.validator.checkRateLimit(propriedadeId);
 
     try {
-      const result = await this.etlClient.importLeite(propriedadeId, file);
+      const result = await this.etlClient.importLeite(propriedadeId, userId, file);
 
       this.logger.log('Pipeline de importação de leite concluída', {
         module: 'LeitePipeline',

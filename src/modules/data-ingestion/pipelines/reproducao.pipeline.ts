@@ -36,7 +36,7 @@ export class ReproducaoPipeline {
     await this.validator.checkRateLimit(propriedadeId);
 
     try {
-      const result = await this.etlClient.importReproducao(propriedadeId, file);
+      const result = await this.etlClient.importReproducao(propriedadeId, userId, file);
 
       this.logger.log('Pipeline de importação de reprodução concluída', {
         module: 'ReproducaoPipeline',

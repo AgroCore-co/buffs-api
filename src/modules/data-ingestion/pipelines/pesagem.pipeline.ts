@@ -35,7 +35,7 @@ export class PesagemPipeline {
     await this.validator.checkRateLimit(propriedadeId);
 
     try {
-      const result = await this.etlClient.importPesagem(propriedadeId, file);
+      const result = await this.etlClient.importPesagem(propriedadeId, userId, file);
 
       this.logger.log('Pipeline de importação de pesagem concluída', {
         module: 'PesagemPipeline',
