@@ -29,7 +29,7 @@ export class EnderecoController {
 
   @Post()
   @ApiOperation({
-    summary: '2️⃣ Criar endereço (SEGUNDO PASSO)',
+    summary: '2. Criar endereço (SEGUNDO PASSO)',
     description: `**FLUXO DE ONBOARDING - PASSO 2/3**
 
 Cria um endereço que será vinculado à propriedade no próximo passo.

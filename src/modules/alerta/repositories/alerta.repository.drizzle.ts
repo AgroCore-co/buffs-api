@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, and, desc, gte, lte, inArray, count, asc } from 'drizzle-orm';
+import { eq, and, desc, gte, lte, inArray, count, asc, type SQL } from 'drizzle-orm';
 import { alertas } from 'src/database/schema';
+import { type CreateAlertaDto, type UpdateAlertaDto } from '../dto/create-alerta.dto';
+
+type AlertaInsert = typeof alertas.$inferInsert;
 
 /**
  * Repository Drizzle para alertas
@@ -15,9 +18,9 @@ export class AlertaRepositoryDrizzle {
    * Cria novo alerta
    * Mapeia snake_case (DTO) para camelCase (schema)
    */
-  async create(data: any) {
+  async create(data: CreateAlertaDto) {
     try {
-      const mappedData = {
+      const mappedData: Partial<AlertaInsert> = {
         animalId: data.animal_id,
         grupo: data.grupo,
         localizacao: data.localizacao,
@@ -32,7 +35,10 @@ export class AlertaRepositoryDrizzle {
         tipoEventoOrigem: data.tipo_evento_origem,
       };
 
-      const result = await this.databaseService.db.insert(alertas).values(mappedData).returning();
+      const result = await this.databaseService.db
+        .insert(alertas)
+        .values(mappedData as AlertaInsert)
+        .returning();
 
       return { data: result[0], error: null };
     } catch (error) {
@@ -86,7 +92,7 @@ export class AlertaRepositoryDrizzle {
         },
       });
 
-      return { data: result || null, error: null };
+      return { data: result ?? null, error: null };
     } catch (error) {
       return { data: null, error };
     }
@@ -97,7 +103,7 @@ export class AlertaRepositoryDrizzle {
    */
   async findAll(filters: { nicho?: string; visto?: boolean; dataInicio?: string; dataFim?: string; limit: number; offset: number }) {
     try {
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
 
       if (filters.nicho) {
         conditions.push(eq(alertas.nicho, filters.nicho));
@@ -135,7 +141,7 @@ export class AlertaRepositoryDrizzle {
    */
   async countAll(filters: { nicho?: string; visto?: boolean; dataInicio?: string; dataFim?: string }) {
     try {
-      const conditions: any[] = [];
+      const conditions: SQL[] = [];
 
       if (filters.nicho) {
         conditions.push(eq(alertas.nicho, filters.nicho));
@@ -157,7 +163,7 @@ export class AlertaRepositoryDrizzle {
 
       const result = await this.databaseService.db.select({ count: count() }).from(alertas).where(whereClause);
 
-      return { count: result[0]?.count || 0, error: null };
+      return { count: result[0]?.count ?? 0, error: null };
     } catch (error) {
       return { count: 0, error };
     }
@@ -234,7 +240,7 @@ export class AlertaRepositoryDrizzle {
         .from(alertas)
         .where(and(...conditions));
 
-      return { count: result[0]?.count || 0, error: null };
+      return { count: result[0]?.count ?? 0, error: null };
     } catch (error) {
       return { count: 0, error };
     }
@@ -263,9 +269,9 @@ export class AlertaRepositoryDrizzle {
    * Atualiza status de visualização de um alerta
    * Mapeia snake_case (DTO) para camelCase (schema)
    */
-  async update(idAlerta: string, data: any) {
+  async update(idAlerta: string, data: UpdateAlertaDto) {
     try {
-      const updateData: any = {
+      const updateData: Partial<AlertaInsert> = {
         updatedAt: new Date().toISOString(),
       };
 

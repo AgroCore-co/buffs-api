@@ -2,6 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { LoggerService } from '../logger/logger.service';
+import { getErrorMessage } from '../utils/error.utils';
 
 @Injectable()
 export class CacheService {
@@ -22,8 +23,8 @@ export class CacheService {
         this.logger.debug(`Cache MISS: ${key}`, { module: 'CacheService', method: 'get' });
       }
       return result;
-    } catch (error) {
-      this.logger.warn(`Erro ao buscar cache: ${key}`, { module: 'CacheService', method: 'get', error: error.message });
+    } catch (error: unknown) {
+      this.logger.warn(`Erro ao buscar cache: ${key}`, { module: 'CacheService', method: 'get', error: getErrorMessage(error) });
       return undefined;
     }
   }
@@ -31,12 +32,12 @@ export class CacheService {
   /**
    * Salvar no cache
    */
-  async set(key: string, value: any, ttl?: number): Promise<void> {
+  async set(key: string, value: unknown, ttl?: number): Promise<void> {
     try {
       await this.cacheManager.set(key, value, ttl);
-      this.logger.debug(`Cache SET: ${key} (TTL: ${ttl || 'default'})`, { module: 'CacheService', method: 'set' });
-    } catch (error) {
-      this.logger.warn(`Erro ao definir cache: ${key}`, { module: 'CacheService', method: 'set', error: error.message });
+      this.logger.debug(`Cache SET: ${key} (TTL: ${ttl ?? 'default'})`, { module: 'CacheService', method: 'set' });
+    } catch (error: unknown) {
+      this.logger.warn(`Erro ao definir cache: ${key}`, { module: 'CacheService', method: 'set', error: getErrorMessage(error) });
     }
   }
 
@@ -47,8 +48,8 @@ export class CacheService {
     try {
       await this.cacheManager.del(key);
       this.logger.debug(`Cache DEL: ${key}`, { module: 'CacheService', method: 'del' });
-    } catch (error) {
-      this.logger.warn(`Erro ao remover cache: ${key}`, { module: 'CacheService', method: 'del', error: error.message });
+    } catch (error: unknown) {
+      this.logger.warn(`Erro ao remover cache: ${key}`, { module: 'CacheService', method: 'del', error: getErrorMessage(error) });
     }
   }
 
@@ -58,7 +59,7 @@ export class CacheService {
   async reset(): Promise<void> {
     try {
       // O cache-manager v5 usa store.reset() se disponível
-      const store = (this.cacheManager as any).store;
+      const store = (this.cacheManager as Cache & { store?: { reset?: () => Promise<void> } }).store;
       if (store && typeof store.reset === 'function') {
         await store.reset();
         this.logger.log('Cache completamente limpo', { module: 'CacheService', method: 'reset' });
@@ -69,8 +70,8 @@ export class CacheService {
           method: 'reset',
         });
       }
-    } catch (error) {
-      this.logger.warn('Erro ao limpar cache', { module: 'CacheService', method: 'reset', error: error.message });
+    } catch (error: unknown) {
+      this.logger.warn('Erro ao limpar cache', { module: 'CacheService', method: 'reset', error: getErrorMessage(error) });
     }
   }
 
@@ -87,8 +88,8 @@ export class CacheService {
       }
 
       return data;
-    } catch (error) {
-      this.logger.warn(`Erro no getOrSet para ${key}`, { module: 'CacheService', method: 'getOrSet', error: error.message });
+    } catch (error: unknown) {
+      this.logger.warn(`Erro no getOrSet para ${key}`, { module: 'CacheService', method: 'getOrSet', error: getErrorMessage(error) });
       return await fetchFunction(); // Fallback para busca direta
     }
   }
@@ -105,7 +106,7 @@ export class CacheService {
   /**
    * Gerar chave de cache baseada no usuário
    */
-  generateUserKey(userId: string, resource: string, params?: any): string {
+  generateUserKey(userId: string, resource: string, params?: Record<string, unknown>): string {
     const paramStr = params ? `:${Buffer.from(JSON.stringify(params)).toString('base64').slice(0, 10)}` : '';
     return `user:${userId}:${resource}${paramStr}`;
   }

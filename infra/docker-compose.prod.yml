@@ -45,6 +45,34 @@ services:
       - buffs-network
 
   # ========================================
+  # Buffs ETL Worker - Go
+  # ========================================
+  # Worker Go responsável pelo processamento de planilhas XLSX.
+  # Recebe chamadas da API via HTTP interno (porta 8081).
+  # ========================================
+  buffs-etl-worker:
+    build:
+      context: ../../buffs-etl-worker
+      dockerfile: Dockerfile
+    container_name: buffs-etl-worker
+    restart: unless-stopped
+    expose:
+      - "8081"
+    env_file:
+      - ../.env
+    volumes:
+      # Compartilha pasta de uploads com a API
+      - ../temp/uploads:/app/temp/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - buffs-network
+
+  # ========================================
   # Buffs API - NestJS
   # ========================================
   buffs-api:
@@ -64,6 +92,8 @@ services:
       NODE_ENV: production
       # buffs-ia roda no host na porta 8000
       IA_API_URL: http://host.docker.internal:8000
+      # ETL Worker roda no serviço interno
+      ETL_BASE_URL: http://buffs-etl-worker:8081
       # Limita heap do Node.js a 256 MB
       NODE_OPTIONS: "--max-old-space-size=256"
     deploy:
@@ -76,6 +106,12 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      buffs-etl-worker:
+        condition: service_healthy
+    volumes:
+      # Bind mount: compartilha uploads com o Worker Go
+      # No container: /app/temp/uploads → No host: ./temp/uploads
+      - ../temp/uploads:/app/temp/uploads
     networks:
       - buffs-network
 

@@ -55,4 +55,30 @@ export class LoggerService implements NestLoggerService {
   logError(error: Error, context?: LogContext) {
     this.error(error.message, error.stack, context);
   }
+
+  /**
+   * Log específico para o fluxo de importação de planilhas.
+   * Facilita o debug do pipeline NestJS → RabbitMQ → Worker Go.
+   */
+  logImportacao(
+    evento: 'RECEBIDA' | 'ENVIADA_FILA' | 'ERRO_FILA',
+    dados: { arquivo: string; propriedadeId: string; usuarioId: string; filePath?: string; erro?: string },
+  ) {
+    const tag = `[IMPORTACAO:${evento}]`;
+    const detalhes = [
+      `arquivo=${dados.arquivo}`,
+      `propriedade=${dados.propriedadeId}`,
+      `usuario=${dados.usuarioId}`,
+      dados.filePath ? `path=${dados.filePath}` : null,
+      dados.erro ? `erro=${dados.erro}` : null,
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    if (evento === 'ERRO_FILA') {
+      this.error(`${tag} ${detalhes}`, undefined, { module: 'Importacao' });
+    } else {
+      this.log(`${tag} ${detalhes}`, { module: 'Importacao' });
+    }
+  }
 }

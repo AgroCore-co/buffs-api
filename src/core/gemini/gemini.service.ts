@@ -3,6 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { PrioridadeAlerta } from '../../modules/alerta/dto/create-alerta.dto';
+import { getErrorMessage, getErrorStack, isAxiosError } from '../utils/error.utils';
+
+interface GeminiCandidate {
+  content?: { parts?: { text?: string }[] };
+}
+
+interface GeminiResponse {
+  candidates?: GeminiCandidate[];
+}
 
 @Injectable()
 export class GeminiService {
@@ -14,7 +23,7 @@ export class GeminiService {
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
   ) {
-    this.apiKey = this.configService.get<any>('GEMINI_API_KEY');
+    this.apiKey = this.configService.get<string>('GEMINI_API_KEY', '');
     if (!this.apiKey) {
       throw new Error('GEMINI_API_KEY não está definida no ficheiro .env');
     }
@@ -180,7 +189,7 @@ Retorne APENAS uma das três palavras, em MAIÚSCULAS, sem pontuação ou explic
     };
 
     try {
-      const { data } = await firstValueFrom(this.httpService.post(this.apiUrl, payload));
+      const { data } = await firstValueFrom(this.httpService.post<GeminiResponse>(this.apiUrl, payload));
 
       const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toUpperCase();
 
@@ -207,19 +216,23 @@ Retorne APENAS uma das três palavras, em MAIÚSCULAS, sem pontuação ou explic
         method: 'classificarPrioridadeOcorrencia',
       });
       throw new ServiceUnavailableException('Serviço de IA retornou resposta inválida. Tente novamente mais tarde.');
-    } catch (error) {
+    } catch (error: unknown) {
       // Log de erro MUITO mais detalhado
-      this.logger.error('Erro CRÍTICO ao chamar a API da Gemini. Verifique a chave e as configurações do projeto Google Cloud.', error.stack, {
-        module: 'GeminiService',
-        method: 'classificarPrioridadeOcorrencia',
-      });
-      if (error.response) {
-        this.logger.error('Detalhes do Erro da API: ' + JSON.stringify(error.response.data, null, 2), error.stack, {
+      this.logger.error(
+        'Erro CRÍTICO ao chamar a API da Gemini. Verifique a chave e as configurações do projeto Google Cloud.',
+        getErrorStack(error),
+        {
+          module: 'GeminiService',
+          method: 'classificarPrioridadeOcorrencia',
+        },
+      );
+      if (isAxiosError(error) && error.response) {
+        this.logger.error('Detalhes do Erro da API: ' + JSON.stringify(error.response.data, null, 2), getErrorStack(error), {
           module: 'GeminiService',
           method: 'classificarPrioridadeOcorrencia',
         });
       } else {
-        this.logger.error('Erro de Rede ou Configuração: ' + error.message, error.stack, {
+        this.logger.error('Erro de Rede ou Configuração: ' + getErrorMessage(error), getErrorStack(error), {
           module: 'GeminiService',
           method: 'classificarPrioridadeOcorrencia',
         });

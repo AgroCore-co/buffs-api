@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access -- Drizzle ORM relation field references resolve to `any` at declaration time */
 import { relations } from 'drizzle-orm/relations';
 import {
   bufalo,

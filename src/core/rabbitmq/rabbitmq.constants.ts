@@ -1,66 +1,40 @@
 /**
- * Constantes GENÉRICAS para configuração do RabbitMQ.
- * Configurações base que podem ser usadas por qualquer módulo.
+ * Constantes centrais para configuração do RabbitMQ.
+ *
+ * Usa @nestjs/microservices com transporte RMQ nativo.
+ * Uma única queue `buffs.alerts` recebe todos os eventos de alertas.
+ * Mensagens falhadas são roteadas para DLQ via Dead Letter Exchange.
  */
 
-export const RabbitMQConfig = {
-  /**
-   * Exchange principal para eventos do sistema
-   */
-  EXCHANGE: 'buffs.events',
+/**
+ * Token de injeção para o ClientProxy do RabbitMQ
+ */
+export const RABBITMQ_SERVICE = 'RABBITMQ_SERVICE';
 
-  /**
-   * Exchange para Dead Letter (mensagens falhadas)
-   */
-  DLX_EXCHANGE: 'buffs.events.dlx',
-
-  /**
-   * Tipo de exchange (topic permite routing patterns flexíveis)
-   */
-  EXCHANGE_TYPE: 'topic' as const,
-
-  /**
-   * Configurações de durabilidade
-   */
-  DURABLE: true,
-
-  /**
-   * Queue para processamento de alertas
-   */
-  ALERTA_QUEUE: 'alerta.queue',
-
-  /**
-   * Routing key para geração de alertas
-   */
-  ALERTA_ROUTING_KEY: 'alerta.gerar',
+/**
+ * Nomes das queues
+ */
+export const RabbitMQQueues = {
+  /** Queue principal para eventos de alertas */
+  ALERTS: 'buffs.alerts',
+  /** Dead Letter Queue para mensagens falhadas */
+  DLQ: 'buffs.alerts.dlq',
 } as const;
 
 /**
- * Configurações de retry e timeout
+ * Event patterns usados com @EventPattern / client.emit()
  */
-export const RabbitMQRetryConfig = {
-  /**
-   * Número máximo de tentativas de reconexão
-   */
-  MAX_RECONNECT_ATTEMPTS: 10,
-
-  /**
-   * Delay entre tentativas de reconexão (ms)
-   */
-  RECONNECT_DELAY: 5000,
-
-  /**
-   * Timeout para operações (ms)
-   */
-  OPERATION_TIMEOUT: 10000,
-
-  /**
-   * TTL para mensagens (ms) - 24 horas
-   */
-  MESSAGE_TTL: 24 * 60 * 60 * 1000,
-
-  /**
-   * Número máximo de tentativas de processamento antes de ir para DLQ
-   */
-  MAX_DELIVERY_ATTEMPTS: 5,
+export const RabbitMQPatterns = {
+  /** Emitido quando um alerta é criado no banco */
+  ALERTA_CRIADO: 'alerta_criado',
 } as const;
+
+/**
+ * Dead Letter Exchange name
+ */
+export const DLX_EXCHANGE = 'buffs.dlx';
+
+/**
+ * URL padrão para desenvolvimento local
+ */
+export const RABBITMQ_DEFAULT_URL = 'amqp://admin:admin@localhost:5672';

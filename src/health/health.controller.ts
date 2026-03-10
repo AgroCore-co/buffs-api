@@ -1,10 +1,12 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../modules/auth/guards/auth.guard';
+import { RabbitMQHealthIndicator } from './rabbitmq-health.indicator';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
+  constructor(private readonly rabbitMQHealth: RabbitMQHealthIndicator) {}
   @Get()
   @ApiOperation({ summary: 'Health check endpoint' })
   @ApiResponse({
@@ -46,11 +48,12 @@ export class HealthController {
     status: 401,
     description: 'Unauthorized - Authentication required',
   })
-  checkDetailed() {
+  async checkDetailed() {
     const memoryUsage = process.memoryUsage();
+    const rabbitMQ = await this.rabbitMQHealth.check();
 
     return {
-      status: 'ok',
+      status: rabbitMQ.status === 'down' ? 'degraded' : 'ok',
       timestamp: new Date().toISOString(),
       service: 'BUFFS API',
       version: '1.0.0',
@@ -60,6 +63,11 @@ export class HealthController {
         api: 'running',
         database: 'supabase_configured',
         gemini: process.env.GEMINI_API_KEY ? 'configured' : 'not_configured',
+        rabbitmq: {
+          status: rabbitMQ.status,
+          connected: rabbitMQ.connected,
+          message: rabbitMQ.message,
+        },
       },
       system: {
         nodeVersion: process.version,

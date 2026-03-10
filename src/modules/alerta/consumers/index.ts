@@ -1,1 +1,2 @@
-export * from './alerta.consumer';
+export * from './alertas.consumer';
+export * from './alerts-consumer.module';

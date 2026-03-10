@@ -327,7 +327,7 @@ export class BufaloRepositoryDrizzle {
       const db = this.databaseService.db;
 
       // Construir as mesmas condições
-      const conditions: any[] = [];
+      const conditions: any[] = [isNull(bufalo.deletedAt)];
 
       if (filtros.id_propriedade) {
         if (Array.isArray(filtros.id_propriedade)) {

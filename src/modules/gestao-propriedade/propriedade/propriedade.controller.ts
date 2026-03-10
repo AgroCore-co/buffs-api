@@ -20,7 +20,7 @@ export class PropriedadeController {
   @UseGuards(RolesGuard)
   @Roles(Cargo.PROPRIETARIO)
   @ApiOperation({
-    summary: '3️⃣ Criar propriedade (TERCEIRO PASSO)',
+    summary: '3. Criar propriedade (TERCEIRO PASSO)',
     description: `**FLUXO DE ONBOARDING - PASSO 3/3**
 
 Cria a propriedade vinculada ao endereço criado no passo anterior.

@@ -6,7 +6,7 @@ import { NivelMaturidade, SexoBufalo } from '../dto/create-bufalo.dto';
  * Filtros aceitos para buscar búfalos.
  */
 export interface BufaloFiltros {
-  idPropriedade?: string;
+  idPropriedade?: string | string[];
   idRaca?: string;
   sexo?: SexoBufalo;
   nivelMaturidade?: NivelMaturidade;
@@ -106,11 +106,24 @@ export class BufaloFiltrosService {
     this.logger.debug(`Filtrando búfalos: ${JSON.stringify(filtros)}`);
     this.logger.debug(`Paginação: offset=${offset}, limit=${limit}`);
 
+    // Map camelCase BufaloFiltros to the snake_case shape expected by the repository
+    const repoFiltros = {
+      id_propriedade: filtros.idPropriedade,
+      id_raca: filtros.idRaca,
+      sexo: filtros.sexo,
+      nivel_maturidade: filtros.nivelMaturidade,
+      status: filtros.status,
+      brinco: filtros.brinco,
+      nome: filtros.nome,
+      microchip: filtros.microchip,
+      id_grupo: filtros.idGrupo,
+    };
+
     try {
       // Busca dados e total em paralelo
       const [bufalosResponse, totalResponse] = await Promise.all([
-        this.bufaloRepo.findWithFilters(filtros, { offset, limit }),
-        this.bufaloRepo.countWithFilters(filtros),
+        this.bufaloRepo.findWithFilters(repoFiltros, { offset, limit }),
+        this.bufaloRepo.countWithFilters(repoFiltros),
       ]);
 
       const bufalos = bufalosResponse.data || [];
@@ -128,83 +141,6 @@ export class BufaloFiltrosService {
       this.logger.error('Erro ao filtrar búfalos:', error);
       throw error;
     }
-  }
-
-  /**
-   * Busca todos os búfalos de uma propriedade.
-   * Wrapper para compatibilidade com código antigo.
-   */
-  async buscarPorPropriedade(idPropriedade: string, paginacao?: PaginacaoOpcoes): Promise<ResultadoPaginado<any>> {
-    return this.filtrarBufalos({ idPropriedade, status: true }, paginacao);
-  }
-
-  /**
-   * Busca todos os búfalos de uma raça.
-   * Wrapper para compatibilidade com código antigo.
-   */
-  async buscarPorRaca(idRaca: string, paginacao?: PaginacaoOpcoes): Promise<ResultadoPaginado<any>> {
-    return this.filtrarBufalos({ idRaca, status: true }, paginacao);
-  }
-
-  /**
-   * Busca búfalos por sexo.
-   * Wrapper para compatibilidade com código antigo.
-   */
-  async buscarPorSexo(sexo: SexoBufalo, paginacao?: PaginacaoOpcoes): Promise<ResultadoPaginado<any>> {
-    return this.filtrarBufalos({ sexo, status: true }, paginacao);
-  }
-
-  /**
-   * Busca búfalos por nível de maturidade.
-   * Wrapper para compatibilidade com código antigo.
-   */
-  async buscarPorMaturidade(nivelMaturidade: NivelMaturidade, paginacao?: PaginacaoOpcoes): Promise<ResultadoPaginado<any>> {
-    return this.filtrarBufalos({ nivelMaturidade, status: true }, paginacao);
-  }
-
-  /**
-   * Busca búfalos por propriedade e raça.
-   * Wrapper para compatibilidade com código antigo.
-   */
-  async buscarPorPropriedadeERaca(idPropriedade: string, idRaca: string, paginacao?: PaginacaoOpcoes): Promise<ResultadoPaginado<any>> {
-    return this.filtrarBufalos({ idPropriedade, idRaca, status: true }, paginacao);
-  }
-
-  /**
-   * Busca búfalos por propriedade e sexo.
-   * Wrapper para compatibilidade com código antigo.
-   */
-  async buscarPorPropriedadeESexo(idPropriedade: string, sexo: SexoBufalo, paginacao?: PaginacaoOpcoes): Promise<ResultadoPaginado<any>> {
-    return this.filtrarBufalos({ idPropriedade, sexo, status: true }, paginacao);
-  }
-
-  /**
-   * Busca búfalos por propriedade e maturidade.
-   * Wrapper para compatibilidade com código antigo.
-   */
-  async buscarPorPropriedadeEMaturidade(
-    idPropriedade: string,
-    nivelMaturidade: NivelMaturidade,
-    paginacao?: PaginacaoOpcoes,
-  ): Promise<ResultadoPaginado<any>> {
-    return this.filtrarBufalos({ idPropriedade, nivelMaturidade, status: true }, paginacao);
-  }
-
-  /**
-   * Busca búfalos por raça e sexo.
-   * Wrapper para compatibilidade com código antigo.
-   */
-  async buscarPorRacaESexo(idRaca: string, sexo: SexoBufalo, paginacao?: PaginacaoOpcoes): Promise<ResultadoPaginado<any>> {
-    return this.filtrarBufalos({ idRaca, sexo, status: true }, paginacao);
-  }
-
-  /**
-   * Busca búfalos por grupo de manejo.
-   * Retorna todos os búfalos ativos associados ao grupo.
-   */
-  async buscarPorGrupo(idGrupo: string, paginacao?: PaginacaoOpcoes): Promise<ResultadoPaginado<any>> {
-    this.logger.debug(`Buscando búfalos do grupo: ${idGrupo}`);
-    return this.filtrarBufalos({ idGrupo, status: true }, paginacao);
   }
 
   /**
