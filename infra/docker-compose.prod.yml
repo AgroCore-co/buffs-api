@@ -54,6 +54,7 @@ services:
     build:
       context: ../../buffs-etl-worker
       dockerfile: Dockerfile
+    image: buffs-etl-worker:latest
     container_name: buffs-etl-worker
     restart: unless-stopped
     expose:
