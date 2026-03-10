@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthFacadeService } from './auth-facade.service';
-import { SignUpDto, SignInDto, RefreshDto, SignUpProprietarioDto, SignUpFuncionarioDto } from './dto';
+import { SignInDto, RefreshDto, SignUpProprietarioDto, SignUpFuncionarioDto } from './dto';
 import { SupabaseAuthGuard } from './guards/auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -23,7 +23,7 @@ export class AuthController {
   @Post('signup-proprietario')
   @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 tentativas por minuto
   @ApiOperation({
-    summary: '1️⃣ Criar conta de proprietário (PRIMEIRO PASSO)',
+    summary: '1. Criar conta de proprietário (PRIMEIRO PASSO)',
     description: `**FLUXO DE ONBOARDING - PASSO 1/3**
 
 Cria conta de autenticação no Supabase + perfil de PROPRIETARIO no banco em uma operação atômica.
@@ -77,7 +77,7 @@ Cria conta de autenticação no Supabase + perfil de PROPRIETARIO no banco em um
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
   @ApiOperation({
-    summary: '👥 Criar funcionário (Apenas PROPRIETARIO ou GERENTE)',
+    summary: 'Criar funcionário (Apenas PROPRIETARIO ou GERENTE)',
     description: `**Cria um novo funcionário no sistema**
 
 Cria conta de autenticação + perfil + vincula a propriedades em operação atômica.

@@ -254,7 +254,7 @@ Authorization: Bearer <access_token>
 
   ---
 
-  ## 📚 Documentação Completa
+  ##  Documentação Completa
 
   Para informações detalhadas sobre o sistema, consulte:
 **Stack:** NestJS v10 + PostgreSQL + Supabase Auth + Drizzle ORM
@@ -340,12 +340,12 @@ Authorization: Bearer <access_token>
   // Iniciar consumers RabbitMQ + servidor HTTP
   await app.startAllMicroservices();
 
-  const port = process.env.PORT || 3001;
+  const port = process.env.PORT ?? 3001;
   await app.listen(port, '0.0.0.0');
 
   console.log(`🚀 API rodando em: http://0.0.0.0:${port}`);
   console.log(`📚 Documentação Swagger: http://localhost:${port}/api`);
-  console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌍 Ambiente: ${process.env.NODE_ENV ?? 'development'}`);
   console.log(`🐰 RabbitMQ consumer ativo na queue: ${RabbitMQQueues.ALERTS}`);
 }
 bootstrap();

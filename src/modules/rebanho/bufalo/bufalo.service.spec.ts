@@ -17,6 +17,7 @@ describe('BufaloService', () => {
   let usuarioPropriedadeRepo: jest.Mocked<UsuarioPropriedadeRepositoryDrizzle>;
   let cacheService: jest.Mocked<CacheService>;
   let authHelper: jest.Mocked<AuthHelperService>;
+  let filtrosService: jest.Mocked<BufaloFiltrosService>;
 
   const mockUser = { email: 'test@example.com' };
   const mockUserId = 'user-123';
@@ -96,6 +97,8 @@ describe('BufaloService', () => {
         {
           provide: LoggerService,
           useValue: {
+            log: jest.fn(),
+            warn: jest.fn(),
             logError: jest.fn(),
           },
         },
@@ -107,6 +110,7 @@ describe('BufaloService', () => {
     usuarioPropriedadeRepo = module.get(UsuarioPropriedadeRepositoryDrizzle);
     cacheService = module.get(CacheService);
     authHelper = module.get(AuthHelperService);
+    filtrosService = module.get(BufaloFiltrosService);
   });
 
   it('should be defined', () => {
@@ -255,15 +259,14 @@ describe('BufaloService', () => {
 
       authHelper.getUserId.mockResolvedValue(mockUserId);
       authHelper.getUserPropriedades.mockResolvedValue([mockPropriedadeId]);
-      usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
-      cacheService.get.mockResolvedValue([mockPropriedadeId]);
 
-      bufaloRepo.findWithFilters.mockResolvedValue({
+      filtrosService.filtrarBufalos.mockResolvedValue({
         data: mockBufalos,
-        error: null,
+        total: 3,
+        offset: 0,
+        limit: 10,
       });
 
-      bufaloRepo.countWithFilters.mockResolvedValue({ count: 3, error: null });
       bufaloRepo.findActiveByIds.mockResolvedValue(mockParents);
 
       const result = await service.findAll(mockUser);
@@ -281,15 +284,14 @@ describe('BufaloService', () => {
 
       authHelper.getUserId.mockResolvedValue(mockUserId);
       authHelper.getUserPropriedades.mockResolvedValue([mockPropriedadeId]);
-      usuarioPropriedadeRepo.buscarUsuarioPorEmail.mockResolvedValue({ idUsuario: mockUserId });
-      cacheService.get.mockResolvedValue([mockPropriedadeId]);
 
-      bufaloRepo.findWithFilters.mockResolvedValue({
+      filtrosService.filtrarBufalos.mockResolvedValue({
         data: mockBufalos,
-        error: null,
+        total: 1,
+        offset: 0,
+        limit: 10,
       });
 
-      bufaloRepo.countWithFilters.mockResolvedValue({ count: 1, error: null });
       bufaloRepo.findActiveByIds.mockResolvedValue([]);
 
       const result = await service.findAll(mockUser);
@@ -305,22 +307,20 @@ describe('BufaloService', () => {
       authHelper.getUserId.mockResolvedValue(mockUserId);
       authHelper.getUserPropriedades.mockResolvedValue(['prop-1', 'prop-2']);
 
-      bufaloRepo.findWithFilters.mockResolvedValue({ data: [], error: null });
-      bufaloRepo.countWithFilters.mockResolvedValue({ count: 0, error: null });
+      filtrosService.filtrarBufalos.mockResolvedValue({ data: [], total: 0, offset: 0, limit: 10 });
 
       await service.findAll(mockUser);
 
       // Deve ter chamado getUserPropriedades do authHelper
       expect(authHelper.getUserPropriedades).toHaveBeenCalledWith(mockUserId);
-      expect(bufaloRepo.findWithFilters).toHaveBeenCalled();
+      expect(filtrosService.filtrarBufalos).toHaveBeenCalled();
     });
 
     it('deve usar authHelper para buscar propriedades', async () => {
       authHelper.getUserId.mockResolvedValue(mockUserId);
       authHelper.getUserPropriedades.mockResolvedValue(['prop-cached']);
 
-      bufaloRepo.findWithFilters.mockResolvedValue({ data: [], error: null });
-      bufaloRepo.countWithFilters.mockResolvedValue({ count: 0, error: null });
+      filtrosService.filtrarBufalos.mockResolvedValue({ data: [], total: 0, offset: 0, limit: 10 });
 
       await service.findAll(mockUser);
 

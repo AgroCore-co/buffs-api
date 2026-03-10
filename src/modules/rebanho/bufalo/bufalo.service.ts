@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { CreateBufaloDto } from './dto/create-bufalo.dto';
 import { UpdateBufaloDto } from './dto/update-bufalo.dto';
 import { UpdateGrupoBufaloDto } from './dto/update-grupo-bufalo.dto';
@@ -50,8 +50,6 @@ import { BufaloFiltrosService } from './services/bufalo-filtros.service';
  */
 @Injectable()
 export class BufaloService implements ISoftDelete {
-  private readonly logger = new Logger(BufaloService.name);
-
   constructor(
     private readonly genealogiaService: GenealogiaService,
     private readonly bufaloRepo: BufaloRepositoryDrizzle,
@@ -182,18 +180,6 @@ export class BufaloService implements ISoftDelete {
   }
 
   /**
-   * Enriquece um array de búfalos com campos derivados.
-   * Aplica enrichBufaloWithDerivedFields() para cada item.
-   *
-   * @param bufalos Array de búfalos
-   * @returns Array de búfalos enriquecidos
-   */
-  private enrichBufalosWithDerivedFields(bufalos: any[]): any[] {
-    if (!bufalos || bufalos.length === 0) return [];
-    return bufalos.map((bufalo) => this.enrichBufaloWithDerivedFields(bufalo));
-  }
-
-  /**
    * Enriquece múltiplos búfalos com campos derivados (OTIMIZADO).
    * Carrega todos os pais/mães em UMA query ao invés de N queries.
    * Resolve N+1 query problem.
@@ -275,6 +261,41 @@ export class BufaloService implements ISoftDelete {
     if (!grupo) {
       throw new NotFoundException(`Grupo com ID ${id_grupo} não encontrado ou você não tem acesso a ele.`);
     }
+  }
+
+  // ==================== HELPERS ====================
+
+  /**
+   * Método auxiliar que centraliza o fluxo padrão das rotas de listagem paginada:
+   * 1. Extrai paginação
+   * 2. Obtém userId e valida acesso à propriedade
+   * 3. Filtra via filtrosService
+   * 4. Atualiza maturidade
+   * 5. Enriquece com campos derivados
+   * 6. Retorna resposta paginada
+   */
+  private async buscarComFiltrosPaginado(
+    filtros: import('./services/bufalo-filtros.service').BufaloFiltros,
+    user: any,
+    paginationDto: PaginationDto = {},
+    idPropriedade?: string,
+  ): Promise<PaginatedResponse<any>> {
+    const { page = 1, limit = 10 } = paginationDto;
+    const { offset } = calculatePaginationParams(page, limit);
+
+    const userId = await this.authHelper.getUserId(user);
+
+    if (idPropriedade) {
+      await this.validatePropriedadeAccess(idPropriedade, userId);
+    }
+
+    const resultado = await this.filtrosService.filtrarBufalos(filtros, { offset, limit });
+
+    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
+
+    const bufalosEnriquecidos = await this.enrichBufalosWithDerivedFieldsBatch(resultado.data);
+
+    return createPaginatedResponse(bufalosEnriquecidos, resultado.total, page, limit);
   }
 
   // ==================== CRUD BÁSICO ====================
@@ -369,7 +390,7 @@ export class BufaloService implements ISoftDelete {
       // 3. Cria no banco
       const novoBufalo = await this.bufaloRepo.create(dadosFinais);
 
-      this.logger.log(`✅ Búfalo criado: ${novoBufalo.nome || novoBufalo.brinco}`);
+      this.loggerService.log(`Búfalo criado: ${novoBufalo.nome || novoBufalo.brinco}`, { service: 'BufaloService', method: 'create' });
       return novoBufalo;
     } catch (error) {
       this.loggerService.logError(error, { service: 'BufaloService', method: 'create' });
@@ -407,30 +428,13 @@ export class BufaloService implements ISoftDelete {
     const userId = await this.authHelper.getUserId(user);
     const propriedadesUsuario = await this.authHelper.getUserPropriedades(userId);
 
-    // Busca diretamente do repository Drizzle com joins genealógicos
-    const resultado = await this.bufaloRepo.findWithFilters(
-      {
-        id_propriedade: propriedadesUsuario,
-        status: true,
-      },
-      { offset, limit },
-    );
+    const resultado = await this.filtrosService.filtrarBufalos({ idPropriedade: propriedadesUsuario as any, status: true }, { offset, limit });
 
-    const totalResponse = await this.bufaloRepo.countWithFilters({
-      id_propriedade: propriedadesUsuario,
-      status: true,
-    });
+    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    const bufalos = resultado.data || [];
-    const total = totalResponse.count || 0;
+    const bufalosEnriquecidos = await this.enrichBufalosWithDerivedFieldsBatch(resultado.data);
 
-    // Atualiza maturidade automaticamente
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
-
-    // Enriquece com campos derivados usando método otimizado (previne N+1)
-    const bufalosEnriquecidos = await this.enrichBufalosWithDerivedFieldsBatch(bufalos);
-
-    return createPaginatedResponse(bufalosEnriquecidos, total, page, limit);
+    return createPaginatedResponse(bufalosEnriquecidos, resultado.total, page, limit);
   }
 
   /**
@@ -460,80 +464,21 @@ export class BufaloService implements ISoftDelete {
    * Busca búfalos por propriedade com paginação.
    */
   async findByPropriedade(id_propriedade: string, user: any, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-
-    // Valida acesso à propriedade
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    // Busca diretamente do repository Drizzle com joins genealógicos
-    const resultado = await this.bufaloRepo.findWithFilters(
-      {
-        id_propriedade,
-        status: true,
-      },
-      { offset, limit },
-    );
-
-    const totalResponse = await this.bufaloRepo.countWithFilters({
-      id_propriedade,
-      status: true,
-    });
-
-    const bufalos = resultado.data || [];
-    const total = totalResponse.count || 0;
-
-    // Atualiza maturidade
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
-
-    // Enriquece com campos derivados usando método otimizado (previne N+1)
-    const bufalosEnriquecidos = await this.enrichBufalosWithDerivedFieldsBatch(bufalos);
-
-    return createPaginatedResponse(bufalosEnriquecidos, total, page, limit);
+    return this.buscarComFiltrosPaginado({ idPropriedade: id_propriedade, status: true }, user, paginationDto, id_propriedade);
   }
 
   /**
    * Busca búfalos por raça em uma propriedade.
    */
   async findByRaca(id_raca: string, id_propriedade: string, user: any, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-
-    // Valida acesso à propriedade
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    // Delega para service de filtros
-    const resultado = await this.filtrosService.buscarPorPropriedadeERaca(id_propriedade, id_raca, { offset, limit });
-
-    // Atualiza maturidade
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    return this.buscarComFiltrosPaginado({ idPropriedade: id_propriedade, idRaca: id_raca, status: true }, user, paginationDto, id_propriedade);
   }
 
   /**
    * Busca búfalos por sexo em uma propriedade.
    */
   async findBySexo(sexo: string, id_propriedade: string, user: any, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-
-    // Valida acesso
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    // Delega para service de filtros
-    const resultado = await this.filtrosService.buscarPorPropriedadeESexo(id_propriedade, sexo as any, { offset, limit });
-
-    // Atualiza maturidade
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    return this.buscarComFiltrosPaginado({ idPropriedade: id_propriedade, sexo: sexo as any, status: true }, user, paginationDto, id_propriedade);
   }
 
   /**
@@ -545,21 +490,12 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-
-    // Valida acesso
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    // Delega para service de filtros
-    const resultado = await this.filtrosService.buscarPorPropriedadeEMaturidade(id_propriedade, nivel_maturidade as any, { offset, limit });
-
-    // Atualiza maturidade
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    return this.buscarComFiltrosPaginado(
+      { idPropriedade: id_propriedade, nivelMaturidade: nivel_maturidade as any, status: true },
+      user,
+      paginationDto,
+      id_propriedade,
+    );
   }
 
   /**
@@ -571,17 +507,15 @@ export class BufaloService implements ISoftDelete {
     const { offset } = calculatePaginationParams(page, limit);
 
     const userId = await this.authHelper.getUserId(user);
-
-    // Valida se o grupo existe e se o usuário tem acesso
     await this.validateGrupoAccess(id_grupo, userId);
 
-    // Delega para service de filtros
-    const resultado = await this.filtrosService.buscarPorGrupo(id_grupo, { offset, limit });
+    const resultado = await this.filtrosService.filtrarBufalos({ idGrupo: id_grupo, status: true }, { offset, limit });
 
-    // Atualiza maturidade
     await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
 
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    const bufalosEnriquecidos = await this.enrichBufalosWithDerivedFieldsBatch(resultado.data);
+
+    return createPaginatedResponse(bufalosEnriquecidos, resultado.total, page, limit);
   }
 
   /**
@@ -594,14 +528,7 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    // Filtra com os parâmetros fornecidos
-    const resultado = await this.filtrosService.filtrarBufalos(
+    return this.buscarComFiltrosPaginado(
       {
         idPropriedade: id_propriedade,
         idRaca: filtroDto.idRaca,
@@ -610,13 +537,10 @@ export class BufaloService implements ISoftDelete {
         status: filtroDto.status !== undefined ? filtroDto.status : true,
         brinco: filtroDto.brinco,
       },
-      { offset, limit },
+      user,
+      paginationDto,
+      id_propriedade,
     );
-
-    // Atualiza maturidade
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -648,9 +572,12 @@ export class BufaloService implements ISoftDelete {
     // Valida acesso
     await this.validateBufaloAccess(id, userId);
 
+    // Busca dados atuais uma única vez (reusado por genealogia e maturidade)
+    const precisaDados = updateDto.idPai !== undefined || updateDto.idMae !== undefined || updateDto.dtNascimento || updateDto.sexo;
+    const bufaloAtual = precisaDados ? await this.bufaloRepo.findById(id) : null;
+
     // Valida genealogia se houver mudança de pai/mãe
     if (updateDto.idPai !== undefined || updateDto.idMae !== undefined) {
-      const bufaloAtual = await this.bufaloRepo.findById(id);
       await this.validarGenealogiaCircular(
         id,
         updateDto.idPai !== undefined ? updateDto.idPai : bufaloAtual?.idPai,
@@ -662,9 +589,6 @@ export class BufaloService implements ISoftDelete {
     let dadosAtualizados = { ...updateDto };
 
     if (updateDto.dtNascimento || updateDto.sexo) {
-      // Busca dados atuais
-      const bufaloAtual = await this.filtrosService.buscarPorId(id);
-
       const dadosCompletos = {
         ...bufaloAtual,
         ...updateDto,
@@ -676,7 +600,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza no banco
     const bufaloAtualizado = await this.bufaloRepo.update(id, dadosAtualizados);
 
-    this.logger.log(`✅ Búfalo atualizado: ${id}`);
+    this.loggerService.log(`Búfalo atualizado: ${id}`, { service: 'BufaloService', method: 'update' });
     return bufaloAtualizado;
   }
 
@@ -707,7 +631,7 @@ export class BufaloService implements ISoftDelete {
     // Marca como deletado (soft delete)
     const bufaloRemovido = await this.bufaloRepo.softDelete(id);
 
-    this.logger.log(`Búfalo removido (soft delete): ${id}`);
+    this.loggerService.log(`Búfalo removido (soft delete): ${id}`, { service: 'BufaloService', method: 'softDelete' });
     return {
       message: 'Búfalo removido com sucesso (soft delete).',
       data: bufaloRemovido,
@@ -733,7 +657,7 @@ export class BufaloService implements ISoftDelete {
     // Restaura (remove deletedAt)
     const bufaloRestaurado = await this.bufaloRepo.restore(id);
 
-    this.logger.log(`Búfalo restaurado: ${id}`);
+    this.loggerService.log(`Búfalo restaurado: ${id}`, { service: 'BufaloService', method: 'restore' });
     return {
       message: 'Búfalo restaurado com sucesso.',
       data: bufaloRestaurado,
@@ -766,7 +690,7 @@ export class BufaloService implements ISoftDelete {
     // Atualiza em lote
     const bufalosAtualizados = await this.bufaloRepo.updateMany(updateGrupoDto.idsBufalos, { idGrupo: updateGrupoDto.idNovoGrupo });
 
-    this.logger.log(`✅ Grupo atualizado para ${updateGrupoDto.idsBufalos.length} búfalos`);
+    this.loggerService.log(`Grupo atualizado para ${updateGrupoDto.idsBufalos.length} búfalos`, { service: 'BufaloService', method: 'updateGrupo' });
     return {
       message: `Grupo atualizado com sucesso para ${updateGrupoDto.idsBufalos.length} búfalos.`,
       updated: bufalosAtualizados,
@@ -786,11 +710,14 @@ export class BufaloService implements ISoftDelete {
     const bufalos = await this.bufaloRepo.findByCategoria(categoria, propriedadesUsuario);
 
     if (!bufalos || bufalos.length === 0) {
-      this.logger.log(`Nenhum búfalo encontrado com categoria ${categoria}`);
+      this.loggerService.log(`Nenhum búfalo encontrado com categoria ${categoria}`, { service: 'BufaloService', method: 'findByCategoria' });
       return [];
     }
 
-    this.logger.log(`✅ Encontrados ${bufalos.length} búfalos com categoria ${categoria}`);
+    this.loggerService.log(`Encontrados ${bufalos.length} búfalos com categoria ${categoria}`, {
+      service: 'BufaloService',
+      method: 'findByCategoria',
+    });
     await this.maturidadeService.atualizarMaturidadeSeNecessario(bufalos);
     return bufalos;
   }
@@ -805,21 +732,12 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    const resultado = await this.filtrosService.filtrarBufalos(
+    return this.buscarComFiltrosPaginado(
       { idPropriedade: id_propriedade, idRaca: id_raca, brinco, status: true },
-      { offset, limit },
+      user,
+      paginationDto,
+      id_propriedade,
     );
-
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -832,21 +750,12 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    const resultado = await this.filtrosService.filtrarBufalos(
+    return this.buscarComFiltrosPaginado(
       { idPropriedade: id_propriedade, sexo: sexo as any, brinco, status: true },
-      { offset, limit },
+      user,
+      paginationDto,
+      id_propriedade,
     );
-
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -859,18 +768,7 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    const resultado = await this.filtrosService.filtrarBufalos({ idPropriedade: id_propriedade, sexo: sexo as any, status }, { offset, limit });
-
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    return this.buscarComFiltrosPaginado({ idPropriedade: id_propriedade, sexo: sexo as any, status }, user, paginationDto, id_propriedade);
   }
 
   /**
@@ -883,21 +781,12 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    const resultado = await this.filtrosService.filtrarBufalos(
+    return this.buscarComFiltrosPaginado(
       { idPropriedade: id_propriedade, nivelMaturidade: nivel_maturidade as any, brinco, status: true },
-      { offset, limit },
+      user,
+      paginationDto,
+      id_propriedade,
     );
-
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -910,21 +799,12 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    const resultado = await this.filtrosService.filtrarBufalos(
+    return this.buscarComFiltrosPaginado(
       { idPropriedade: id_propriedade, nivelMaturidade: nivel_maturidade as any, status },
-      { offset, limit },
+      user,
+      paginationDto,
+      id_propriedade,
     );
-
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
   }
 
   /**
@@ -937,36 +817,14 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    const resultado = await this.filtrosService.filtrarBufalos({ idPropriedade: id_propriedade, idRaca: id_raca, status }, { offset, limit });
-
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    return this.buscarComFiltrosPaginado({ idPropriedade: id_propriedade, idRaca: id_raca, status }, user, paginationDto, id_propriedade);
   }
 
   /**
    * Busca búfalos por status.
    */
   async findByStatus(status: boolean, id_propriedade: string, user: any, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    const resultado = await this.filtrosService.filtrarBufalos({ idPropriedade: id_propriedade, status }, { offset, limit });
-
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    return this.buscarComFiltrosPaginado({ idPropriedade: id_propriedade, status }, user, paginationDto, id_propriedade);
   }
 
   /**
@@ -979,18 +837,7 @@ export class BufaloService implements ISoftDelete {
     user: any,
     paginationDto: PaginationDto = {},
   ): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
-
-    const userId = await this.authHelper.getUserId(user);
-    await this.validatePropriedadeAccess(id_propriedade, userId);
-
-    const resultado = await this.filtrosService.filtrarBufalos({ idPropriedade: id_propriedade, status, brinco }, { offset, limit });
-
-    await this.maturidadeService.atualizarMaturidadeSeNecessario(resultado.data);
-
-    // Drizzle already returns properly typed data
-    return createPaginatedResponse(resultado.data, resultado.total, page, limit);
+    return this.buscarComFiltrosPaginado({ idPropriedade: id_propriedade, status, brinco }, user, paginationDto, id_propriedade);
   }
 
   // ==================== PROCESSAMENTO DE CATEGORIA ABCB ====================
@@ -1055,7 +902,7 @@ export class BufaloService implements ISoftDelete {
         }
       } catch (error) {
         erros++;
-        this.logger.error(`Erro ao processar categoria do búfalo ${bufalo.id_bufalo}:`, error);
+        this.loggerService.logError(error, { service: 'BufaloService', method: 'processarCategoriaPropriedade', bufaloId: bufalo.idBufalo });
       }
     }
 
