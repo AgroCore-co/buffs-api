@@ -64,7 +64,7 @@ services:
     environment:
       BUFFS_ETL_PORT: 8081
       # Mapeia variáveis da API (.env) para o formato do worker Go
-      BUFFS_ETL_DB_URL: ${DIRECT_URL}
+      BUFFS_ETL_DB_URL: ${DIRECT_URL:-${DATABASE_URL}}
       BUFFS_ETL_INTERNAL_KEY: ${ETL_INTERNAL_KEY}
     volumes:
       # Compartilha pasta de uploads com a API
