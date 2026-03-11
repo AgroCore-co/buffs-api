@@ -82,7 +82,8 @@ jobs:
             fi
 
             # Limpar e recriar diretório (preserva .env)
-            rm -rf buffs-api
+            # sudo necessário: Docker cria arquivos em temp/uploads com UID do container
+            sudo rm -rf buffs-api
             mkdir -p buffs-api
 
             # Extrair código-fonte
