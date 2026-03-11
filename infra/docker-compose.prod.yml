@@ -61,6 +61,8 @@ services:
       - "8081"
     env_file:
       - ../.env
+    environment:
+      BUFFS_ETL_PORT: 8081
     volumes:
       # Compartilha pasta de uploads com a API
       - ../temp/uploads:/app/temp/uploads
