@@ -6,12 +6,12 @@ import { PaginationDto } from '../../../core/dto/pagination.dto';
 import { PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse } from '../../../core/utils/pagination.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
-import { ProducaoDiariaRepository } from './repositories';
+import { ProducaoDiariaRepositoryDrizzle } from './repositories';
 
 @Injectable()
 export class ProducaoDiariaService implements ISoftDelete {
   constructor(
-    private readonly repository: ProducaoDiariaRepository,
+    private readonly repository: ProducaoDiariaRepositoryDrizzle,
     private readonly logger: LoggerService,
   ) {}
 

@@ -18,7 +18,7 @@ import { FemeaEmLactacaoDto } from './dto/femea-em-lactacao.dto';
 import { ResumoProducaoBufalaDto } from './dto/resumo-producao-bufala.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
-import { OrdenhaRepository } from './repositories';
+import { OrdenhaRepositoryDrizzle } from './repositories';
 import { BufaloRepositoryDrizzle } from '../../rebanho/bufalo/repositories/bufalo.repository.drizzle';
 import { LactacaoRepositoryDrizzle } from '../lactacao/repositories';
 import { PropriedadeRepositoryDrizzle } from '../../gestao-propriedade/propriedade/repositories/propriedade.repository.drizzle';
@@ -28,7 +28,7 @@ export class OrdenhaService implements ISoftDelete {
   private readonly logger = new Logger(OrdenhaService.name);
 
   constructor(
-    private readonly controleRepository: OrdenhaRepository,
+    private readonly controleRepository: OrdenhaRepositoryDrizzle,
     private readonly authHelper: AuthHelperService,
     private readonly bufaloRepository: BufaloRepositoryDrizzle,
     private readonly cicloRepository: LactacaoRepositoryDrizzle,

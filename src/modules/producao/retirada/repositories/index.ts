@@ -1,1 +1,1 @@
-export * from './retirada.repository';
+export * from './retirada.repository.drizzle';

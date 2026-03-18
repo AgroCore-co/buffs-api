@@ -27,13 +27,7 @@ import { CreateAlertaDto, PrioridadeAlerta, NichoAlerta } from './dto/create-ale
 import { SupabaseAuthGuard } from '../auth/guards/auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { PaginationDto } from '../../core/dto/pagination.dto';
-
-// Domain Services
-import { AlertaReproducaoService } from './services/alerta-reproducao.service';
-import { AlertaSanitarioService } from './services/alerta-sanitario.service';
-import { AlertaProducaoService } from './services/alerta-producao.service';
-import { AlertaManejoService } from './services/alerta-manejo.service';
-import { AlertaClinicoService } from './services/alerta-clinico.service';
+import { AlertasVerificacaoService } from './services/alertas-verificacao.service';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -42,12 +36,7 @@ import { AlertaClinicoService } from './services/alerta-clinico.service';
 export class AlertasController {
   constructor(
     private readonly alertasService: AlertasService,
-    // Domain services para verificação manual
-    private readonly reproducaoService: AlertaReproducaoService,
-    private readonly sanitarioService: AlertaSanitarioService,
-    private readonly producaoService: AlertaProducaoService,
-    private readonly manejoService: AlertaManejoService,
-    private readonly clinicoService: AlertaClinicoService,
+    private readonly alertasVerificacaoService: AlertasVerificacaoService,
   ) {}
 
   // Este endpoint seria mais para testes ou criação manual,
@@ -343,65 +332,6 @@ export class AlertasController {
     },
   })
   async verificarAlertas(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query('nichos') nichos?: string | string[]) {
-    // Normaliza nichos para array: se não fornecido, verifica todos os nichos disponíveis
-    const nichosArray: NichoAlerta[] = nichos
-      ? Array.isArray(nichos)
-        ? (nichos as NichoAlerta[])
-        : [nichos as NichoAlerta]
-      : [NichoAlerta.CLINICO, NichoAlerta.SANITARIO, NichoAlerta.REPRODUCAO, NichoAlerta.MANEJO, NichoAlerta.PRODUCAO];
-
-    const detalhes: any = {};
-    let totalAlertas = 0;
-
-    // Processa cada nicho solicitado de forma sequencial
-    for (const nicho of nichosArray) {
-      switch (nicho) {
-        case NichoAlerta.SANITARIO:
-          const tratamentos = await this.sanitarioService.verificarTratamentos(id_propriedade);
-          const vacinacoes = await this.sanitarioService.verificarVacinacoes(id_propriedade);
-          detalhes[nicho] = { tratamentos, vacinacoes };
-          totalAlertas += tratamentos + vacinacoes;
-          break;
-
-        case NichoAlerta.REPRODUCAO:
-          const nascimentos = await this.reproducaoService.verificarNascimentos(id_propriedade);
-          const coberturasSemDiag = await this.reproducaoService.verificarCoberturaSemDiagnostico(id_propriedade);
-          const femeasVazias = await this.reproducaoService.verificarFemeasVazias(id_propriedade);
-          detalhes[nicho] = {
-            nascimentos,
-            coberturas_sem_diagnostico: coberturasSemDiag,
-            femeas_vazias: femeasVazias,
-          };
-          totalAlertas += nascimentos + coberturasSemDiag + femeasVazias;
-          break;
-
-        case NichoAlerta.PRODUCAO:
-          const quedaProducao = await this.producaoService.verificarQuedaProducao(id_propriedade);
-          detalhes[nicho] = { queda_producao: quedaProducao };
-          totalAlertas += quedaProducao;
-          break;
-
-        case NichoAlerta.MANEJO:
-          const secagem = await this.manejoService.verificarSecagemPendente(id_propriedade);
-          detalhes[nicho] = { secagem_pendente: secagem };
-          totalAlertas += secagem;
-          break;
-
-        case NichoAlerta.CLINICO:
-          const sinaisClinicos = await this.clinicoService.verificarSinaisClinicosPrecoces(id_propriedade);
-          detalhes[nicho] = { sinais_clinicos_precoces: sinaisClinicos };
-          totalAlertas += sinaisClinicos;
-          break;
-      }
-    }
-
-    return {
-      success: true,
-      message: 'Verificação de alertas concluída',
-      propriedade: id_propriedade,
-      nichos_verificados: nichosArray,
-      alertas_criados: totalAlertas,
-      detalhes,
-    };
+    return this.alertasVerificacaoService.verificarPorPropriedade(id_propriedade, nichos);
   }
 }

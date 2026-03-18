@@ -6,7 +6,7 @@ import { CreateProducaoDiariaDto, UpdateProducaoDiariaDto } from '../dto';
 import { PaginationDto } from '../../../../core/dto';
 
 @Injectable()
-export class ProducaoDiariaRepository {
+export class ProducaoDiariaRepositoryDrizzle {
   constructor(private readonly db: DatabaseService) {}
 
   async criar(createDto: CreateProducaoDiariaDto) {
