@@ -86,8 +86,8 @@ export class AuthService {
     };
   }
 
-  async signOut() {
-    const { error } = await this.supabase.getClient().auth.signOut();
+  async signOut(accessToken: string) {
+    const { error } = await this.supabase.getAdminClient().auth.admin.signOut(accessToken);
 
     if (error) {
       this.logger.logError(error, { module: 'Auth', method: 'signOut' });

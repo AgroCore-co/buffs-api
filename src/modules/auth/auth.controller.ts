@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Headers, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -154,12 +154,20 @@ Cria conta de autenticação + perfil + vincula a propriedades em operação at�
   }
 
   @Post('signout')
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(SupabaseAuthGuard)
   @ApiOperation({
     summary: 'Faz logout do usuário',
     description: 'Invalida a sessão atual do usuário.',
   })
   @ApiResponse({ status: 200, description: 'Logout realizado com sucesso.' })
-  async signOut() {
-    return this.authService.signOut();
+  async signOut(@Headers('authorization') authorization?: string) {
+    const accessToken = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null;
+
+    if (!accessToken) {
+      throw new UnauthorizedException('Token de acesso não informado.');
+    }
+
+    return this.authService.signOut(accessToken);
   }
 }

@@ -55,11 +55,19 @@ export class AlertaClinicoService {
 
       const tratamentosPorBufalo = new Map<string, number>();
       for (const tratamento of tratamentosRecentes) {
+        if (!tratamento.idBufalo) {
+          continue;
+        }
+
         tratamentosPorBufalo.set(tratamento.idBufalo, (tratamentosPorBufalo.get(tratamento.idBufalo) ?? 0) + 1);
       }
 
       const pesagensPorBufalo = new Map<string, Array<{ peso: string | null }>>();
       for (const pesagem of pesagensRecentes) {
+        if (!pesagem.idBufalo) {
+          continue;
+        }
+
         if (!pesagensPorBufalo.has(pesagem.idBufalo)) {
           pesagensPorBufalo.set(pesagem.idBufalo, []);
         }
