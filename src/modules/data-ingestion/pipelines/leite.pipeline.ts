@@ -16,7 +16,7 @@ import { getErrorMessage } from '../../../core/utils/error.utils';
 export class LeitePipeline {
   constructor(
     @Inject(ETL_CLIENT) private readonly etlClient: IEtlClient,
-    private readonly validator: DataIngestionValidator,
+    public readonly validator: DataIngestionValidator,
     private readonly mapper: DataIngestionMapper,
     private readonly logger: LoggerService,
   ) {}
