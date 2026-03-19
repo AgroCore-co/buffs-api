@@ -62,7 +62,7 @@ export class AlertaClinicoService {
         tratamentosPorBufalo.set(tratamento.idBufalo, (tratamentosPorBufalo.get(tratamento.idBufalo) ?? 0) + 1);
       }
 
-      const pesagensPorBufalo = new Map<string, Array<{ peso: string | null }>>();
+      const pesagensPorBufalo = new Map<string, { peso: string | null }[]>();
       for (const pesagem of pesagensRecentes) {
         if (!pesagem.idBufalo) {
           continue;
@@ -105,7 +105,7 @@ export class AlertaClinicoService {
   /**
    * Verifica se búfalo teve ganho de peso insuficiente.
    */
-  private verificarGanhoPesoInsuficiente(pesagens: Array<{ peso: string | null }>): boolean {
+  private verificarGanhoPesoInsuficiente(pesagens: { peso: string | null }[]): boolean {
     if (pesagens.length < AlertaConstants.MIN_PESAGENS_ANALISE) {
       return false; // Dados insuficientes
     }

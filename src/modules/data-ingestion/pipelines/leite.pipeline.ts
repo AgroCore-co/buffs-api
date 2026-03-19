@@ -27,7 +27,7 @@ export class LeitePipeline {
       method: 'import',
       propriedadeId,
       userId,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+       
       fileName: file.originalname,
     });
 

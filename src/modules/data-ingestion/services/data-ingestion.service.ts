@@ -73,7 +73,7 @@ export class DataIngestionService {
       userId,
     });
 
-    await this.leitePipeline['validator'].validatePropriedadeAccess(userId, propriedadeId);
+    await this.leitePipeline.validator.validatePropriedadeAccess(userId, propriedadeId);
     return this.leitePipeline.export(filters);
   }
 
@@ -87,7 +87,7 @@ export class DataIngestionService {
       userId,
     });
 
-    await this.pesagemPipeline['validator'].validatePropriedadeAccess(userId, propriedadeId);
+    await this.pesagemPipeline.validator.validatePropriedadeAccess(userId, propriedadeId);
     return this.pesagemPipeline.export(filters);
   }
 
@@ -101,7 +101,7 @@ export class DataIngestionService {
       userId,
     });
 
-    await this.reproducaoPipeline['validator'].validatePropriedadeAccess(userId, propriedadeId);
+    await this.reproducaoPipeline.validator.validatePropriedadeAccess(userId, propriedadeId);
     return this.reproducaoPipeline.export(filters);
   }
 

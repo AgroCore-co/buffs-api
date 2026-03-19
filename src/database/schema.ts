@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access -- Drizzle ORM forward-reference pattern in foreignKey callbacks */
+ 
 import { pgTable, uuid, varchar, timestamp, index, foreignKey, integer, text, boolean, numeric, unique, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { geometry } from './custom-types';
