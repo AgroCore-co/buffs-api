@@ -6,36 +6,50 @@ import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/dat
 import { RegistrosRepositoryDrizzle } from './repositories/registros.repository.drizzle';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { calculatePaginationParams, createPaginatedResponse } from '../../../core/utils/pagination.utils';
+import { DatabaseService } from '../../../core/database/database.service';
+import { eq, and, isNull } from 'drizzle-orm';
+import { alimentacaodef, grupo } from '../../../database/schema';
+
+type CreateRegistroPayload = CreateRegistroAlimentacaoDto & { id_usuario: string };
 
 @Injectable()
 export class RegistrosService {
   constructor(
     private readonly registrosRepo: RegistrosRepositoryDrizzle,
     private readonly logger: LoggerService,
+    private readonly databaseService: DatabaseService,
   ) {}
 
-  async create(dto: CreateRegistroAlimentacaoDto) {
+  async create(dto: CreateRegistroPayload) {
     // Validar se o grupo pertence à propriedade
-    const { data: grupo, error: grupoError } = await this.registrosRepo.findGrupoById(dto.id_grupo);
+    const grupoData = await this.databaseService.db.query.grupo.findFirst({
+      where: and(eq(grupo.idGrupo, dto.id_grupo), isNull(grupo.deletedAt)),
+      columns: {
+        idPropriedade: true,
+      },
+    });
 
-    if (grupoError || !grupo) {
-      this.logger.logError(grupoError, { module: 'RegistrosAlimentacao', method: 'create', step: 'validacao_grupo' });
+    if (!grupoData) {
       throw new NotFoundException('Grupo não encontrado.');
     }
 
-    if (grupo.idPropriedade !== dto.id_propriedade) {
+    if (grupoData.idPropriedade !== dto.id_propriedade) {
       throw new BadRequestException('O grupo informado não pertence à propriedade especificada.');
     }
 
     // Validar se a definição de alimentação pertence à propriedade
-    const { data: alimentDef, error: alimentError } = await this.registrosRepo.findAlimentDefById(dto.id_aliment_def);
+    const alimentDefData = await this.databaseService.db.query.alimentacaodef.findFirst({
+      where: and(eq(alimentacaodef.idAlimentDef, dto.id_aliment_def), isNull(alimentacaodef.deletedAt)),
+      columns: {
+        idPropriedade: true,
+      },
+    });
 
-    if (alimentError || !alimentDef) {
-      this.logger.logError(alimentError, { module: 'RegistrosAlimentacao', method: 'create', step: 'validacao_alimentacao_def' });
+    if (!alimentDefData) {
       throw new NotFoundException('Definição de alimentação não encontrada.');
     }
 
-    if (alimentDef.idPropriedade !== dto.id_propriedade) {
+    if (alimentDefData.idPropriedade !== dto.id_propriedade) {
       throw new BadRequestException('A definição de alimentação informada não pertence à propriedade especificada.');
     }
 

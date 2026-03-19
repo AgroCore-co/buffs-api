@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, ParseUUIDPipe, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, ParseUUIDPipe, UseGuards, Query, ForbiddenException } from '@nestjs/common';
 import { RegistrosService } from './registros.service';
 import { CreateRegistroAlimentacaoDto } from './dto/create-registro.dto';
 import { UpdateRegistroAlimentacaoDto } from './dto/update-registro.dto';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
+import { User } from '../../auth/decorators/user.decorator';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -22,7 +23,6 @@ export class RegistrosController {
     - id_propriedade: UUID da propriedade
     - id_grupo: UUID do grupo de búfalos
     - id_aliment_def: UUID da definição de alimentação (use GET /alimentacoes-def/propriedade/:id para listar)
-    - id_usuario: UUID do usuário que está registrando
     - quantidade: Valor numérico positivo
     - unidade_medida: String (kg, g, L, etc)
     
@@ -35,17 +35,12 @@ export class RegistrosController {
   @ApiResponse({ status: 201, description: 'Registro criado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos. Verifique os campos obrigatórios e formatos.' })
   @ApiResponse({ status: 401, description: 'Não autorizado. Token de autenticação inválido ou ausente.' })
-  create(@Body() dto: CreateRegistroAlimentacaoDto) {
-    return this.service.create(dto);
-  }
+  create(@Body() dto: CreateRegistroAlimentacaoDto, @User('id_usuario') idUsuario: string | null) {
+    if (!idUsuario) {
+      throw new ForbiddenException('Usuário autenticado sem perfil cadastrado.');
+    }
 
-  @Get()
-  @ApiOperation({ summary: 'Lista registros de alimentação' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
-  @ApiResponse({ status: 200, description: 'Lista retornada.' })
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.service.findAll(paginationDto);
+    return this.service.create({ ...dto, id_usuario: idUsuario });
   }
 
   @Get('propriedade/:id_propriedade')

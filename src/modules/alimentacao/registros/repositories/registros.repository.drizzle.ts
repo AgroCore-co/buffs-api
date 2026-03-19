@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, desc, count, asc } from 'drizzle-orm';
-import { alimregistro, alimentacaodef, grupo, usuario } from 'src/database/schema';
+import { eq, desc, count, and, isNull } from 'drizzle-orm';
+import { alimregistro } from 'src/database/schema';
 
 /**
  * Repository Drizzle para alimregistro (Registros de Alimentação)
@@ -41,6 +41,7 @@ export class RegistrosRepositoryDrizzle {
   async findAll(limit: number, offset: number) {
     try {
       const result = await this.databaseService.db.query.alimregistro.findMany({
+        where: isNull(alimregistro.deletedAt),
         orderBy: [desc(alimregistro.createdAt)],
         limit,
         offset,
@@ -57,7 +58,7 @@ export class RegistrosRepositoryDrizzle {
    */
   async countAll() {
     try {
-      const result = await this.databaseService.db.select({ count: count() }).from(alimregistro);
+      const result = await this.databaseService.db.select({ count: count() }).from(alimregistro).where(isNull(alimregistro.deletedAt));
 
       return { count: result[0]?.count || 0, error: null };
     } catch (error) {
@@ -71,7 +72,7 @@ export class RegistrosRepositoryDrizzle {
   async findByPropriedade(idPropriedade: string, limit: number, offset: number) {
     try {
       const result = await this.databaseService.db.query.alimregistro.findMany({
-        where: eq(alimregistro.idPropriedade, idPropriedade),
+        where: and(eq(alimregistro.idPropriedade, idPropriedade), isNull(alimregistro.deletedAt)),
         with: {
           alimentacaodef: {
             columns: {
@@ -106,7 +107,10 @@ export class RegistrosRepositoryDrizzle {
    */
   async countByPropriedade(idPropriedade: string) {
     try {
-      const result = await this.databaseService.db.select({ count: count() }).from(alimregistro).where(eq(alimregistro.idPropriedade, idPropriedade));
+      const result = await this.databaseService.db
+        .select({ count: count() })
+        .from(alimregistro)
+        .where(and(eq(alimregistro.idPropriedade, idPropriedade), isNull(alimregistro.deletedAt)));
 
       return { count: result[0]?.count || 0, error: null };
     } catch (error) {
@@ -120,7 +124,7 @@ export class RegistrosRepositoryDrizzle {
   async findOne(idRegistro: string) {
     try {
       const result = await this.databaseService.db.query.alimregistro.findFirst({
-        where: eq(alimregistro.idRegistro, idRegistro),
+        where: and(eq(alimregistro.idRegistro, idRegistro), isNull(alimregistro.deletedAt)),
       });
 
       if (!result) {
@@ -144,16 +148,16 @@ export class RegistrosRepositoryDrizzle {
       };
 
       // Mapeia snake_case para camelCase
-      if (data.id_propriedade !== undefined) updateData.idPropriedade = data.id_propriedade;
-      if (data.id_grupo !== undefined) updateData.idGrupo = data.id_grupo;
-      if (data.id_aliment_def !== undefined) updateData.idAlimentDef = data.id_aliment_def;
-      if (data.id_usuario !== undefined) updateData.idUsuario = data.id_usuario;
       if (data.quantidade !== undefined) updateData.quantidade = data.quantidade;
       if (data.unidade_medida !== undefined) updateData.unidadeMedida = data.unidade_medida;
       if (data.freq_dia !== undefined) updateData.freqDia = data.freq_dia;
       if (data.dt_registro !== undefined) updateData.dtRegistro = data.dt_registro;
 
-      const result = await this.databaseService.db.update(alimregistro).set(updateData).where(eq(alimregistro.idRegistro, idRegistro)).returning();
+      const result = await this.databaseService.db
+        .update(alimregistro)
+        .set(updateData)
+        .where(and(eq(alimregistro.idRegistro, idRegistro), isNull(alimregistro.deletedAt)))
+        .returning();
 
       if (!result || result.length === 0) {
         return { data: null, error: { message: 'Registro de alimentação não encontrado' } };
@@ -170,45 +174,17 @@ export class RegistrosRepositoryDrizzle {
    */
   async remove(idRegistro: string) {
     try {
-      await this.databaseService.db.delete(alimregistro).where(eq(alimregistro.idRegistro, idRegistro));
+      const result = await this.databaseService.db
+        .update(alimregistro)
+        .set({ deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+        .where(and(eq(alimregistro.idRegistro, idRegistro), isNull(alimregistro.deletedAt)))
+        .returning();
+
+      if (!result || result.length === 0) {
+        return { data: null, error: { message: 'Registro de alimentação não encontrado' } };
+      }
 
       return { data: null, error: null };
-    } catch (error) {
-      return { data: null, error };
-    }
-  }
-
-  /**
-   * Busca grupo por ID (para validação)
-   */
-  async findGrupoById(idGrupo: string) {
-    try {
-      const result = await this.databaseService.db.query.grupo.findFirst({
-        where: eq(grupo.idGrupo, idGrupo),
-        columns: {
-          idPropriedade: true,
-        },
-      });
-
-      return { data: result, error: null };
-    } catch (error) {
-      return { data: null, error };
-    }
-  }
-
-  /**
-   * Busca definição de alimentação por ID (para validação)
-   */
-  async findAlimentDefById(idAlimentDef: string) {
-    try {
-      const result = await this.databaseService.db.query.alimentacaodef.findFirst({
-        where: eq(alimentacaodef.idAlimentDef, idAlimentDef),
-        columns: {
-          idPropriedade: true,
-        },
-      });
-
-      return { data: result, error: null };
     } catch (error) {
       return { data: null, error };
     }
