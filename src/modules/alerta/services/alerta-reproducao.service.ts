@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AlertasService } from '../alerta.service';
 import { ReproducaoRepositoryDrizzle } from '../repositories/reproducao.repository.drizzle';
 import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
-import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
+import { CreateAlertaDto, NichoAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, formatarDataBR, calcularIdadeEmMeses } from '../utils/alerta.constants';
 
 /**
@@ -78,21 +78,13 @@ export class AlertaReproducaoService {
    */
   private async criarAlertaNascimento(reproducao: any, dataPrevistaParto: Date, dataEvento: Date): Promise<boolean> {
     try {
-      const bufalaData = await this.bufaloRepo.buscarBufaloSimples(reproducao.idBufala);
+      const bufalaData = await this.bufaloRepo.buscarBufaloCompleto(reproducao.idBufala);
       if (!bufalaData) return false;
 
-      let grupoNome = 'Não informado';
-      if (bufalaData.idGrupo) {
-        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufalaData.idGrupo);
-        if (nomeGrupo) grupoNome = nomeGrupo;
-      }
+      const grupoNome = bufalaData.grupo?.nomeGrupo ?? 'Não informado';
+      const propriedadeNome = bufalaData.propriedade?.nome ?? 'Não informada';
 
-      let propriedadeNome = 'Não informada';
       const propriedadeId = reproducao.idPropriedade || bufalaData.idPropriedade;
-      if (propriedadeId) {
-        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeId);
-        if (nomeProp) propriedadeNome = nomeProp;
-      }
 
       const alertaDto: CreateAlertaDto = {
         animal_id: bufalaData.idBufalo,
@@ -161,21 +153,13 @@ export class AlertaReproducaoService {
    */
   private async criarAlertaCoberturaSemDiagnostico(cobertura: any, diasDesdeCobertura: number, hoje: Date): Promise<boolean> {
     try {
-      const bufalaData = await this.bufaloRepo.buscarBufaloSimples(cobertura.idBufala);
+      const bufalaData = await this.bufaloRepo.buscarBufaloCompleto(cobertura.idBufala);
       if (!bufalaData) return false;
 
-      let grupoNome = 'Não informado';
-      if (bufalaData.idGrupo) {
-        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufalaData.idGrupo);
-        if (nomeGrupo) grupoNome = nomeGrupo;
-      }
+      const grupoNome = bufalaData.grupo?.nomeGrupo ?? 'Não informado';
+      const propriedadeNome = bufalaData.propriedade?.nome ?? 'Não informada';
 
-      let propriedadeNome = 'Não informada';
       const propriedadeId = cobertura.idPropriedade || bufalaData.idPropriedade;
-      if (propriedadeId) {
-        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeId);
-        if (nomeProp) propriedadeNome = nomeProp;
-      }
 
       const alertaDto: CreateAlertaDto = {
         animal_id: bufalaData.idBufalo,
@@ -267,17 +251,9 @@ export class AlertaReproducaoService {
    */
   private async criarAlertaFemeaVazia(femea: any, diasSemCobertura: number, hoje: Date): Promise<boolean> {
     try {
-      let grupoNome = 'Não informado';
-      if (femea.idGrupo) {
-        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(femea.idGrupo);
-        if (nomeGrupo) grupoNome = nomeGrupo;
-      }
-
-      let propriedadeNome = 'Não informada';
-      if (femea.idPropriedade) {
-        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(femea.idPropriedade);
-        if (nomeProp) propriedadeNome = nomeProp;
-      }
+      const femeaCompleta = await this.bufaloRepo.buscarBufaloCompleto(femea.idBufalo);
+      const grupoNome = femeaCompleta?.grupo?.nomeGrupo ?? 'Não informado';
+      const propriedadeNome = femeaCompleta?.propriedade?.nome ?? 'Não informada';
 
       const mensagem =
         diasSemCobertura === Infinity

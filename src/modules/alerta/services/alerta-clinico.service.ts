@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AlertasService } from '../alerta.service';
 import { SanitarioRepositoryDrizzle } from '../repositories/sanitario.repository.drizzle';
 import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
-import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
+import { CreateAlertaDto, NichoAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, calcularIdadeEmMeses } from '../utils/alerta.constants';
 
 /**
@@ -48,16 +48,34 @@ export class AlertaClinicoService {
         return 0;
       }
 
+      const [tratamentosRecentes, pesagensRecentes] = await Promise.all([
+        this.sanitarioRepo.buscarTratamentosRecentesBatch(ids_bufalos, AlertaConstants.PERIODO_ANALISE_PESO_DIAS),
+        this.bufaloRepo.buscarPesagensRecentesBatch(ids_bufalos, AlertaConstants.PERIODO_ANALISE_PESO_DIAS),
+      ]);
+
+      const tratamentosPorBufalo = new Map<string, number>();
+      for (const tratamento of tratamentosRecentes) {
+        tratamentosPorBufalo.set(tratamento.idBufalo, (tratamentosPorBufalo.get(tratamento.idBufalo) ?? 0) + 1);
+      }
+
+      const pesagensPorBufalo = new Map<string, Array<{ peso: string | null }>>();
+      for (const pesagem of pesagensRecentes) {
+        if (!pesagensPorBufalo.has(pesagem.idBufalo)) {
+          pesagensPorBufalo.set(pesagem.idBufalo, []);
+        }
+
+        pesagensPorBufalo.get(pesagem.idBufalo)!.push({
+          peso: pesagem.peso,
+        });
+      }
+
       let alertasCriados = 0;
       const hoje = new Date();
 
       for (const id_bufalo of ids_bufalos) {
         try {
-          // Verificar múltiplos tratamentos
-          const multiplos = await this.verificarTratamentosMultiplos(id_bufalo);
-
-          // Verificar ganho de peso
-          const pesoInsuficiente = await this.verificarGanhoPesoInsuficiente(id_bufalo);
+          const multiplos = (tratamentosPorBufalo.get(id_bufalo) ?? 0) >= AlertaConstants.TRATAMENTOS_MULTIPLOS_THRESHOLD;
+          const pesoInsuficiente = this.verificarGanhoPesoInsuficiente(pesagensPorBufalo.get(id_bufalo) ?? []);
 
           if (multiplos || pesoInsuficiente) {
             const alertaCriado = await this.criarAlertaSinaisClinicosPrecoces(id_bufalo, multiplos, pesoInsuficiente, hoje, id_propriedade);
@@ -77,19 +95,10 @@ export class AlertaClinicoService {
   }
 
   /**
-   * Verifica se búfalo teve múltiplos tratamentos recentes.
-   */
-  private async verificarTratamentosMultiplos(id_bufalo: string): Promise<boolean> {
-    const tratamentos = await this.sanitarioRepo.buscarTratamentosRecentes(id_bufalo, AlertaConstants.PERIODO_ANALISE_PESO_DIAS);
-
-    return !!(tratamentos && tratamentos.length >= AlertaConstants.TRATAMENTOS_MULTIPLOS_THRESHOLD);
-  } /**
    * Verifica se búfalo teve ganho de peso insuficiente.
    */
-  private async verificarGanhoPesoInsuficiente(id_bufalo: string): Promise<boolean> {
-    const pesagens = await this.bufaloRepo.buscarPesagensRecentes(id_bufalo, AlertaConstants.PERIODO_ANALISE_PESO_DIAS);
-
-    if (!pesagens || pesagens.length < AlertaConstants.MIN_PESAGENS_ANALISE) {
+  private verificarGanhoPesoInsuficiente(pesagens: Array<{ peso: string | null }>): boolean {
+    if (pesagens.length < AlertaConstants.MIN_PESAGENS_ANALISE) {
       return false; // Dados insuficientes
     }
 
@@ -111,21 +120,13 @@ export class AlertaClinicoService {
     id_propriedade?: string,
   ): Promise<boolean> {
     try {
-      const bufaloData = await this.bufaloRepo.buscarBufaloSimples(id_bufalo);
+      const bufaloData = await this.bufaloRepo.buscarBufaloCompleto(id_bufalo);
       if (!bufaloData) return false;
 
-      let grupoNome = 'Não informado';
-      if (bufaloData.idGrupo) {
-        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufaloData.idGrupo);
-        if (nomeGrupo) grupoNome = nomeGrupo;
-      }
+      const grupoNome = bufaloData.grupo?.nomeGrupo ?? 'Não informado';
+      const propriedadeNome = bufaloData.propriedade?.nome ?? 'Não informada';
 
-      let propriedadeNome = 'Não informada';
       const propriedadeIdFinal = id_propriedade || bufaloData.idPropriedade;
-      if (propriedadeIdFinal) {
-        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeIdFinal);
-        if (nomeProp) propriedadeNome = nomeProp;
-      }
 
       let motivo = `Sinais clínicos precoces em ${bufaloData.nome}: `;
       const sinais: string[] = [];

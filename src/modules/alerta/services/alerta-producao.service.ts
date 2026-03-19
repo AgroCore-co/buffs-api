@@ -157,21 +157,13 @@ export class AlertaProducaoService {
     id_propriedade?: string,
   ): Promise<boolean> {
     try {
-      const bufalaData = await this.bufaloRepo.buscarBufaloSimples(id_bufala);
+      const bufalaData = await this.bufaloRepo.buscarBufaloCompleto(id_bufala);
       if (!bufalaData) return false;
 
-      let grupoNome = 'Não informado';
-      if (bufalaData.idGrupo) {
-        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufalaData.idGrupo);
-        if (nomeGrupo) grupoNome = nomeGrupo;
-      }
+      const grupoNome = bufalaData.grupo?.nomeGrupo ?? 'Não informado';
+      const propriedadeNome = bufalaData.propriedade?.nome ?? 'Não informada';
 
-      let propriedadeNome = 'Não informada';
       const propriedadeIdFinal = id_propriedade || bufalaData.idPropriedade;
-      if (propriedadeIdFinal) {
-        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeIdFinal);
-        if (nomeProp) propriedadeNome = nomeProp;
-      }
 
       // Prioridade baseada na gravidade da queda
       const prioridade = analise.percentualQueda >= AlertaConstants.QUEDA_PRODUCAO_CRITICA ? PrioridadeAlerta.ALTA : PrioridadeAlerta.MEDIA;

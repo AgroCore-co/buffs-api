@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as amqplib from 'amqplib';
 import { DLX_EXCHANGE, RabbitMQQueues, RABBITMQ_DEFAULT_URL } from './rabbitmq.constants';
@@ -13,13 +13,13 @@ import { DLX_EXCHANGE, RabbitMQQueues, RABBITMQ_DEFAULT_URL } from './rabbitmq.c
  * Após criar, fecha a conexão. É executado apenas uma vez no startup.
  */
 @Injectable()
-export class RabbitMQBootstrapService implements OnModuleInit {
+export class RabbitMQBootstrapService implements OnApplicationBootstrap {
   private readonly logger = new Logger(RabbitMQBootstrapService.name);
   private static readonly MAX_RETRIES = 3;
 
   constructor(private readonly configService: ConfigService) {}
 
-  async onModuleInit(): Promise<void> {
+  async onApplicationBootstrap(): Promise<void> {
     const url = this.configService.get<string>('RABBITMQ_URL', RABBITMQ_DEFAULT_URL);
 
     for (let attempt = 1; attempt <= RabbitMQBootstrapService.MAX_RETRIES; attempt++) {

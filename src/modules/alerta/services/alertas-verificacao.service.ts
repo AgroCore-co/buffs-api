@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { NichoAlerta } from '../dto/create-alerta.dto';
 import { AlertaReproducaoService } from './alerta-reproducao.service';
 import { AlertaSanitarioService } from './alerta-sanitario.service';
@@ -13,6 +13,8 @@ interface VerificacaoResultado {
 
 @Injectable()
 export class AlertasVerificacaoService {
+  private readonly logger = new Logger(AlertasVerificacaoService.name);
+
   constructor(
     private readonly reproducaoService: AlertaReproducaoService,
     private readonly sanitarioService: AlertaSanitarioService,
@@ -24,19 +26,33 @@ export class AlertasVerificacaoService {
   async verificarPorPropriedade(idPropriedade: string, nichos?: string | string[]) {
     const nichosArray = this.normalizarNichos(nichos);
 
-    const resultados = await Promise.all(
+    const resultados = await Promise.allSettled(
       nichosArray.map(async (nicho) => {
         const resultado = await this.executarNicho(nicho, idPropriedade);
         return { nicho, ...resultado };
       }),
     );
 
-    const detalhes = resultados.reduce<Record<string, unknown>>((acc, item) => {
-      acc[item.nicho] = item.detalhes;
+    const detalhes = resultados.reduce<Record<string, unknown>>((acc, item, index) => {
+      const nicho = nichosArray[index];
+
+      if (item.status === 'fulfilled') {
+        acc[nicho] = item.value.detalhes;
+        return acc;
+      }
+
+      const reason = item.reason instanceof Error ? item.reason.message : String(item.reason);
+      this.logger.error(`Falha na verificacao do nicho ${nicho}: ${reason}`);
+      acc[nicho] = { erro: reason };
       return acc;
     }, {});
 
-    const total = resultados.reduce((acc, item) => acc + item.total, 0);
+    const total = resultados.reduce((acc, item) => {
+      if (item.status === 'fulfilled') {
+        return acc + item.value.total;
+      }
+      return acc;
+    }, 0);
 
     return {
       success: true,

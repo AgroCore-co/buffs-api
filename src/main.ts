@@ -5,14 +5,12 @@ import { ValidationPipe } from '@nestjs/common';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
-import * as dotenv from 'dotenv';
 import { RabbitMQQueues, DLX_EXCHANGE, RABBITMQ_DEFAULT_URL } from './core/rabbitmq/rabbitmq.constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['log', 'debug', 'error', 'verbose', 'warn'],
   });
-  dotenv.config();
 
   // ── RabbitMQ Microservice (Hybrid App) ────────────────────────────
   const configService = app.get(ConfigService);

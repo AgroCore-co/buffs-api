@@ -86,6 +86,37 @@ export class SanitarioRepositoryDrizzle {
   }
 
   /**
+   * Busca tratamentos recentes de múltiplos búfalos em uma única consulta.
+   */
+  async buscarTratamentosRecentesBatch(ids_bufalos: string[], diasAtras: number) {
+    try {
+      if (!ids_bufalos.length) {
+        return [];
+      }
+
+      const dataLimite = new Date();
+      dataLimite.setDate(dataLimite.getDate() - diasAtras);
+      const dataLimiteStr = dataLimite.toISOString();
+
+      return await this.databaseService.db.query.dadossanitarios.findMany({
+        where: and(inArray(dadossanitarios.idBufalo, ids_bufalos), gte(dadossanitarios.dtAplicacao, dataLimiteStr)),
+        columns: {
+          idSanit: true,
+          idBufalo: true,
+        },
+      });
+    } catch (error) {
+      this.logger.logError(error, {
+        repository: 'SanitarioRepositoryDrizzle',
+        method: 'buscarTratamentosRecentesBatch',
+        ids_bufalos,
+        diasAtras,
+      });
+      throw new InternalServerErrorException(`Erro ao buscar tratamentos recentes em lote: ${error.message}`);
+    }
+  }
+
+  /**
    * Busca vacinações programadas nos próximos X dias.
    */
   async buscarVacinacoesProgramadas(diasAntecedencia: number, ids_bufalos?: string[]) {
