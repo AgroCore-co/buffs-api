@@ -50,15 +50,16 @@ export class AlertaRepositoryDrizzle {
    * Busca alertas existentes por critérios de identificação única
    * Usado para verificação de duplicatas na lógica de idempotência
    */
-  async findExisting(tipoEvento: string, idEvento: string, animalId: string, nicho: string) {
+  async findExisting(tipoEvento: string, idEvento: string, animalId: string | undefined, nicho: string) {
     try {
+      const conditions = [eq(alertas.tipoEventoOrigem, tipoEvento), eq(alertas.idEventoOrigem, idEvento), eq(alertas.nicho, nicho)];
+
+      if (animalId) {
+        conditions.push(eq(alertas.animalId, animalId));
+      }
+
       const result = await this.databaseService.db.query.alertas.findMany({
-        where: and(
-          eq(alertas.tipoEventoOrigem, tipoEvento),
-          eq(alertas.idEventoOrigem, idEvento),
-          eq(alertas.animalId, animalId),
-          eq(alertas.nicho, nicho),
-        ),
+        where: and(...conditions),
         columns: {
           idAlerta: true,
           visto: true,
@@ -77,16 +78,21 @@ export class AlertaRepositoryDrizzle {
    * Busca alerta recorrente na mesma data que não foi visto
    * Usado para evitar duplicatas de alertas recorrentes no mesmo dia
    */
-  async findRecorrenteSameDate(tipoEvento: string, idEvento: string, animalId: string, dataAlerta: string) {
+  async findRecorrenteSameDate(tipoEvento: string, idEvento: string, animalId: string | undefined, dataAlerta: string) {
     try {
+      const conditions = [
+        eq(alertas.tipoEventoOrigem, tipoEvento),
+        eq(alertas.idEventoOrigem, idEvento),
+        eq(alertas.dataAlerta, dataAlerta),
+        eq(alertas.visto, false),
+      ];
+
+      if (animalId) {
+        conditions.push(eq(alertas.animalId, animalId));
+      }
+
       const result = await this.databaseService.db.query.alertas.findFirst({
-        where: and(
-          eq(alertas.tipoEventoOrigem, tipoEvento),
-          eq(alertas.idEventoOrigem, idEvento),
-          eq(alertas.animalId, animalId),
-          eq(alertas.dataAlerta, dataAlerta),
-          eq(alertas.visto, false),
-        ),
+        where: and(...conditions),
         columns: {
           idAlerta: true,
         },
@@ -290,6 +296,35 @@ export class AlertaRepositoryDrizzle {
       if (data.tipo_evento_origem !== undefined) updateData.tipoEventoOrigem = data.tipo_evento_origem;
 
       const result = await this.databaseService.db.update(alertas).set(updateData).where(eq(alertas.idAlerta, idAlerta)).returning();
+
+      if (!result || result.length === 0) {
+        return { data: null, error: { code: 'PGRST116', message: 'Alerta não encontrado' } };
+      }
+
+      return { data: result[0], error: null };
+    } catch (error) {
+      return { data: null, error };
+    }
+  }
+
+  /**
+   * Atualiza apenas a prioridade de um alerta.
+   * Caminho otimizado para uso no consumer de classificação IA.
+   */
+  async atualizarPrioridade(idAlerta: string, prioridade: string) {
+    try {
+      const result = await this.databaseService.db
+        .update(alertas)
+        .set({
+          prioridade,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(alertas.idAlerta, idAlerta))
+        .returning({
+          idAlerta: alertas.idAlerta,
+          prioridade: alertas.prioridade,
+          dataAlerta: alertas.dataAlerta,
+        });
 
       if (!result || result.length === 0) {
         return { data: null, error: { code: 'PGRST116', message: 'Alerta não encontrado' } };

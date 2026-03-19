@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AlertasService } from '../alerta.service';
 import { SanitarioRepositoryDrizzle } from '../repositories/sanitario.repository.drizzle';
-import { ProducaoRepositoryDrizzle } from '../repositories/producao.repository.drizzle';
 import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
 import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, calcularIdadeEmMeses } from '../utils/alerta.constants';
@@ -20,7 +19,6 @@ export class AlertaClinicoService {
   constructor(
     private readonly alertasService: AlertasService,
     private readonly sanitarioRepo: SanitarioRepositoryDrizzle,
-    private readonly producaoRepo: ProducaoRepositoryDrizzle,
     private readonly bufaloRepo: BufaloRepositoryDrizzle,
   ) {}
 
@@ -89,7 +87,7 @@ export class AlertaClinicoService {
    * Verifica se búfalo teve ganho de peso insuficiente.
    */
   private async verificarGanhoPesoInsuficiente(id_bufalo: string): Promise<boolean> {
-    const pesagens = await this.producaoRepo.buscarPesagensRecentes(id_bufalo, AlertaConstants.PERIODO_ANALISE_PESO_DIAS);
+    const pesagens = await this.bufaloRepo.buscarPesagensRecentes(id_bufalo, AlertaConstants.PERIODO_ANALISE_PESO_DIAS);
 
     if (!pesagens || pesagens.length < AlertaConstants.MIN_PESAGENS_ANALISE) {
       return false; // Dados insuficientes

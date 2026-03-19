@@ -17,19 +17,20 @@ export enum PrioridadeAlerta {
 }
 
 export class CreateAlertaDto {
-  @ApiProperty({ description: 'ID do búfalo relacionado ao alerta', example: 12 })
+  @ApiProperty({ description: 'ID do búfalo relacionado ao alerta', example: 12, required: false })
   @IsUUID()
-  animal_id: string;
+  @IsOptional()
+  animal_id?: string;
 
-  @ApiProperty({ description: 'Nome do grupo/lote do animal', example: 'Lote A-01' })
+  @ApiProperty({ description: 'Nome do grupo/lote do animal', example: 'Lote A-01', required: false })
   @IsString()
-  @IsNotEmpty()
-  grupo: string;
+  @IsOptional()
+  grupo?: string;
 
-  @ApiProperty({ description: 'Nome da propriedade onde o animal está', example: 'Fazenda Santa Clara' })
+  @ApiProperty({ description: 'Nome da propriedade onde o animal está', example: 'Fazenda Santa Clara', required: false })
   @IsString()
-  @IsNotEmpty()
-  localizacao: string;
+  @IsOptional()
+  localizacao?: string;
 
   @ApiProperty({ description: 'ID da propriedade onde o alerta foi gerado (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
   @IsUUID()

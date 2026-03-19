@@ -3,24 +3,9 @@ import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
 import { GeminiService } from 'src/core/gemini/gemini.service';
 import { RabbitMQPatterns } from 'src/core/rabbitmq/rabbitmq.constants';
 import { AlertasService } from '../alerta.service';
+import { AlertaCriadoPayload } from '../interfaces/alerta-criado-payload.interface';
 
 const GEMINI_TIMEOUT_MS = 10_000;
-
-/**
- * Payload emitido pelo AlertasService quando um alerta é criado.
- */
-export interface AlertaCriadoPayload {
-  id_alerta: string;
-  nicho: string;
-  prioridade?: string | null;
-  titulo: string;
-  descricao?: string | null;
-  texto_ocorrencia_clinica?: string | null;
-  data_ocorrencia: string;
-  animal_id?: string | null;
-  id_propriedade?: string | null;
-  grupo?: string | null;
-}
 
 /** Tipagem mínima do canal RabbitMQ obtido via RmqContext. */
 interface RmqChannel {

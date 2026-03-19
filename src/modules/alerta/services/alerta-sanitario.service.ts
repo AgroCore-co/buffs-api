@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AlertasService } from '../alerta.service';
 import { SanitarioRepositoryDrizzle } from '../repositories/sanitario.repository.drizzle';
 import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
-import { ProducaoRepositoryDrizzle } from '../repositories/producao.repository.drizzle';
 import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, formatarDataBR } from '../utils/alerta.constants';
 
@@ -21,7 +20,6 @@ export class AlertaSanitarioService {
   constructor(
     private readonly alertasService: AlertasService,
     private readonly sanitarioRepo: SanitarioRepositoryDrizzle,
-    private readonly producaoRepo: ProducaoRepositoryDrizzle,
     private readonly bufaloRepo: BufaloRepositoryDrizzle,
   ) {}
 
@@ -131,7 +129,7 @@ export class AlertaSanitarioService {
         }
       }
 
-      const vacinacoes = await this.producaoRepo.buscarVacinacoesprogramadas(AlertaConstants.ANTECEDENCIA_VACINACAO_DIAS, ids_bufalos);
+      const vacinacoes = await this.sanitarioRepo.buscarVacinacoesProgramadas(AlertaConstants.ANTECEDENCIA_VACINACAO_DIAS, ids_bufalos);
 
       if (!vacinacoes || vacinacoes.length === 0) {
         this.logger.log('Nenhuma vacinação programada encontrada.');

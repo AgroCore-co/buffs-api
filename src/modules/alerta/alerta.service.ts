@@ -8,7 +8,7 @@ import { createPaginatedResponse, calculatePaginationParams } from '../../core/u
 import { formatDateFields, formatDateFieldsArray } from '../../core/utils/date-formatter.utils';
 import { AlertaRepositoryDrizzle } from './repositories/alerta.repository.drizzle';
 import { RABBITMQ_SERVICE, RabbitMQPatterns } from 'src/core/rabbitmq/rabbitmq.constants';
-import { AlertaCriadoPayload } from './consumers/alertas.consumer';
+import { AlertaCriadoPayload } from './interfaces/alerta-criado-payload.interface';
 import { getErrorMessage } from 'src/core/utils/error.utils';
 
 interface AlertaFilter {
@@ -504,7 +504,7 @@ export class AlertasService {
   async atualizarPrioridade(id: string, prioridade: PrioridadeAlerta | string) {
     await this.findOne(id);
 
-    const { data, error } = await this.alertaRepo.update(id, { prioridade: prioridade as PrioridadeAlerta });
+    const { data, error } = await this.alertaRepo.atualizarPrioridade(id, prioridade);
 
     if (error) {
       const errorCode = (error as { code?: string })?.code;

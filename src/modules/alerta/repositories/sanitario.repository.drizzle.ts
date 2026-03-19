@@ -1,8 +1,8 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { eq, and, gte, lte, inArray } from 'drizzle-orm';
-import { dadossanitarios } from 'src/database/schema';
+import { eq, and, gte, lte, inArray, isNull } from 'drizzle-orm';
+import { dadossanitarios, medicacoes } from 'src/database/schema';
 
 /**
  * Repository Drizzle para busca de dados sanitários.
@@ -82,6 +82,57 @@ export class SanitarioRepositoryDrizzle {
         diasAtras,
       });
       throw new InternalServerErrorException(`Erro ao buscar tratamentos recentes: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca vacinações programadas nos próximos X dias.
+   */
+  async buscarVacinacoesProgramadas(diasAntecedencia: number, ids_bufalos?: string[]) {
+    try {
+      const hoje = new Date();
+      const dataLimite = new Date();
+      dataLimite.setDate(hoje.getDate() + diasAntecedencia);
+
+      const hojeStr = hoje.toISOString();
+      const dataLimiteStr = dataLimite.toISOString();
+
+      const conditions: any[] = [
+        gte(dadossanitarios.dtAplicacao, hojeStr),
+        lte(dadossanitarios.dtAplicacao, dataLimiteStr),
+        isNull(dadossanitarios.deletedAt),
+      ];
+
+      if (ids_bufalos && ids_bufalos.length > 0) {
+        conditions.push(inArray(dadossanitarios.idBufalo, ids_bufalos));
+      }
+
+      return await this.databaseService.db.query.dadossanitarios.findMany({
+        where: and(...conditions),
+        columns: {
+          idSanit: true,
+          dtAplicacao: true,
+          idBufalo: true,
+          doenca: true,
+        },
+        with: {
+          medicacoe: {
+            columns: {
+              tipoTratamento: true,
+              medicacao: true,
+            },
+            where: eq(medicacoes.tipoTratamento, 'Vacinação'),
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.logError(error, {
+        repository: 'SanitarioRepositoryDrizzle',
+        method: 'buscarVacinacoesProgramadas',
+        diasAntecedencia,
+        ids_bufalos,
+      });
+      throw new InternalServerErrorException(`Erro ao buscar vacinações programadas: ${error.message}`);
     }
   }
 }
