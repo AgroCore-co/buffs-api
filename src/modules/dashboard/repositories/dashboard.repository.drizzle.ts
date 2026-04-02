@@ -16,25 +16,6 @@ export class DashboardRepositoryDrizzle {
   ) {}
 
   /**
-   * Verifica se uma propriedade existe
-   */
-  async verificarPropriedadeExiste(id_propriedade: string) {
-    try {
-      return await this.databaseService.db.query.propriedade.findFirst({
-        where: eq(propriedade.idPropriedade, id_propriedade),
-        columns: { idPropriedade: true },
-      });
-    } catch (error) {
-      this.logger.logError(error, {
-        repository: 'DashboardRepositoryDrizzle',
-        method: 'verificarPropriedadeExiste',
-        id_propriedade,
-      });
-      throw new InternalServerErrorException(`Erro ao verificar existência da propriedade: ${error.message}`);
-    }
-  }
-
-  /**
    * Busca búfalos de uma propriedade com informações de raça
    */
   async buscarBufalosComRaca(id_propriedade: string) {
@@ -128,13 +109,13 @@ export class DashboardRepositoryDrizzle {
       return await this.databaseService.db
         .select({
           idCicloLactacao: ciclolactacao.idCicloLactacao,
-          idBufala:        ciclolactacao.idBufala,
-          dtParto:         ciclolactacao.dtParto,
-          dtSecagemReal:   ciclolactacao.dtSecagemReal,
-          nomeBufala:      bufalo.nome,
-          sexoBufala:      bufalo.sexo,
-          totalLeite:      sql<number>`COALESCE(SUM(${dadoslactacao.qtOrdenha}), 0)`,
-          qtdOrdenhas:     sql<number>`COUNT(${dadoslactacao.idLact})`,
+          idBufala: ciclolactacao.idBufala,
+          dtParto: ciclolactacao.dtParto,
+          dtSecagemReal: ciclolactacao.dtSecagemReal,
+          nomeBufala: bufalo.nome,
+          sexoBufala: bufalo.sexo,
+          totalLeite: sql<number>`COALESCE(SUM(${dadoslactacao.qtOrdenha}), 0)`,
+          qtdOrdenhas: sql<number>`COUNT(${dadoslactacao.idLact})`,
         })
         .from(ciclolactacao)
         .innerJoin(bufalo, eq(ciclolactacao.idBufala, bufalo.idBufalo))
@@ -144,17 +125,10 @@ export class DashboardRepositoryDrizzle {
             eq(ciclolactacao.idPropriedade, id_propriedade),
             sql`${ciclolactacao.dtSecagemReal} IS NOT NULL`,
             sql`EXTRACT(YEAR FROM ${ciclolactacao.dtSecagemReal}) = ${ano}`,
-            eq(bufalo.sexo, 'F')
-          )
+            eq(bufalo.sexo, 'F'),
+          ),
         )
-        .groupBy(
-          ciclolactacao.idCicloLactacao,
-          ciclolactacao.idBufala,
-          ciclolactacao.dtParto,
-          ciclolactacao.dtSecagemReal,
-          bufalo.nome,
-          bufalo.sexo,
-        );
+        .groupBy(ciclolactacao.idCicloLactacao, ciclolactacao.idBufala, ciclolactacao.dtParto, ciclolactacao.dtSecagemReal, bufalo.nome, bufalo.sexo);
     } catch (error) {
       this.logger.logError(error, {
         repository: 'DashboardRepositoryDrizzle',

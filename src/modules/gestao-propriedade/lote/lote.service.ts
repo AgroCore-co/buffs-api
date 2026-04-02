@@ -5,13 +5,13 @@ import { CreateLoteDto } from './dto/create-lote.dto';
 import { UpdateLoteDto } from './dto/update-lote.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { LoteRepositoryDrizzle } from './repositories';
-import { PropriedadeRepositoryDrizzle } from '../propriedade/repositories';
+import { GrupoRepositoryDrizzle } from '../../rebanho/grupo/repositories/grupo.repository.drizzle';
 
 @Injectable()
 export class LoteService {
   constructor(
     private readonly loteRepo: LoteRepositoryDrizzle,
-    private readonly propriedadeRepo: PropriedadeRepositoryDrizzle,
+    private readonly grupoRepository: GrupoRepositoryDrizzle,
     private readonly authHelper: AuthHelperService,
     private readonly logger: LoggerService,
   ) {}
@@ -32,29 +32,13 @@ export class LoteService {
     return lote;
   }
 
-  private async validateOwnership(propriedadeId: string, userId: string) {
-    // Verifica se o usuário é dono da propriedade
-    const propriedadeComoDono = await this.propriedadeRepo.buscarPropriedadeComoDono(propriedadeId, userId);
-
-    if (propriedadeComoDono) {
-      return; // É dono, pode prosseguir
-    }
-
-    // Se não é dono, verifica se é funcionário vinculado à propriedade
-    const propriedadeComoFuncionario = await this.propriedadeRepo.buscarVinculoFuncionario(propriedadeId, userId);
-
-    if (!propriedadeComoFuncionario) {
-      throw new NotFoundException(`Propriedade com ID ${propriedadeId} não encontrada ou não pertence a este usuário.`);
-    }
-  }
-
   /**
    * Valida se o grupo existe e pertence à mesma propriedade do lote
    */
   private async validateGrupoOwnership(grupoId: string, propriedadeId: string) {
     if (!grupoId) return; // Se não há grupo, não precisa validar
 
-    const grupo = await this.loteRepo.buscarGrupoPorId(grupoId);
+    const grupo = await this.grupoRepository.findById(grupoId);
 
     if (!grupo) {
       throw new NotFoundException(`Grupo com ID ${grupoId} não encontrado.`);
@@ -67,7 +51,7 @@ export class LoteService {
 
   async create(createLoteDto: CreateLoteDto, user: any) {
     const userId = await this.authHelper.getUserId(user);
-    await this.validateOwnership(createLoteDto.idPropriedade, userId);
+    await this.authHelper.validatePropriedadeAccess(userId, createLoteDto.idPropriedade);
 
     // Valida se o grupo pertence à mesma propriedade (se informado)
     if (createLoteDto.idGrupo) {
@@ -83,7 +67,7 @@ export class LoteService {
 
   async findAllByPropriedade(id_propriedade: string, user: any) {
     const userId = await this.authHelper.getUserId(user);
-    await this.validateOwnership(id_propriedade, userId);
+    await this.authHelper.validatePropriedadeAccess(userId, id_propriedade);
 
     const lotes = await this.loteRepo.buscarPorPropriedade(id_propriedade);
 
@@ -100,25 +84,14 @@ export class LoteService {
       throw new NotFoundException(`Lote com ID ${id} não encontrado.`);
     }
 
-    // Verifica se o usuário é dono da propriedade
-    if (lote.propriedade && !Array.isArray(lote.propriedade) && lote.propriedade.idDono === userId) {
-      delete (lote as any).propriedade;
-      return formatDateFields(this.parseGeoMapa(lote));
-    }
-
-    // Se não é dono, verifica se é funcionário
     if (!lote.idPropriedade) {
       throw new NotFoundException(`Lote com ID ${id} não encontrado ou não pertence a este usuário.`);
     }
 
-    const funcionarioData = await this.propriedadeRepo.buscarVinculoFuncionario(lote.idPropriedade, userId);
+    await this.authHelper.validatePropriedadeAccess(userId, lote.idPropriedade);
 
-    if (!funcionarioData) {
-      throw new NotFoundException(`Lote com ID ${id} não encontrado ou não pertence a este usuário.`);
-    }
-
-    delete (lote as any).propriedade;
-    return formatDateFields(this.parseGeoMapa(lote));
+    const { propriedade: _, ...lotePublico } = lote as Record<string, any>;
+    return formatDateFields(this.parseGeoMapa(lotePublico));
   }
 
   async update(id: string, updateLoteDto: UpdateLoteDto, user: any) {
@@ -130,7 +103,7 @@ export class LoteService {
     // Se a propriedade estiver sendo alterada, valida a posse da nova propriedade
     if (updateLoteDto.idPropriedade) {
       const userId = await this.authHelper.getUserId(user);
-      await this.validateOwnership(updateLoteDto.idPropriedade, userId);
+      await this.authHelper.validatePropriedadeAccess(userId, updateLoteDto.idPropriedade);
     }
 
     // Valida se o grupo pertence à mesma propriedade (se informado)

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, InternalServerErrorException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { CreatePropriedadeDto } from './dto/create-propriedade.dto';
@@ -25,7 +25,7 @@ export class PropriedadeService {
       if (error.message?.includes('foreign key')) {
         throw new BadRequestException(`O endereço com id ${createPropriedadeDto.idEndereco} não foi encontrado.`);
       }
-      console.error('Erro ao criar propriedade:', error);
+      this.logger.logError(error, { module: 'Propriedade', method: 'create' });
       throw new InternalServerErrorException('Falha ao criar a propriedade.');
     }
   }
@@ -38,11 +38,11 @@ export class PropriedadeService {
     this.logger.log(`[INICIO] Buscando propriedades do usuário ${userId}`);
 
     try {
-      // 1. Busca propriedades onde o usuário é DONO
-      const propriedadesComoDono = await this.propriedadeRepo.buscarPropriedadesComoDono(userId);
-
-      // 2. Busca propriedades onde o usuário é FUNCIONÁRIO
-      const propriedadesComoFuncionario = await this.propriedadeRepo.buscarPropriedadesComoFuncionario(userId);
+      // 1. Busca propriedades onde o usuário é DONO e FUNCIONÁRIO em paralelo
+      const [propriedadesComoDono, propriedadesComoFuncionario] = await Promise.all([
+        this.propriedadeRepo.buscarPropriedadesComoDono(userId),
+        this.propriedadeRepo.buscarPropriedadesComoFuncionario(userId),
+      ]);
 
       // 3. Combina as propriedades (removendo duplicatas)
       const propriedadesFuncionario = propriedadesComoFuncionario?.map((item: any) => item.propriedade) || [];
@@ -70,22 +70,15 @@ export class PropriedadeService {
    */
   async findOne(id: string, user: any) {
     const userId = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(userId, id);
 
-    // 1. Verifica se o usuário é dono da propriedade
-    const propriedadeComoDono = await this.propriedadeRepo.buscarPropriedadeComoDono(id, userId);
+    const propriedade = await this.propriedadeRepo.buscarPorIdInterno(id);
 
-    if (propriedadeComoDono) {
-      return formatDateFields(propriedadeComoDono);
+    if (!propriedade) {
+      throw new NotFoundException(`Propriedade com ID ${id} não encontrada.`);
     }
 
-    // 2. Verifica se o usuário é funcionário vinculado à propriedade
-    const vinculo = await this.propriedadeRepo.buscarVinculoFuncionario(id, userId);
-
-    if (vinculo?.propriedade) {
-      return formatDateFields(vinculo.propriedade as Record<string, unknown>);
-    }
-
-    throw new NotFoundException(`Propriedade com ID ${id} não encontrada ou não pertence a este usuário.`);
+    return formatDateFields(propriedade);
   }
 
   /**

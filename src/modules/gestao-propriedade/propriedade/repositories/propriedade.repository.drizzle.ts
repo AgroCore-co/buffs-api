@@ -1,8 +1,8 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { eq, and, or, isNull, desc } from 'drizzle-orm';
-import { propriedade, usuario, usuariopropriedade } from 'src/database/schema';
+import { eq, and, isNull } from 'drizzle-orm';
+import { propriedade, usuariopropriedade } from 'src/database/schema';
 import { CreatePropriedadeDto } from '../dto/create-propriedade.dto';
 import { UpdatePropriedadeDto } from '../dto/update-propriedade.dto';
 
@@ -16,27 +16,6 @@ export class PropriedadeRepositoryDrizzle {
     private readonly databaseService: DatabaseService,
     private readonly logger: LoggerService,
   ) {}
-
-  /**
-   * Busca usuário por email
-   */
-  async buscarUsuarioPorEmail(email: string) {
-    try {
-      return await this.databaseService.db.query.usuario.findFirst({
-        where: eq(usuario.email, email),
-        columns: {
-          idUsuario: true,
-        },
-      });
-    } catch (error) {
-      this.logger.logError(error, {
-        repository: 'PropriedadeRepositoryDrizzle',
-        method: 'buscarUsuarioPorEmail',
-        email,
-      });
-      throw new InternalServerErrorException(`Erro ao buscar usuário: ${error.message}`);
-    }
-  }
 
   /**
    * Cria uma nova propriedade
@@ -107,18 +86,21 @@ export class PropriedadeRepositoryDrizzle {
     }
   }
 
-  async findById(id: string) {
+  /**
+   * Busca uma propriedade por ID (uso interno após validação de acesso)
+   */
+  async buscarPorIdInterno(idPropriedade: string) {
     try {
       return await this.databaseService.db.query.propriedade.findFirst({
-        where: and(eq(propriedade.idPropriedade, id), isNull(propriedade.deletedAt)),
+        where: and(eq(propriedade.idPropriedade, idPropriedade), isNull(propriedade.deletedAt)),
       });
     } catch (error) {
       this.logger.logError(error, {
         repository: 'PropriedadeRepositoryDrizzle',
-        method: 'findById',
-        id,
+        method: 'buscarPorIdInterno',
+        idPropriedade,
       });
-      throw new InternalServerErrorException(`Erro ao buscar propriedade por ID: ${error.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar propriedade: ${error.message}`);
     }
   }
 
@@ -174,8 +156,6 @@ export class PropriedadeRepositoryDrizzle {
       };
 
       if (updatePropriedadeDto.nome !== undefined) updateData.nome = updatePropriedadeDto.nome;
-      if (updatePropriedadeDto.cnpj !== undefined) updateData.cnpj = updatePropriedadeDto.cnpj;
-      if (updatePropriedadeDto.idEndereco !== undefined) updateData.idEndereco = updatePropriedadeDto.idEndereco;
       if (updatePropriedadeDto.p_abcb !== undefined) updateData.pAbcb = updatePropriedadeDto.p_abcb;
       if (updatePropriedadeDto.tipoManejo !== undefined) updateData.tipoManejo = updatePropriedadeDto.tipoManejo;
 

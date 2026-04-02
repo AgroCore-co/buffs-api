@@ -18,7 +18,12 @@ export const endereco = pgTable('endereco', {
   pontoReferencia: varchar('ponto_referencia', { length: 150 }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
-});
+  deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+}, (table) => [
+  index('idx_endereco_deleted_at')
+    .using('btree', table.deletedAt.asc().nullsLast().op('timestamptz_ops'))
+    .where(sql`(deleted_at IS NULL)`),
+]);
 
 export const ciclolactacao = pgTable(
   'ciclolactacao',

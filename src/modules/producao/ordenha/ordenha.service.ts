@@ -1,12 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  InternalServerErrorException,
-  BadRequestException,
-  Logger,
-  UnauthorizedException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException, Logger } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { CreateDadosLactacaoDto } from './dto/create-ordenha.dto';
@@ -21,7 +13,6 @@ import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
 import { OrdenhaRepositoryDrizzle } from './repositories';
 import { BufaloRepositoryDrizzle } from '../../rebanho/bufalo/repositories/bufalo.repository.drizzle';
 import { LactacaoRepositoryDrizzle } from '../lactacao/repositories';
-import { PropriedadeRepositoryDrizzle } from '../../gestao-propriedade/propriedade/repositories/propriedade.repository.drizzle';
 
 @Injectable()
 export class OrdenhaService implements ISoftDelete {
@@ -32,7 +23,6 @@ export class OrdenhaService implements ISoftDelete {
     private readonly authHelper: AuthHelperService,
     private readonly bufaloRepository: BufaloRepositoryDrizzle,
     private readonly cicloRepository: LactacaoRepositoryDrizzle,
-    private readonly propriedadeRepository: PropriedadeRepositoryDrizzle,
     private readonly alertasService: AlertasService,
     private readonly geminiService: GeminiService,
     private readonly customLogger: LoggerService,
@@ -226,19 +216,18 @@ export class OrdenhaService implements ISoftDelete {
       throw new NotFoundException(`Búfala com ID ${id_bufala} não encontrada.`);
     }
 
-    // Acessando o id_dono através da relação aninhada.
-    const idDonoPropriedade = bufalaData.propriedade?.idDono;
+    const idPropriedade = bufalaData.idPropriedade || bufalaData.propriedade?.idPropriedade;
 
-    if (!idDonoPropriedade || idDonoPropriedade !== idUsuario) {
-      this.customLogger.warn('Acesso negado - usuário não tem permissão para acessar dados da búfala', {
+    if (!idPropriedade) {
+      this.customLogger.warn('Búfala sem propriedade associada', {
         module: 'OrdenhaService',
         method: 'findAllByBufala',
         bufalaId: id_bufala,
-        userId: idUsuario,
-        idDonoPropriedade,
       });
-      throw new UnauthorizedException(`Você não tem permissão para acessar os dados desta búfala.`);
+      throw new BadRequestException('Búfala sem propriedade associada.');
     }
+
+    await this.authHelper.validatePropriedadeAccess(idUsuario, idPropriedade);
 
     // Etapa 2: Buscar os registros de lactação paginados
     try {
@@ -455,17 +444,7 @@ export class OrdenhaService implements ISoftDelete {
       throw new BadRequestException('Ciclo sem propriedade associada.');
     }
 
-    const prop = await this.propriedadeRepository.findById(cicloData.idPropriedade);
-
-    if (prop?.idDono !== idUsuario) {
-      this.customLogger.log('Usuário não autorizado a acessar este ciclo', {
-        module: 'OrdenhaService',
-        method: 'findAllByCiclo',
-        userId: idUsuario,
-        idDonoPropriedade: prop?.idDono,
-      });
-      throw new ForbiddenException('Você não tem permissão para acessar os dados deste ciclo de lactação.');
-    }
+    await this.authHelper.validatePropriedadeAccess(idUsuario, cicloData.idPropriedade);
 
     const { registros, total } = await this.controleRepository.listarPorCiclo(id_ciclo_lactacao, page, limit);
 
