@@ -22,6 +22,7 @@ Objetivos:
 - producao/: Especificacoes do modulo de lactacao, ordenha, estoque diario, retiradas, laticinios e predicao de producao.
 - alerta/: Especificacoes do modulo de alertas (scheduler, verificacoes por nicho, idempotencia e classificacao por IA).
 - data-ingestion/: Especificacoes do modulo de importacao/exportacao de planilhas e integracao com ETL.
+- infra/: Especificacoes do repositorio de infraestrutura (docker compose local/producao, operacao e seguranca).
 
 ## Padrao de Regra (obrigatorio)
 
@@ -47,6 +48,6 @@ Use o arquivo TEMPLATE-RULE.md como base para novos documentos.
 
 ## Proximo passo sugerido
 
-Depois de CORE/Auth/Dashboard/Alimentacao/Usuario/Gestao-Propriedade/Rebanho/Saude-Zootecnia/Reproducao/Producao/Alerta/Data-Ingestion, seguir com consolidacao transversal:
+Depois de CORE/Auth/Dashboard/Alimentacao/Usuario/Gestao-Propriedade/Rebanho/Saude-Zootecnia/Reproducao/Producao/Alerta/Data-Ingestion/Infra, seguir com consolidacao transversal:
 
 - Revisao e priorizacao dos itens com Status parcial nos modulos documentados

@@ -40,239 +40,189 @@ async function bootstrap() {
   );
 
   const swaggerDescription = `
-# BUFFS API - Sistema de Gerenciamento de Búfalos
+# BUFFS API - Guia Operacional (alinhado ao SDD)
 
-API para gestão de propriedades rurais, rebanhos e produção de leite.
+API para gestao rural multi-tenant com foco em propriedade, rebanho, reproducao, saude, producao, alertas e ingestao de dados.
 
----
-
-## Início Rápido
-
-### 1. Criar Conta
-\`\`\`json
-POST /auth/signup-proprietario
-{
-  "email": "proprietario@fazenda.com",
-  "password": "senha123",
-  "nome": "João Silva",
-  "telefone": "27999887766"
-}
-\`\`\`
-Retorna: \`access_token\` (use nos próximos passos)
-
-### 2. Criar Endereço
-\`\`\`json
-POST /enderecos
-Authorization: Bearer <token>
-{
-  "logradouro": "Rodovia BR-101",
-  "cidade": "Cachoeiro de Itapemirim",
-  "estado": "ES",
-  "cep": "29300-000"
-}
-\`\`\`
-Retorna: \`idEndereco\` (use no próximo passo)
-
-### 3. Criar Propriedade
-\`\`\`json
-POST /propriedades
-Authorization: Bearer <token>
-{
-  "nome": "Fazenda São João",
-  "area_hectares": 250.5,
-  "id_endereco": "<idEndereco>"
-}
-\`\`\`
-Sistema pronto para uso
+Este Swagger foi reorganizado com base em \`docs/specs\` para facilitar onboarding tecnico e uso diario pelo time.
 
 ---
 
-## Autenticação
+## Fonte oficial das regras de negocio
 
-Todos os endpoints (exceto signup/signin) requerem:
+- \`docs/specs/README.md\`
+
+- \`docs/specs/auth\`
+
+- \`docs/specs/usuario\`
+
+- \`docs/specs/gestao-propriedade\`
+
+- \`docs/specs/rebanho\`
+
+- \`docs/specs/reproducao\`
+
+- \`docs/specs/saude-zootecnia\`
+
+- \`docs/specs/alimentacao\`
+
+- \`docs/specs/producao\`
+
+- \`docs/specs/alerta\`
+
+- \`docs/specs/data-ingestion\`
+
+- \`docs/specs/dashboard\`
+
+---
+
+## Inicio rapido para um novo tenant
+
+1. \`POST /auth/signup-proprietario\` para criar conta.
+
+2. \`POST /auth/signin\` para obter \`access_token\`.
+
+3. \`POST /enderecos\` para cadastrar endereco base.
+
+4. \`POST /propriedades\` para criar a propriedade.
+
+5. \`POST /auth/signup-funcionario\` para criar equipe (quando aplicavel).
+
+Todos os endpoints protegidos exigem header:
+
 \`\`\`
 Authorization: Bearer <access_token>
 \`\`\`
 
-**Login:** \`POST /auth/signin\`  
+---
 
-**Refresh:** \`POST /auth/refresh\` (token expira em 1h)  
+## Regras transversais da API
 
-**Logout:** \`POST /auth/signout\`
+- Autenticacao e sessao: \`/auth/signin\`, \`/auth/refresh\`, \`/auth/signout\`.
+
+- Autorizacao por cargo: PROPRIETARIO, GERENTE, FUNCIONARIO e VETERINARIO.
+
+- Escopo multi-tenant por propriedade em fluxos operacionais.
+
+- Validacao global com \`ValidationPipe\` (whitelist, forbidNonWhitelisted, transform).
+
+- Padrao de soft delete em varios subdominios com endpoint de restore quando suportado.
+
+- Processamento assincrono de alertas via RabbitMQ (ack/nack manual, DLX/DLQ).
 
 ---
 
-## Permissões por Cargo
+## Fluxos funcionais principais
 
-| Cargo | Criar Propriedade | Criar Funcionários | Alterar Cargos | Operações Gerais |
-|-------|------------------|-------------------|----------------|------------------|
-| PROPRIETARIO | ✅ | ✅ | ✅ | ✅ |
-| GERENTE | ❌ | ✅ | ✅ | ✅ |
-| FUNCIONARIO | ❌ | ❌ | ❌ | ✅ |
-| VETERINARIO | ❌ | ❌ | ❌ | ✅ (saúde apenas) |
+### Propriedade e acesso
+- \`/enderecos\`, \`/propriedades\`, \`/lotes\` para estrutura da fazenda.
 
-**Criar Funcionário:** \`POST /auth/signup-funcionario\` (PROPRIETARIO/GERENTE)  
-**Alterar Cargo:** \`PATCH /usuarios/{id}/cargo\` (PROPRIETARIO/GERENTE)
+- \`/usuarios\` e \`/usuarios/funcionarios\` para perfil, cargo e vinculos.
 
----
+### Rebanho
+- \`/bufalos\`, \`/grupos\`, \`/racas\`, \`/mov-lote\`.
 
-## Segurança
+- Regras relevantes: maturidade automatica, genealogia e categoria ABCB.
 
-**Rate Limiting:**
-- Signup: 3-5 req/min
-- Geral: 10 req/min
-- Resposta: HTTP 429
+### Reproducao e genetica
+- \`/cobertura\`, \`/material-genetico\`, \`/reproducao/genealogia\`, \`/reproducao/simulacao\`.
 
-**Guards:**
-- \`SupabaseAuthGuard\`: Valida JWT
+- Regras relevantes: validacoes zootecnicas por tecnica, recomendacao de femeas (IAR) e machos (IVR), simulacao assistida por IA.
 
-- \`RolesGuard\`: Verifica permissões por cargo
+### Saude e zootecnia
+- \`/dados-sanitarios\`, \`/dados-zootecnicos\`, \`/medicamentos\`, \`/vacinacao\`.
 
-- \`OnboardingGuard\`: Bloqueia proprietário sem propriedade
+- Regras relevantes: normalizacao de doenca, historico clinico e integracao com alertas clinicos.
 
-- \`EmailVerifiedGuard\`: Requer email confirmado (ops críticas)
+### Alimentacao
+- \`/alimentacoes-def\` e \`/alimentacao/registros\`.
 
----
+- Regras relevantes: consistencia entre propriedade, grupo e definicao de alimentacao.
 
-## Fluxo de Produção
+### Producao de leite
+- \`/lactacao\` -> \`/ordenhas\` -> \`/producao-diaria\` -> \`/retiradas\`.
 
-**Diário:**
-1. \`POST /lactacao\` - Iniciar ciclo após parto
+- \`/laticinios\` para gestao de compradores e \`/producao/predicao\` para predicao assistida por IA.
 
-2. \`POST /ordenhas\` - Registrar ordenhas (2-3x/dia)
+### Alertas e monitoramento
+- \`/alertas\` para criacao, listagem e tratamento.
 
-3. \`POST /producao-diaria\` - Consolidar fim do dia
+- Regras relevantes: idempotencia por evento de origem, verificacoes automaticas por nicho e classificacao assincrona via IA.
 
-4. \`POST /retiradas\` - Registrar coleta do laticínio
+### Data ingestion (ETL)
+- Base: \`/propriedades/:propriedadeId/data-ingestion\` e status em \`/data-ingestion/jobs/:jobId\`.
 
----
+- Regras relevantes: importacao aceita somente XLSX; limite de 50 MB por arquivo; rate limit de 10 importacoes por propriedade a cada 1 hora; limpeza de uploads temporarios as 01:00 para arquivos com mais de 24h.
 
-## Troubleshooting
-
-**401 Unauthorized:** Token ausente/expirado → use \`/auth/refresh\`  
-
-**403 Forbidden:** Cargo sem permissão → veja matriz acima  
-
-**403 Onboarding:** Proprietário sem propriedade → crie endereço + propriedade  
-
-**429 Too Many Requests:** Aguarde 60s
+### Dashboard
+\`/dashboard\` para indicadores consolidados de rebanho, lactacao, producao e reproducao.
 
 ---
 
-**Stack:** NestJS v10 + PostgreSQL + Supabase Auth + Drizzle ORM
+## Erros comuns e leitura rapida
 
-  ---
+- \`400\`: validacao de entrada/contrato.
 
-  ## Sistema de Produção de Leite - Fluxo Completo
+- \`401\`: token ausente, invalido ou expirado.
 
-  ### Conceitos Importantes:
+- \`403\`: sem permissao por cargo/escopo.
 
-  #### 1. Ciclo de Lactação
-  Período que inicia quando a búfala pare e começa a produzir leite.
-  - Início: Data do parto
-  - Fim: Quando a búfala é secada (para de ser ordenhada)
-  - Status: ATIVO (produzindo) ou ENCERRADO (parou de produzir)
+- \`404\`: recurso nao encontrado.
 
-  #### 2. Controle Leiteiro (Ordenha Individual)
-  Cada ordenha individual de uma búfala.
-  - Registra quanto leite foi produzido por búfala em cada ordenha
-  - Pode ter múltiplas ordenhas por dia (manhã, tarde, noite)
-  - Vinculado a um ciclo de lactação específico
+- \`409\`: conflito de estado (quando aplicavel).
 
-  #### 3. Estoque de Leite
-  Consolidação do leite produzido no dia pela propriedade.
-  - Soma de todas as ordenhas do dia
-  - Registrado no final do dia de produção
-  - Representa o total de leite disponível
+- \`422\`: regra de arquivo/negocio invalida (ex.: ingestao).
 
-  #### 4. Coleta de Leite
-  Quando o laticínio vem buscar o leite na propriedade.
-  - Retira leite do estoque
-  - Gera receita para a propriedade
-  - Registra quantidade coletada e valor pago
+- \`429\`: limite de requisicoes excedido.
 
-  ### **Fluxo de Trabalho Diário:**
+- \`500\`: erro interno nao esperado.
 
-  \`\`\`
-  MANHÃ:
-  1. Ordenha individual das búfalas → POST /lactacao (Controle Leiteiro)
-  
-  TARDE:
-  2. Ordenha individual das búfalas → POST /lactacao (Controle Leiteiro)
-  
-  FIM DO DIA:
-  3. Consolidar produção do dia → POST /producao-diaria
-  
-  QUANDO O LATICÍNIO CHEGAR:
-  4. Registrar retirada → POST /retiradas
-  \`\`\`
+- \`503\`: dependencia externa indisponivel (ex.: ETL/IA).
 
-  ### **Endpoints Organizados por Ordem de Uso:**
+---
 
-  **1. Gestão de Lactação (Após Parto)**
+## Observabilidade e saude
 
-  - \`POST /lactacao\` - Iniciar novo período de lactação após parto
+- Health check em \`/health\`.
 
-  - \`GET /lactacao/propriedade/:id\` - Ver períodos ativos
+- Ambiente hibrido HTTP + RabbitMQ consumer para processamento de alertas.
 
-  **2. Ordenha Diária (2-3x por dia)**
-
-  - \`POST /ordenhas\` - Registrar cada ordenha individual
-
-  - \`GET /ordenhas/femeas/em-lactacao/:id_propriedade\` - Ver búfalas em lactação
-
-  **3. Consolidação Diária (Fim do dia)**
-
-  - \`POST /producao-diaria\` - Consolidar produção do dia
-
-  - \`GET /producao-diaria/propriedade/:id\` - Ver produção disponível
-
-  **4. Retirada pelo Laticínio (Conforme agendamento)**
-
-  - \`POST /retiradas\` - Registrar retirada pelo laticínio
-
-  - \`GET /retiradas/propriedade/:id\` - Histórico de retiradas
-
-  ---
-
-  ## � Autenticação em Todas as Requisições
-
-  Todos os endpoints protegidos requerem:
-  \`\`\`
-  Authorization: Bearer <access_token>
-  \`\`\`
-
-  **Obtendo o access_token:**
-
-  - Cadastro: \`POST /auth/signup-proprietario\` retorna o token
-
-  - Login: \`POST /auth/signin\` retorna o token
-  
-  - Refresh: \`POST /auth/refresh\` renova o token expirado
-
-  ---
-
-  ##  Documentação Completa
-
-  Para informações detalhadas sobre o sistema, consulte:
-**Stack:** NestJS v10 + PostgreSQL + Supabase Auth + Drizzle ORM
+**Stack:** NestJS + PostgreSQL + Supabase Auth + Drizzle ORM + RabbitMQ
   `;
 
   const config = new DocumentBuilder()
     .setTitle('🐃 BUFFS API')
     .setDescription(swaggerDescription)
     .setVersion('1.0')
+    .addTag('Health', 'Status de disponibilidade da API e dependencias')
     .addTag('Autenticação', 'Cadastro, login e sessão')
-    .addTag('Usuários', 'Gerenciamento de perfis')
+    .addTag('Usuários', 'Gestao de perfil, funcionarios, cargos e vinculos')
     .addTag('Gestão de Propriedade - Endereços', 'Endereços das propriedades')
     .addTag('Gestão de Propriedade - Propriedades', 'Propriedades rurais')
     .addTag('Gestão de Propriedade - Lotes (Piquetes)', 'Lotes e piquetes')
-    .addTag('Rebanho - Búfalos', 'Gestão do rebanho')
+    .addTag('Rebanho - Búfalos', 'Gestao de bufalos, filtros, genealogia e categoria ABCB')
+    .addTag('Rebanho - Grupos', 'Gestao de grupos de manejo')
+    .addTag('Rebanho - Raças', 'Catalogo de racas do rebanho')
+    .addTag('Rebanho - Movimentação de Lotes', 'Movimentacao de grupos entre lotes')
+    .addTag('Reprodução - Cobertura', 'Coberturas, status reprodutivo e parto')
+    .addTag('Reprodução - Material Genético', 'Gestao de material genetico com soft delete')
+    .addTag('IA - Genealogia', 'Analise genealogica e consanguinidade via IA')
+    .addTag('IA - Simulação', 'Simulacao de acasalamento e compatibilidade genetica')
     .addTag('Produção - Lactação', 'Ciclos de lactação')
     .addTag('Produção - Ordenha', 'Registro de ordenhas')
     .addTag('Produção - Produção Diária', 'Consolidação diária')
     .addTag('Produção - Retirada', 'Coleta pelo laticínio')
     .addTag('Produção - Laticínios', 'Cadastro de compradores')
+    .addTag('IA - Predição de Produção', 'Predicao de producao leiteira assistida por IA')
+    .addTag('Saúde/Zootecnia - Dados Sanitários', 'Historico sanitario e tratamentos')
+    .addTag('Saúde/Zootecnia - Dados Zootécnicos', 'Registros zootecnicos e metricas de campo')
+    .addTag('Saúde/Zootecnia - Medicamentos', 'Catalogo de medicamentos por propriedade')
+    .addTag('Saúde/Zootecnia - Vacinação', 'Aplicacao e historico de vacinacao')
+    .addTag('Alimentação - Definições', 'Definicoes de alimentacao por propriedade')
+    .addTag('Alimentação - Registros', 'Registros operacionais de alimentacao')
+    .addTag('Data Ingestion', 'Importacao/exportacao ETL por propriedade e acompanhamento de jobs')
+    .addTag('Alertas', 'Alertas operacionais com verificacao automatica e classificacao por IA')
+    .addTag('Dashboard', 'Indicadores consolidados de propriedade')
     .addBearerAuth(
       {
         type: 'http',
