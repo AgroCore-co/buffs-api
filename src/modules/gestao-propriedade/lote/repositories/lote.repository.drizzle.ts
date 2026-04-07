@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { eq, and, desc, isNull } from 'drizzle-orm';
-import { lote, grupo } from 'src/database/schema';
+import { lote } from 'src/database/schema';
 import { CreateLoteDto } from '../dto/create-lote.dto';
 import { UpdateLoteDto } from '../dto/update-lote.dto';
 
@@ -108,23 +108,10 @@ export class LoteRepositoryDrizzle {
   }
 
   /**
-   * Remove um lote (hard delete)
+   * Remove um lote (soft delete)
    */
   async remover(id: string) {
-    await this.databaseService.db.delete(lote).where(eq(lote.idLote, id));
+    await this.databaseService.db.update(lote).set({ deletedAt: new Date().toISOString() }).where(eq(lote.idLote, id));
     return true;
-  }
-
-  /**
-   * Busca um grupo por ID para validação
-   */
-  async buscarGrupoPorId(idGrupo: string) {
-    return await this.databaseService.db.query.grupo.findFirst({
-      where: and(eq(grupo.idGrupo, idGrupo), isNull(grupo.deletedAt)),
-      columns: {
-        idGrupo: true,
-        idPropriedade: true,
-      },
-    });
   }
 }

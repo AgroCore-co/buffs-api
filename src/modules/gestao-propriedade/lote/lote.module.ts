@@ -5,12 +5,12 @@ import { AuthModule } from '../../auth/auth.module';
 import { LoggerModule } from '../../../core/logger/logger.module';
 import { DatabaseModule } from '../../../core/database/database.module';
 import { LoteRepositoryDrizzle } from './repositories';
-import { PropriedadeRepositoryDrizzle } from '../propriedade/repositories';
+import { GrupoModule } from '../../rebanho/grupo/grupo.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, LoggerModule],
+  imports: [DatabaseModule, AuthModule, LoggerModule, GrupoModule],
   controllers: [LoteController],
-  providers: [LoteService, LoteRepositoryDrizzle, PropriedadeRepositoryDrizzle],
+  providers: [LoteService, LoteRepositoryDrizzle],
   exports: [LoteService],
 })
 export class LoteModule {}

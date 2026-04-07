@@ -1,27 +1,11 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload, Ctx, RmqContext } from '@nestjs/microservices';
 import { GeminiService } from 'src/core/gemini/gemini.service';
-import { AlertaRepositoryDrizzle } from '../repositories/alerta.repository.drizzle';
 import { RabbitMQPatterns } from 'src/core/rabbitmq/rabbitmq.constants';
-import { getErrorMessage } from 'src/core/utils/error.utils';
+import { AlertasService } from '../alerta.service';
+import { AlertaCriadoPayload } from '../interfaces/alerta-criado-payload.interface';
 
 const GEMINI_TIMEOUT_MS = 10_000;
-
-/**
- * Payload emitido pelo AlertasService quando um alerta é criado.
- */
-export interface AlertaCriadoPayload {
-  id_alerta: string;
-  nicho: string;
-  prioridade?: string | null;
-  titulo: string;
-  descricao?: string | null;
-  texto_ocorrencia_clinica?: string | null;
-  data_ocorrencia: string;
-  animal_id?: string | null;
-  id_propriedade?: string | null;
-  grupo?: string | null;
-}
 
 /** Tipagem mínima do canal RabbitMQ obtido via RmqContext. */
 interface RmqChannel {
@@ -45,7 +29,7 @@ export class AlertasConsumer {
 
   constructor(
     private readonly geminiService: GeminiService,
-    private readonly alertaRepository: AlertaRepositoryDrizzle,
+    private readonly alertasService: AlertasService,
   ) {}
 
   @EventPattern(RabbitMQPatterns.ALERTA_CRIADO)
@@ -88,12 +72,7 @@ export class AlertasConsumer {
     });
 
     const prioridade = await Promise.race([this.geminiService.classificarPrioridadeOcorrencia(texto), timeoutPromise]);
-
-    const { error } = await this.alertaRepository.update(data.id_alerta, { prioridade });
-
-    if (error) {
-      throw new Error(`Falha ao atualizar prioridade no banco: ${getErrorMessage(error)}`);
-    }
+    await this.alertasService.atualizarPrioridade(data.id_alerta, prioridade);
 
     this.logger.log(`🤖 IA classificou alerta ${data.id_alerta} → ${prioridade}`);
   }

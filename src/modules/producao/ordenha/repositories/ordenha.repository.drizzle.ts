@@ -5,7 +5,7 @@ import { dadoslactacao } from '../../../../database/schema';
 import { CreateDadosLactacaoDto, UpdateDadosLactacaoDto } from '../dto';
 
 @Injectable()
-export class OrdenhaRepository {
+export class OrdenhaRepositoryDrizzle {
   constructor(private readonly db: DatabaseService) {}
 
   async criar(createDto: CreateDadosLactacaoDto, idUsuario: string) {

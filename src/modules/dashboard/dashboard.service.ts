@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { LoggerService } from '../../core/logger/logger.service';
 import {
   DashboardStatsDto,
@@ -23,13 +23,6 @@ export class DashboardService {
    */
   async getStats(id_propriedade: string): Promise<DashboardStatsDto> {
     try {
-      // Verifica se a propriedade existe
-      const propriedadeExists = await this.dashboardRepository.verificarPropriedadeExiste(id_propriedade);
-
-      if (!propriedadeExists) {
-        throw new NotFoundException(`Propriedade com ID ${id_propriedade} não encontrada.`);
-      }
-
       // Executa queries em paralelo para melhor performance
       const [bufalosStats, bufalasLactando, qtdLotes, qtdUsuarios] = await Promise.all([
         this.dashboardRepository.buscarBufalosComRaca(id_propriedade),
@@ -70,9 +63,6 @@ export class DashboardService {
 
       return stats;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
-        throw error;
-      }
       this.logger.logError(error, { module: 'Dashboard', method: 'getStats', id_propriedade });
       throw new InternalServerErrorException(`Erro inesperado ao gerar estatísticas: ${error.message}`);
     }
@@ -83,21 +73,8 @@ export class DashboardService {
    */
   async getLactacaoMetricas(id_propriedade: string, ano: number): Promise<DashboardLactacaoDto> {
     try {
-      // Verifica se a propriedade existe
-      const propriedadeExists = await this.dashboardRepository.verificarPropriedadeExiste(id_propriedade);
-
-      if (!propriedadeExists) {
-        throw new NotFoundException(`Propriedade com ID ${id_propriedade} não encontrada.`);
-      }
-
-      // Busca ciclos de lactação da propriedade com dados relacionados
-      const ciclosRaw = await this.dashboardRepository.buscarCiclosLactacaoCompletos(id_propriedade);
-
-      // Filtrar apenas fêmeas e do ano especificado
-      const ciclosFiltered = ciclosRaw.filter((c: any) => {
-        const anoSecagem = new Date(c.dtSecagemReal).getFullYear();
-        return c.bufalo?.sexo === 'F' && anoSecagem === ano;
-      });
+      // Busca ciclos de lactação da propriedade com dados relacionados, já agregados e filtrados no banco
+      const ciclosFiltered = await this.dashboardRepository.buscarCiclosLactacaoCompletos(id_propriedade, ano);
 
       // Agrupar ciclos por búfala para calcular número do parto
       const ciclosPorBufala = new Map<string, any[]>();
@@ -118,16 +95,14 @@ export class DashboardService {
         ciclosDaBufala.forEach((ciclo: any, index: number) => {
           const diasLactacao = Math.floor((new Date(ciclo.dtSecagemReal).getTime() - new Date(ciclo.dtParto).getTime()) / (1000 * 60 * 60 * 24));
 
-          // Total de leite = soma das ordenhas
-          const lactacaoTotal = (ciclo.dadoslactacaos || []).reduce((sum: number, d: any) => sum + (Number(d.qtOrdenha) || 0), 0);
-
-          // Média diária = total / quantidade de registros
-          const mediaLactacao = (ciclo.dadoslactacaos || []).length > 0 ? lactacaoTotal / (ciclo.dadoslactacaos || []).length : 0;
+          const lactacaoTotal = Number(ciclo.totalLeite) || 0;
+          const qtdOrdenhas = Number(ciclo.qtdOrdenhas) || 0;
+          const mediaLactacao = qtdOrdenhas > 0 ? lactacaoTotal / qtdOrdenhas : 0;
 
           ciclosProcessados.push({
             id_ciclo_lactacao: ciclo.idCicloLactacao,
             id_bufala: ciclo.idBufala,
-            nome_bufala: ciclo.bufalo?.nome,
+            nome_bufala: ciclo.nomeBufala,
             numero_parto: index + 1,
             dt_parto: new Date(ciclo.dtParto).toISOString().split('T')[0],
             dt_secagem_real: new Date(ciclo.dtSecagemReal).toISOString().split('T')[0],
@@ -168,9 +143,6 @@ export class DashboardService {
         ciclos: ciclosClassificados,
       };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
-        throw error;
-      }
       this.logger.logError(error, { module: 'Dashboard', method: 'getLactacaoMetricas', id_propriedade, ano });
       throw new InternalServerErrorException(`Erro inesperado ao gerar métricas de lactação: ${error.message}`);
     }
@@ -183,13 +155,6 @@ export class DashboardService {
     const anoReferencia = ano || new Date().getFullYear();
 
     try {
-      // Verifica se a propriedade existe
-      const propriedadeExists = await this.dashboardRepository.verificarPropriedadeExiste(id_propriedade);
-
-      if (!propriedadeExists) {
-        throw new NotFoundException(`Propriedade com ID ${id_propriedade} não encontrada.`);
-      }
-
       // Buscar todas as ordenhas do ano
       const dataInicio = `${anoReferencia}-01-01`;
       const dataFim = `${anoReferencia}-12-31`;
@@ -274,9 +239,6 @@ export class DashboardService {
         serie_historica: serieHistorica,
       };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
-        throw error;
-      }
       this.logger.logError(error, { module: 'Dashboard', method: 'getProducaoMensal', id_propriedade, ano: anoReferencia });
       throw new InternalServerErrorException(`Erro inesperado ao gerar métricas de produção mensal: ${error.message}`);
     }
@@ -287,13 +249,6 @@ export class DashboardService {
    */
   async getReproducaoMetricas(id_propriedade: string): Promise<DashboardReproducaoDto> {
     try {
-      // Verifica se a propriedade existe
-      const propriedadeExists = await this.dashboardRepository.verificarPropriedadeExiste(id_propriedade);
-
-      if (!propriedadeExists) {
-        throw new NotFoundException(`Propriedade com ID ${id_propriedade} não encontrada`);
-      }
-
       // Busca todas as reproduções da propriedade
       const reproducoes = await this.dashboardRepository.buscarReproducoes(id_propriedade);
 
@@ -313,9 +268,6 @@ export class DashboardService {
         ultimaDataReproducao,
       };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof InternalServerErrorException) {
-        throw error;
-      }
       this.logger.logError(error, { module: 'Dashboard', method: 'getReproducaoMetricas', id_propriedade });
       throw new InternalServerErrorException(`Erro inesperado ao gerar métricas de reprodução: ${error.message}`);
     }

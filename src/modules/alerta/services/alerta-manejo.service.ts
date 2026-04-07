@@ -81,26 +81,20 @@ export class AlertaManejoService {
     const ordenhas = await this.producaoRepo.buscarOrdenhasRecentes(id_bufala, AlertaConstants.DIAS_VERIFICACAO_ORDENHA_SECAGEM);
 
     return !!(ordenhas && ordenhas.length > 0);
-  } /**
+  }
+
+  /**
    * Cria alerta de secagem pendente.
    */
   private async criarAlertaSecagem(reproducao: any, dataPrevistaParto: Date, diasAteParto: number): Promise<boolean> {
     try {
-      const bufalaData = await this.bufaloRepo.buscarBufaloSimples(reproducao.idBufala);
+      const bufalaData = await this.bufaloRepo.buscarBufaloCompleto(reproducao.idBufala);
       if (!bufalaData) return false;
 
-      let grupoNome = 'Não informado';
-      if (bufalaData.idGrupo) {
-        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufalaData.idGrupo);
-        if (nomeGrupo) grupoNome = nomeGrupo;
-      }
+      const grupoNome = bufalaData.grupo?.nomeGrupo ?? 'Não informado';
+      const propriedadeNome = bufalaData.propriedade?.nome ?? 'Não informada';
 
-      let propriedadeNome = 'Não informada';
       const propriedadeId = reproducao.idPropriedade || bufalaData.idPropriedade;
-      if (propriedadeId) {
-        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeId);
-        if (nomeProp) propriedadeNome = nomeProp;
-      }
 
       // Prioridade ALTA se está na janela final (últimos 45 dias)
       const prioridade = diasAteParto <= AlertaConstants.DIAS_SECAGEM_JANELA_FINAL ? PrioridadeAlerta.ALTA : PrioridadeAlerta.MEDIA;

@@ -1,5 +1,4 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { PropriedadeRepositoryHelper } from '../../usuario/repositories/helper/propriedade.repository.helper';
 import { Cargo } from '../../usuario/enums/cargo.enum';
 
@@ -14,10 +13,7 @@ import { Cargo } from '../../usuario/enums/cargo.enum';
  */
 @Injectable()
 export class OnboardingGuard implements CanActivate {
-  constructor(
-    private readonly reflector: Reflector,
-    private readonly propriedadeRepository: PropriedadeRepositoryHelper,
-  ) {}
+  constructor(private readonly propriedadeRepository: PropriedadeRepositoryHelper) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -33,8 +29,12 @@ export class OnboardingGuard implements CanActivate {
       return true;
     }
 
+    if (!user.id_usuario) {
+      throw new ForbiddenException('Perfil de proprietário incompleto. Conclua o cadastro antes de acessar esta funcionalidade.');
+    }
+
     // Verifica se o proprietário tem pelo menos uma propriedade
-    const propriedades = await this.propriedadeRepository.listarPorDono(user.id);
+    const propriedades = await this.propriedadeRepository.listarPorDono(user.id_usuario);
 
     if (!propriedades || propriedades.length === 0) {
       throw new ForbiddenException(

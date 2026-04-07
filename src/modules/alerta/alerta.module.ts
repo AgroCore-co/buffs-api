@@ -20,6 +20,7 @@ import { AlertaSanitarioService } from './services/alerta-sanitario.service';
 import { AlertaProducaoService } from './services/alerta-producao.service';
 import { AlertaManejoService } from './services/alerta-manejo.service';
 import { AlertaClinicoService } from './services/alerta-clinico.service';
+import { AlertasVerificacaoService } from './services/alertas-verificacao.service';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AlertaClinicoService } from './services/alerta-clinico.service';
     AlertaProducaoService,
     AlertaManejoService,
     AlertaClinicoService,
+    AlertasVerificacaoService,
   ],
   exports: [AlertasService, AlertaRepositoryDrizzle],
 })

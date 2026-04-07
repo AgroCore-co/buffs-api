@@ -10,7 +10,7 @@ import { IsInt, IsNumber, IsOptional, IsString, IsUUID, IsNotEmpty, Min, MaxLeng
  * fornecida a um grupo específico de búfalos, vinculando-a a uma definição de alimentação
  * pré-cadastrada.
  *
- * Campos obrigatórios: id_propriedade, id_grupo, id_aliment_def, id_usuario, quantidade, unidade_medida
+ * Campos obrigatórios: id_propriedade, id_grupo, id_aliment_def, quantidade, unidade_medida
  * Campos opcionais: freq_dia, dt_registro
  */
 export class CreateRegistroAlimentacaoDto {
@@ -41,15 +41,6 @@ export class CreateRegistroAlimentacaoDto {
   @IsUUID()
   @IsNotEmpty()
   id_aliment_def: string;
-
-  @ApiProperty({
-    description: 'ID do usuário que está registrando a alimentação (UUID).',
-    example: 'df1c7ee5-563f-4f8e-885a-0234d80e5a9e',
-    required: true,
-  })
-  @IsUUID()
-  @IsNotEmpty()
-  id_usuario: string;
 
   @ApiProperty({
     description: 'Quantidade de alimento fornecida (número decimal positivo).',

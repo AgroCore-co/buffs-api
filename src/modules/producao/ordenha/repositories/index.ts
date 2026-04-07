@@ -1,1 +1,1 @@
-export * from './ordenha.repository';
+export * from './ordenha.repository.drizzle';

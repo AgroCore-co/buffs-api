@@ -142,7 +142,7 @@ src/
 │   ├── dashboard/               # Métricas e indicadores por propriedade
 │   ├── data-ingestion/          # Importação/exportação de dados via ETL Worker (Go)
 │   ├── gestao-propriedade/      # Endereços, propriedades, lotes/piquetes
-│   ├── importacao/              # ⚠️  Deprecated — substituído por data-ingestion
+data-ingestion
 │   ├── producao/                # Lactação, ordenhas, produção diária, retiradas, laticínios
 │   ├── rebanho/                 # Búfalos, raças, grupos, movimentação de lotes
 │   ├── reproducao/              # Coberturas, material genético, genealogia, simulação

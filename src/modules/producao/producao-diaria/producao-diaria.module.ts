@@ -4,12 +4,12 @@ import { ProducaoDiariaController } from './producao-diaria.controller';
 import { LoggerModule } from '../../../core/logger/logger.module';
 import { AuthModule } from '../../auth/auth.module';
 import { DatabaseModule } from '../../../core/database/database.module';
-import { ProducaoDiariaRepository } from './repositories';
+import { ProducaoDiariaRepositoryDrizzle } from './repositories';
 
 @Module({
   imports: [LoggerModule, AuthModule, DatabaseModule],
   controllers: [ProducaoDiariaController],
-  providers: [ProducaoDiariaService, ProducaoDiariaRepository],
+  providers: [ProducaoDiariaService, ProducaoDiariaRepositoryDrizzle],
   exports: [ProducaoDiariaService],
 })
 export class ProducaoDiariaModule {}

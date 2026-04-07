@@ -1,14 +1,14 @@
 import { Injectable, Inject, InternalServerErrorException, NotFoundException, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { GeminiService } from 'src/core/gemini/gemini.service';
-import { CreateAlertaDto } from './dto/create-alerta.dto';
+import { CreateAlertaDto, PrioridadeAlerta } from './dto/create-alerta.dto';
 import { PaginationDto } from '../../core/dto/pagination.dto';
 import { PaginatedResponse } from '../../core/dto/pagination.dto';
 import { createPaginatedResponse, calculatePaginationParams } from '../../core/utils/pagination.utils';
 import { formatDateFields, formatDateFieldsArray } from '../../core/utils/date-formatter.utils';
 import { AlertaRepositoryDrizzle } from './repositories/alerta.repository.drizzle';
 import { RABBITMQ_SERVICE, RabbitMQPatterns } from 'src/core/rabbitmq/rabbitmq.constants';
-import { AlertaCriadoPayload } from './consumers/alertas.consumer';
+import { AlertaCriadoPayload } from './interfaces/alerta-criado-payload.interface';
 import { getErrorMessage } from 'src/core/utils/error.utils';
 
 interface AlertaFilter {
@@ -498,6 +498,23 @@ export class AlertasService {
       }
       throw new InternalServerErrorException(`Falha ao atualizar o status do alerta: ${getErrorMessage(error)}`);
     }
+    return formatDateFields(data!, ['data_alerta']);
+  }
+
+  async atualizarPrioridade(id: string, prioridade: PrioridadeAlerta | string) {
+    await this.findOne(id);
+
+    const { data, error } = await this.alertaRepo.atualizarPrioridade(id, prioridade);
+
+    if (error) {
+      const errorCode = (error as { code?: string })?.code;
+      if (errorCode === 'PGRST116') {
+        throw new NotFoundException(`Alerta com ID ${id} não encontrado para atualização.`);
+      }
+
+      throw new InternalServerErrorException(`Falha ao atualizar prioridade do alerta: ${getErrorMessage(error)}`);
+    }
+
     return formatDateFields(data!, ['data_alerta']);
   }
 

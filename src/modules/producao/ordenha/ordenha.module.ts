@@ -10,7 +10,7 @@ import { RebanhoModule } from '../../rebanho/rebanho.module';
 import { UsuarioModule } from '../../usuario/usuario.module';
 import { LactacaoModule } from '../lactacao/lactacao.module';
 import { GestaoPropriedadeModule } from '../../gestao-propriedade/gestao-propriedade.module';
-import { OrdenhaRepository } from './repositories';
+import { OrdenhaRepositoryDrizzle } from './repositories';
 
 @Module({
   imports: [
@@ -25,7 +25,7 @@ import { OrdenhaRepository } from './repositories';
     GestaoPropriedadeModule,
   ],
   controllers: [OrdenhaController],
-  providers: [OrdenhaService, OrdenhaRepository],
+  providers: [OrdenhaService, OrdenhaRepositoryDrizzle],
   exports: [OrdenhaService],
 })
 export class OrdenhaModule {}

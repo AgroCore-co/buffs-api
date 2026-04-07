@@ -1,1 +1,1 @@
-export * from './lactacao.repository';
+export * from './lactacao.repository.drizzle';

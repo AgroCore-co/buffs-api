@@ -1,5 +1,4 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { SupabaseService } from '../../../core/supabase/supabase.service';
 
 /**
@@ -11,22 +10,19 @@ import { SupabaseService } from '../../../core/supabase/supabase.service';
  */
 @Injectable()
 export class EmailVerifiedGuard implements CanActivate {
-  constructor(
-    private readonly reflector: Reflector,
-    private readonly supabaseService: SupabaseService,
-  ) {}
+  constructor(private readonly supabaseService: SupabaseService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
     // Se usuário não está autenticado, deixa o AuthGuard lidar com isso
-    if (!user?.authId) {
+    if (!user?.id) {
       return true;
     }
 
     // Busca dados do usuário no Supabase Auth
-    const { data: authUser, error } = await this.supabaseService.getClient().auth.admin.getUserById(user.authId);
+    const { data: authUser, error } = await this.supabaseService.getAdminClient().auth.admin.getUserById(user.id);
 
     if (error || !authUser) {
       throw new ForbiddenException('Não foi possível verificar o status do email.');

@@ -14,19 +14,20 @@ import { PaginationDto } from '../../../core/dto/pagination.dto';
 export class AlimentacaoDefController {
   constructor(private readonly alimentacaoDefService: AlimentacaoDefService) {}
 
-  @Get()
+  @Get('propriedade/:id_propriedade')
   @UseInterceptors(CacheInterceptor)
-  @CacheTTL(3600)
+  @CacheTTL(1800) // 30 minutes
   @ApiOperation({
-    summary: 'Lista todas as alimentações definidas',
-    description: 'Retorna uma lista de todas as alimentações definidas cadastradas no sistema, ordenadas alfabeticamente.',
+    summary: 'Lista todas as definições de alimentação de uma propriedade',
+    description: 'Retorna uma lista de todas as definições de alimentação cadastradas para uma propriedade específica.',
   })
+  @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade', type: 'string' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
-  @ApiResponse({ status: 200, description: 'Lista de alimentações definidas retornada com sucesso.' })
+  @ApiResponse({ status: 200, description: 'Lista de definições de alimentação da propriedade retornada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.alimentacaoDefService.findAll(paginationDto);
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) idPropriedade: string, @Query() paginationDto: PaginationDto) {
+    return this.alimentacaoDefService.findByPropriedade(idPropriedade, paginationDto);
   }
 
   @Get(':id')
@@ -42,22 +43,6 @@ export class AlimentacaoDefController {
   @ApiResponse({ status: 404, description: 'Alimentação definida não encontrada.' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.alimentacaoDefService.findOne(id);
-  }
-
-  @Get('propriedade/:id_propriedade')
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(1800) // 30 minutes
-  @ApiOperation({
-    summary: 'Lista todas as definições de alimentação de uma propriedade',
-    description: 'Retorna uma lista de todas as definições de alimentação cadastradas para uma propriedade específica.',
-  })
-  @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade', type: 'string' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
-  @ApiResponse({ status: 200, description: 'Lista de definições de alimentação da propriedade retornada com sucesso.' })
-  @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) idPropriedade: string, @Query() paginationDto: PaginationDto) {
-    return this.alimentacaoDefService.findByPropriedade(idPropriedade, paginationDto);
   }
 
   @Post()

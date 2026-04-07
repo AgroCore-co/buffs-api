@@ -1,1 +1,1 @@
-export * from './producao-diaria.repository';
+export * from './producao-diaria.repository.drizzle';

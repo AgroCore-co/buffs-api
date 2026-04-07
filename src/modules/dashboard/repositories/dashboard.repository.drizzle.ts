@@ -16,25 +16,6 @@ export class DashboardRepositoryDrizzle {
   ) {}
 
   /**
-   * Verifica se uma propriedade existe
-   */
-  async verificarPropriedadeExiste(id_propriedade: string) {
-    try {
-      return await this.databaseService.db.query.propriedade.findFirst({
-        where: eq(propriedade.idPropriedade, id_propriedade),
-        columns: { idPropriedade: true },
-      });
-    } catch (error) {
-      this.logger.logError(error, {
-        repository: 'DashboardRepositoryDrizzle',
-        method: 'verificarPropriedadeExiste',
-        id_propriedade,
-      });
-      throw new InternalServerErrorException(`Erro ao verificar existência da propriedade: ${error.message}`);
-    }
-  }
-
-  /**
    * Busca búfalos de uma propriedade com informações de raça
    */
   async buscarBufalosComRaca(id_propriedade: string) {
@@ -88,7 +69,6 @@ export class DashboardRepositoryDrizzle {
   async contarLotes(id_propriedade: string): Promise<number> {
     try {
       const result = await this.databaseService.db.select({ count: count() }).from(lote).where(eq(lote.idPropriedade, id_propriedade));
-
       return Number(result[0]?.count || 0);
     } catch (error) {
       this.logger.logError(error, {
@@ -122,32 +102,33 @@ export class DashboardRepositoryDrizzle {
   }
 
   /**
-   * Busca ciclos de lactação com dados relacionados (búfalo e ordenhas)
+   * Busca ciclos de lactação com dados relacionados e agregados no banco
    */
-  async buscarCiclosLactacaoCompletos(id_propriedade: string) {
+  async buscarCiclosLactacaoCompletos(id_propriedade: string, ano: number) {
     try {
-      return await this.databaseService.db.query.ciclolactacao.findMany({
-        where: and(eq(ciclolactacao.idPropriedade, id_propriedade), sql`${ciclolactacao.dtSecagemReal} IS NOT NULL`),
-        columns: {
-          idCicloLactacao: true,
-          idBufala: true,
-          dtParto: true,
-          dtSecagemReal: true,
-        },
-        with: {
-          bufalo: {
-            columns: {
-              nome: true,
-              sexo: true,
-            },
-          },
-          dadoslactacaos: {
-            columns: {
-              qtOrdenha: true,
-            },
-          },
-        },
-      });
+      return await this.databaseService.db
+        .select({
+          idCicloLactacao: ciclolactacao.idCicloLactacao,
+          idBufala: ciclolactacao.idBufala,
+          dtParto: ciclolactacao.dtParto,
+          dtSecagemReal: ciclolactacao.dtSecagemReal,
+          nomeBufala: bufalo.nome,
+          sexoBufala: bufalo.sexo,
+          totalLeite: sql<number>`COALESCE(SUM(${dadoslactacao.qtOrdenha}), 0)`,
+          qtdOrdenhas: sql<number>`COUNT(${dadoslactacao.idLact})`,
+        })
+        .from(ciclolactacao)
+        .innerJoin(bufalo, eq(ciclolactacao.idBufala, bufalo.idBufalo))
+        .leftJoin(dadoslactacao, eq(dadoslactacao.idCicloLactacao, ciclolactacao.idCicloLactacao))
+        .where(
+          and(
+            eq(ciclolactacao.idPropriedade, id_propriedade),
+            sql`${ciclolactacao.dtSecagemReal} IS NOT NULL`,
+            sql`EXTRACT(YEAR FROM ${ciclolactacao.dtSecagemReal}) = ${ano}`,
+            eq(bufalo.sexo, 'F'),
+          ),
+        )
+        .groupBy(ciclolactacao.idCicloLactacao, ciclolactacao.idBufala, ciclolactacao.dtParto, ciclolactacao.dtSecagemReal, bufalo.nome, bufalo.sexo);
     } catch (error) {
       this.logger.logError(error, {
         repository: 'DashboardRepositoryDrizzle',

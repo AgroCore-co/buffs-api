@@ -82,33 +82,9 @@ export class AlertasScheduler implements OnModuleInit {
    */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async verificarTratamentos() {
-    const inicio = Date.now();
-    this.logger.log(' [00:00] ═══════════════════════════════════════════════');
-    this.logger.log('🩺 [SCHEDULER] Iniciando verificação de tratamentos sanitários...');
-
-    try {
-      const propriedades = await this.getPropriedadesAtivas();
-      this.logger.log(`📍 ${propriedades.length} propriedades ativas encontradas`);
-
-      let totalAlertas = 0;
-      for (const prop of propriedades) {
-        try {
-          const alertas = await this.sanitarioService.verificarTratamentos(prop.id_propriedade);
-          totalAlertas += alertas;
-          if (alertas > 0) {
-            this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
-          }
-        } catch (error: unknown) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
-        }
-      }
-
-      const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
-      this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
-      this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error: unknown) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
-    }
+    await this.executarJobPorPropriedade('00:00', '🩺 [SCHEDULER] Iniciando verificação de tratamentos sanitários...', (idPropriedade) =>
+      this.sanitarioService.verificarTratamentos(idPropriedade),
+    );
   }
 
   /**
@@ -117,33 +93,9 @@ export class AlertasScheduler implements OnModuleInit {
    */
   @Cron('0 3 * * *')
   async verificarVacinacoes() {
-    const inicio = Date.now();
-    this.logger.log('� [03:00] ═══════════════════════════════════════════════');
-    this.logger.log('�💉 [SCHEDULER] Iniciando verificação de vacinações programadas...');
-
-    try {
-      const propriedades = await this.getPropriedadesAtivas();
-      this.logger.log(`📍 ${propriedades.length} propriedades ativas encontradas`);
-
-      let totalAlertas = 0;
-      for (const prop of propriedades) {
-        try {
-          const alertas = await this.sanitarioService.verificarVacinacoes(prop.id_propriedade);
-          totalAlertas += alertas;
-          if (alertas > 0) {
-            this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
-          }
-        } catch (error: unknown) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
-        }
-      }
-
-      const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
-      this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
-      this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error: unknown) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
-    }
+    await this.executarJobPorPropriedade('03:00', '💉 [SCHEDULER] Iniciando verificação de vacinações programadas...', (idPropriedade) =>
+      this.sanitarioService.verificarVacinacoes(idPropriedade),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -156,33 +108,9 @@ export class AlertasScheduler implements OnModuleInit {
    */
   @Cron('5 0 * * *')
   async verificarNascimentos() {
-    const inicio = Date.now();
-    this.logger.log('� [00:05] ═══════════════════════════════════════════════');
-    this.logger.log('�🐃 [SCHEDULER] Iniciando verificação de nascimentos previstos...');
-
-    try {
-      const propriedades = await this.getPropriedadesAtivas();
-      this.logger.log(`📍 ${propriedades.length} propriedades ativas encontradas`);
-
-      let totalAlertas = 0;
-      for (const prop of propriedades) {
-        try {
-          const alertas = await this.reproducaoService.verificarNascimentos(prop.id_propriedade);
-          totalAlertas += alertas;
-          if (alertas > 0) {
-            this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
-          }
-        } catch (error: unknown) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
-        }
-      }
-
-      const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
-      this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
-      this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error: unknown) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
-    }
+    await this.executarJobPorPropriedade('00:05', '🐃 [SCHEDULER] Iniciando verificação de nascimentos previstos...', (idPropriedade) =>
+      this.reproducaoService.verificarNascimentos(idPropriedade),
+    );
   }
 
   /**
@@ -191,33 +119,9 @@ export class AlertasScheduler implements OnModuleInit {
    */
   @Cron('0 1 * * *')
   async verificarCoberturaSemDiagnostico() {
-    const inicio = Date.now();
-    this.logger.log('🕐 [01:00] ═══════════════════════════════════════════════');
-    this.logger.log('🔬 [SCHEDULER] Iniciando verificação de coberturas sem diagnóstico...');
-
-    try {
-      const propriedades = await this.getPropriedadesAtivas();
-      this.logger.log(`📍 ${propriedades.length} propriedades ativas encontradas`);
-
-      let totalAlertas = 0;
-      for (const prop of propriedades) {
-        try {
-          const alertas = await this.reproducaoService.verificarCoberturaSemDiagnostico(prop.id_propriedade);
-          totalAlertas += alertas;
-          if (alertas > 0) {
-            this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
-          }
-        } catch (error: unknown) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
-        }
-      }
-
-      const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
-      this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
-      this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error: unknown) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
-    }
+    await this.executarJobPorPropriedade('01:00', '🔬 [SCHEDULER] Iniciando verificação de coberturas sem diagnóstico...', (idPropriedade) =>
+      this.reproducaoService.verificarCoberturaSemDiagnostico(idPropriedade),
+    );
   }
 
   /**
@@ -226,33 +130,9 @@ export class AlertasScheduler implements OnModuleInit {
    */
   @Cron('0 2 * * *')
   async verificarFemeasVazias() {
-    const inicio = Date.now();
-    this.logger.log('🕐 [02:00] ═══════════════════════════════════════════════');
-    this.logger.log('🚺 [SCHEDULER] Iniciando verificação de fêmeas vazias...');
-
-    try {
-      const propriedades = await this.getPropriedadesAtivas();
-      this.logger.log(`📍 ${propriedades.length} propriedades ativas encontradas`);
-
-      let totalAlertas = 0;
-      for (const prop of propriedades) {
-        try {
-          const alertas = await this.reproducaoService.verificarFemeasVazias(prop.id_propriedade);
-          totalAlertas += alertas;
-          if (alertas > 0) {
-            this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
-          }
-        } catch (error: unknown) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
-        }
-      }
-
-      const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
-      this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
-      this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error: unknown) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
-    }
+    await this.executarJobPorPropriedade('02:00', '🚺 [SCHEDULER] Iniciando verificação de fêmeas vazias...', (idPropriedade) =>
+      this.reproducaoService.verificarFemeasVazias(idPropriedade),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -265,33 +145,9 @@ export class AlertasScheduler implements OnModuleInit {
    */
   @Cron('0 4 * * *')
   async verificarQuedaProducao() {
-    const inicio = Date.now();
-    this.logger.log('🕐 [04:00] ═══════════════════════════════════════════════');
-    this.logger.log('🥛 [SCHEDULER] Iniciando verificação de queda de produção...');
-
-    try {
-      const propriedades = await this.getPropriedadesAtivas();
-      this.logger.log(`📍 ${propriedades.length} propriedades ativas encontradas`);
-
-      let totalAlertas = 0;
-      for (const prop of propriedades) {
-        try {
-          const alertas = await this.producaoService.verificarQuedaProducao(prop.id_propriedade);
-          totalAlertas += alertas;
-          if (alertas > 0) {
-            this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
-          }
-        } catch (error: unknown) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
-        }
-      }
-
-      const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
-      this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
-      this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error: unknown) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
-    }
+    await this.executarJobPorPropriedade('04:00', '🥛 [SCHEDULER] Iniciando verificação de queda de produção...', (idPropriedade) =>
+      this.producaoService.verificarQuedaProducao(idPropriedade),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -304,33 +160,9 @@ export class AlertasScheduler implements OnModuleInit {
    */
   @Cron('0 5 * * *')
   async verificarSecagemPendente() {
-    const inicio = Date.now();
-    this.logger.log('🕐 [05:00] ═══════════════════════════════════════════════');
-    this.logger.log('🛑 [SCHEDULER] Iniciando verificação de secagem pendente...');
-
-    try {
-      const propriedades = await this.getPropriedadesAtivas();
-      this.logger.log(`📍 ${propriedades.length} propriedades ativas encontradas`);
-
-      let totalAlertas = 0;
-      for (const prop of propriedades) {
-        try {
-          const alertas = await this.manejoService.verificarSecagemPendente(prop.id_propriedade);
-          totalAlertas += alertas;
-          if (alertas > 0) {
-            this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);
-          }
-        } catch (error: unknown) {
-          this.logger.error(`   ❌ Erro na propriedade ${prop.nome}: ${getErrorMessage(error)}`);
-        }
-      }
-
-      const duracao = ((Date.now() - inicio) / 1000).toFixed(2);
-      this.logger.log(`✅ [SCHEDULER] Verificação concluída em ${duracao}s - ${totalAlertas} alertas criados`);
-      this.logger.log('═══════════════════════════════════════════════════════');
-    } catch (error: unknown) {
-      this.logger.error(`❌ [SCHEDULER] Erro crítico: ${getErrorMessage(error)}`, getErrorStack(error));
-    }
+    await this.executarJobPorPropriedade('05:00', '🛑 [SCHEDULER] Iniciando verificação de secagem pendente...', (idPropriedade) =>
+      this.manejoService.verificarSecagemPendente(idPropriedade),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -344,18 +176,24 @@ export class AlertasScheduler implements OnModuleInit {
    */
   @Cron('0 6 * * *')
   async verificarSinaisClinicosPrecoces() {
+    await this.executarJobPorPropriedade('06:00', '🩹 [SCHEDULER] Iniciando verificação de sinais clínicos precoces...', (idPropriedade) =>
+      this.clinicoService.verificarSinaisClinicosPrecoces(idPropriedade),
+    );
+  }
+
+  private async executarJobPorPropriedade(horario: string, descricao: string, callback: (idPropriedade: string) => Promise<number>): Promise<void> {
     const inicio = Date.now();
-    this.logger.log('🕐 [06:00] ═══════════════════════════════════════════════');
-    this.logger.log('🩹 [SCHEDULER] Iniciando verificação de sinais clínicos precoces...');
+    this.logger.log(`🕐 [${horario}] ═══════════════════════════════════════════════`);
+    this.logger.log(descricao);
 
     try {
       const propriedades = await this.getPropriedadesAtivas();
-      this.logger.log(`� ${propriedades.length} propriedades ativas encontradas`);
+      this.logger.log(`📍 ${propriedades.length} propriedades ativas encontradas`);
 
       let totalAlertas = 0;
       for (const prop of propriedades) {
         try {
-          const alertas = await this.clinicoService.verificarSinaisClinicosPrecoces(prop.id_propriedade);
+          const alertas = await callback(prop.id_propriedade);
           totalAlertas += alertas;
           if (alertas > 0) {
             this.logger.log(`   ✅ ${prop.nome}: ${alertas} alertas criados`);

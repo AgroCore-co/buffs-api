@@ -6,11 +6,11 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@ne
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
+import { User } from '../../auth/decorators/user.decorator';
 import { Cargo } from '../../usuario/enums/cargo.enum';
 
 @ApiBearerAuth('JWT-auth')
-@UseGuards(SupabaseAuthGuard, RolesGuard)
-@Roles(Cargo.PROPRIETARIO)
+@UseGuards(SupabaseAuthGuard)
 @ApiTags('Gestão de Propriedade - Endereços')
 @Controller('enderecos')
 /**
@@ -28,6 +28,8 @@ export class EnderecoController {
   constructor(private readonly enderecoService: EnderecoService) {}
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
   @ApiOperation({
     summary: '2. Criar endereço (SEGUNDO PASSO)',
     description: `**FLUXO DE ONBOARDING - PASSO 2/3**
@@ -73,8 +75,8 @@ Cria um endereço que será vinculado à propriedade no próximo passo.
   })
   @ApiResponse({ status: 200, description: 'Lista de endereços retornada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findAll() {
-    return this.enderecoService.findAll();
+  findAll(@User() user: any) {
+    return this.enderecoService.findAllByUser(user);
   }
 
   @Get(':id')
@@ -88,11 +90,13 @@ Cria um endereço que será vinculado à propriedade no próximo passo.
   @ApiResponse({ status: 200, description: 'Endereço encontrado com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Endereço não encontrado.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.enderecoService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.enderecoService.findOne(id, user);
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
   @ApiOperation({
     summary: 'Atualiza um endereço',
     description: 'Atualiza os dados de um endereço específico pelo ID.',
@@ -102,11 +106,13 @@ Cria um endereço que será vinculado à propriedade no próximo passo.
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Endereço não encontrado.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() updateEnderecoDto: UpdateEnderecoDto) {
-    return this.enderecoService.update(id, updateEnderecoDto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() updateEnderecoDto: UpdateEnderecoDto, @User() user: any) {
+    return this.enderecoService.update(id, updateEnderecoDto, user);
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Cargo.PROPRIETARIO)
   @ApiOperation({
     summary: 'Remove um endereço',
     description: 'Remove um endereço específico do sistema pelo ID.',
@@ -115,7 +121,7 @@ Cria um endereço que será vinculado à propriedade no próximo passo.
   @ApiResponse({ status: 200, description: 'Endereço removido com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Endereço não encontrado.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.enderecoService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.enderecoService.remove(id, user);
   }
 }

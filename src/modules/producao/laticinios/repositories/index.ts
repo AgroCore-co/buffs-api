@@ -1,1 +1,1 @@
-export * from './laticinios.repository';
+export * from './laticinios.repository.drizzle';

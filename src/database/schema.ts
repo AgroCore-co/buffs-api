@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access -- Drizzle ORM forward-reference pattern in foreignKey callbacks */
+ 
 import { pgTable, uuid, varchar, timestamp, index, foreignKey, integer, text, boolean, numeric, unique, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { geometry } from './custom-types';
@@ -18,7 +18,12 @@ export const endereco = pgTable('endereco', {
   pontoReferencia: varchar('ponto_referencia', { length: 150 }),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
-});
+  deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+}, (table) => [
+  index('idx_endereco_deleted_at')
+    .using('btree', table.deletedAt.asc().nullsLast().op('timestamptz_ops'))
+    .where(sql`(deleted_at IS NULL)`),
+]);
 
 export const ciclolactacao = pgTable(
   'ciclolactacao',

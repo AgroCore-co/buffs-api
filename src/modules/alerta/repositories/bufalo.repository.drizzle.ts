@@ -1,8 +1,8 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { eq, and, lte } from 'drizzle-orm';
-import { bufalo, grupo, propriedade } from 'src/database/schema';
+import { eq, and, lte, gte, isNull, asc, inArray } from 'drizzle-orm';
+import { bufalo, grupo, propriedade, dadoszootecnicos } from 'src/database/schema';
 
 /**
  * Repository Drizzle para busca de dados de búfalos.
@@ -199,6 +199,73 @@ export class BufaloRepositoryDrizzle {
         id_propriedade,
       });
       throw new InternalServerErrorException(`Erro ao buscar IDs de búfalos: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca pesagens de um búfalo em período específico.
+   */
+  async buscarPesagensRecentes(id_bufalo: string, diasAtras: number) {
+    try {
+      const dataLimite = new Date();
+      dataLimite.setDate(dataLimite.getDate() - diasAtras);
+      const dataLimiteStr = dataLimite.toISOString();
+
+      return await this.databaseService.db.query.dadoszootecnicos.findMany({
+        where: and(eq(dadoszootecnicos.idBufalo, id_bufalo), gte(dadoszootecnicos.dtRegistro, dataLimiteStr), isNull(dadoszootecnicos.deletedAt)),
+        columns: {
+          peso: true,
+          dtRegistro: true,
+          tipoPesagem: true,
+        },
+        orderBy: [asc(dadoszootecnicos.dtRegistro)],
+      });
+    } catch (error) {
+      this.logger.logError(error, {
+        repository: 'BufaloRepositoryDrizzle',
+        method: 'buscarPesagensRecentes',
+        id_bufalo,
+        diasAtras,
+      });
+      throw new InternalServerErrorException(`Erro ao buscar pesagens recentes: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca pesagens recentes de múltiplos búfalos em uma única consulta.
+   */
+  async buscarPesagensRecentesBatch(ids_bufalos: string[], diasAtras: number) {
+    try {
+      if (!ids_bufalos.length) {
+        return [];
+      }
+
+      const dataLimite = new Date();
+      dataLimite.setDate(dataLimite.getDate() - diasAtras);
+      const dataLimiteStr = dataLimite.toISOString();
+
+      return await this.databaseService.db.query.dadoszootecnicos.findMany({
+        where: and(
+          inArray(dadoszootecnicos.idBufalo, ids_bufalos),
+          gte(dadoszootecnicos.dtRegistro, dataLimiteStr),
+          isNull(dadoszootecnicos.deletedAt),
+        ),
+        columns: {
+          idBufalo: true,
+          peso: true,
+          dtRegistro: true,
+          tipoPesagem: true,
+        },
+        orderBy: [asc(dadoszootecnicos.idBufalo), asc(dadoszootecnicos.dtRegistro)],
+      });
+    } catch (error) {
+      this.logger.logError(error, {
+        repository: 'BufaloRepositoryDrizzle',
+        method: 'buscarPesagensRecentesBatch',
+        ids_bufalos,
+        diasAtras,
+      });
+      throw new InternalServerErrorException(`Erro ao buscar pesagens recentes em lote: ${error.message}`);
     }
   }
 }

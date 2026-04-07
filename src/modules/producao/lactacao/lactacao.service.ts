@@ -180,7 +180,7 @@ export class LactacaoService implements ISoftDelete {
 
       let propriedadeNome = 'Não informada';
       if (params.id_propriedade) {
-        const propData = await this.propriedadeRepository.findById(params.id_propriedade);
+        const propData = await this.propriedadeRepository.buscarPorIdInterno(params.id_propriedade);
         if (propData) propriedadeNome = propData.nome;
       }
 

@@ -2,8 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AlertasService } from '../alerta.service';
 import { SanitarioRepositoryDrizzle } from '../repositories/sanitario.repository.drizzle';
 import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizzle';
-import { ProducaoRepositoryDrizzle } from '../repositories/producao.repository.drizzle';
-import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
+import { CreateAlertaDto, NichoAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, formatarDataBR } from '../utils/alerta.constants';
 
 /**
@@ -21,7 +20,6 @@ export class AlertaSanitarioService {
   constructor(
     private readonly alertasService: AlertasService,
     private readonly sanitarioRepo: SanitarioRepositoryDrizzle,
-    private readonly producaoRepo: ProducaoRepositoryDrizzle,
     private readonly bufaloRepo: BufaloRepositoryDrizzle,
   ) {}
 
@@ -75,21 +73,13 @@ export class AlertaSanitarioService {
    */
   private async criarAlertaTratamento(tratamento: any, dtRetorno: Date): Promise<boolean> {
     try {
-      const bufaloData = await this.bufaloRepo.buscarBufaloSimples(tratamento.idBufalo);
+      const bufaloData = await this.bufaloRepo.buscarBufaloCompleto(tratamento.idBufalo);
       if (!bufaloData) return false;
 
-      let grupoNome = 'Não informado';
-      if (bufaloData.idGrupo) {
-        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufaloData.idGrupo);
-        if (nomeGrupo) grupoNome = nomeGrupo;
-      }
+      const grupoNome = bufaloData.grupo?.nomeGrupo ?? 'Não informado';
+      const propriedadeNome = bufaloData.propriedade?.nome ?? 'Não informada';
 
-      let propriedadeNome = 'Não informada';
       const propriedadeId = tratamento.idPropriedade || bufaloData.idPropriedade;
-      if (propriedadeId) {
-        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeId);
-        if (nomeProp) propriedadeNome = nomeProp;
-      }
 
       const alertaDto: CreateAlertaDto = {
         animal_id: bufaloData.idBufalo,
@@ -131,7 +121,7 @@ export class AlertaSanitarioService {
         }
       }
 
-      const vacinacoes = await this.producaoRepo.buscarVacinacoesprogramadas(AlertaConstants.ANTECEDENCIA_VACINACAO_DIAS, ids_bufalos);
+      const vacinacoes = await this.sanitarioRepo.buscarVacinacoesProgramadas(AlertaConstants.ANTECEDENCIA_VACINACAO_DIAS, ids_bufalos);
 
       if (!vacinacoes || vacinacoes.length === 0) {
         this.logger.log('Nenhuma vacinação programada encontrada.');
@@ -162,21 +152,13 @@ export class AlertaSanitarioService {
    */
   private async criarAlertaVacinacao(vacinacao: any, dtProxVac: Date): Promise<boolean> {
     try {
-      const bufaloData = await this.bufaloRepo.buscarBufaloSimples(vacinacao.idBufalo);
+      const bufaloData = await this.bufaloRepo.buscarBufaloCompleto(vacinacao.idBufalo);
       if (!bufaloData) return false;
 
-      let grupoNome = 'Não informado';
-      if (bufaloData.idGrupo) {
-        const nomeGrupo = await this.bufaloRepo.buscarNomeGrupo(bufaloData.idGrupo);
-        if (nomeGrupo) grupoNome = nomeGrupo;
-      }
+      const grupoNome = bufaloData.grupo?.nomeGrupo ?? 'Não informado';
+      const propriedadeNome = bufaloData.propriedade?.nome ?? 'Não informada';
 
-      let propriedadeNome = 'Não informada';
       const propriedadeId = vacinacao.idPropriedade || bufaloData.idPropriedade;
-      if (propriedadeId) {
-        const nomeProp = await this.bufaloRepo.buscarNomePropriedade(propriedadeId);
-        if (nomeProp) propriedadeNome = nomeProp;
-      }
 
       const alertaDto: CreateAlertaDto = {
         animal_id: bufaloData.idBufalo,
