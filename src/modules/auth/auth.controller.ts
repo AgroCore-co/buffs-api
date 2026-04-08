@@ -18,8 +18,6 @@ export class AuthController {
     private readonly authFacade: AuthFacadeService,
   ) {}
 
-  // ==================== NOVOS ENDPOINTS RECOMENDADOS ====================
-
   @Post('signup-proprietario')
   @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 tentativas por minuto
   @ApiOperation({
@@ -138,6 +136,7 @@ Cria conta de autenticação + perfil + vincula a propriedades em operação at�
   })
   @ApiResponse({ status: 200, description: 'Login realizado com sucesso.' })
   @ApiResponse({ status: 401, description: 'Credenciais inválidas ou email não confirmado.' })
+  @ApiResponse({ status: 503, description: 'Serviço de autenticação temporariamente indisponível.' })
   async signIn(@Body() signInDto: SignInDto) {
     return this.authService.signIn(signInDto.email, signInDto.password);
   }
@@ -149,6 +148,7 @@ Cria conta de autenticação + perfil + vincula a propriedades em operação at�
   })
   @ApiResponse({ status: 200, description: 'Token renovado com sucesso.' })
   @ApiResponse({ status: 401, description: 'Refresh token inválido ou expirado.' })
+  @ApiResponse({ status: 503, description: 'Serviço de autenticação temporariamente indisponível.' })
   async refresh(@Body() refreshDto: RefreshDto) {
     return this.authService.refresh(refreshDto.refresh_token);
   }
@@ -161,6 +161,7 @@ Cria conta de autenticação + perfil + vincula a propriedades em operação at�
     description: 'Invalida a sessão atual do usuário.',
   })
   @ApiResponse({ status: 200, description: 'Logout realizado com sucesso.' })
+  @ApiResponse({ status: 503, description: 'Serviço de autenticação temporariamente indisponível.' })
   async signOut(@Headers('authorization') authorization?: string) {
     const accessToken = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null;
 

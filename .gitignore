@@ -36,11 +36,8 @@ DRIZZLE_*.ts
 *_EXAMPLE.ts
 
 # Drizzle migrations (keep only in migration folder)
-/drizzle/*.sql
-/drizzle/meta
 
 promptsdrizzle/
-drizzle/
 
 # Ignorar overrides locais do docker-compose
 docker-compose.override.yml

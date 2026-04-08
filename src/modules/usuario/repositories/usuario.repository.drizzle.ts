@@ -5,9 +5,45 @@ import { usuario, endereco } from '../../../database/schema';
 import { CreateUsuarioDto, UpdateUsuarioDto } from '../dto';
 import { Cargo } from '../enums/cargo.enum';
 
+const usuarioComEnderecoSelect = {
+  usuario: {
+    idUsuario: usuario.idUsuario,
+    authId: usuario.authId,
+    nome: usuario.nome,
+    telefone: usuario.telefone,
+    email: usuario.email,
+    cargo: usuario.cargo,
+    idEndereco: usuario.idEndereco,
+    createdAt: usuario.createdAt,
+    updatedAt: usuario.updatedAt,
+  },
+  endereco: {
+    idEndereco: endereco.idEndereco,
+    pais: endereco.pais,
+    estado: endereco.estado,
+    cidade: endereco.cidade,
+    bairro: endereco.bairro,
+    rua: endereco.rua,
+    cep: endereco.cep,
+    numero: endereco.numero,
+    pontoReferencia: endereco.pontoReferencia,
+    createdAt: endereco.createdAt,
+    updatedAt: endereco.updatedAt,
+  },
+};
+
 @Injectable()
 export class UsuarioRepositoryDrizzle {
   constructor(private readonly db: DatabaseService) {}
+
+  private montarUsuarioComEndereco(linha: { usuario: any; endereco: any }) {
+    const { usuario: usuarioData, endereco: enderecoData } = linha;
+
+    return {
+      ...usuarioData,
+      endereco: enderecoData?.idEndereco ? enderecoData : null,
+    };
+  }
 
   /**
    * Cria um novo usuário (perfil PROPRIETARIO)
@@ -48,7 +84,7 @@ export class UsuarioRepositoryDrizzle {
    */
   async buscarPorEmail(email: string) {
     const resultado = await this.db.db
-      .select()
+      .select(usuarioComEnderecoSelect)
       .from(usuario)
       .leftJoin(endereco, eq(usuario.idEndereco, endereco.idEndereco))
       .where(eq(usuario.email, email))
@@ -58,11 +94,7 @@ export class UsuarioRepositoryDrizzle {
       return null;
     }
 
-    const { usuario: usuarioData, endereco: enderecoData } = resultado[0];
-    return {
-      ...usuarioData,
-      endereco: enderecoData,
-    };
+    return this.montarUsuarioComEndereco(resultado[0]);
   }
 
   /**
@@ -83,7 +115,7 @@ export class UsuarioRepositoryDrizzle {
    */
   async buscarPorId(idUsuario: string) {
     const resultado = await this.db.db
-      .select()
+      .select(usuarioComEnderecoSelect)
       .from(usuario)
       .leftJoin(endereco, eq(usuario.idEndereco, endereco.idEndereco))
       .where(eq(usuario.idUsuario, idUsuario))
@@ -93,11 +125,7 @@ export class UsuarioRepositoryDrizzle {
       return null;
     }
 
-    const { usuario: usuarioData, endereco: enderecoData } = resultado[0];
-    return {
-      ...usuarioData,
-      endereco: enderecoData,
-    };
+    return this.montarUsuarioComEndereco(resultado[0]);
   }
 
   /**
@@ -126,12 +154,9 @@ export class UsuarioRepositoryDrizzle {
    * Lista todos os usuários
    */
   async listarTodos() {
-    const resultado = await this.db.db.select().from(usuario).leftJoin(endereco, eq(usuario.idEndereco, endereco.idEndereco));
+    const resultado = await this.db.db.select(usuarioComEnderecoSelect).from(usuario).leftJoin(endereco, eq(usuario.idEndereco, endereco.idEndereco));
 
-    return resultado.map(({ usuario: usuarioData, endereco: enderecoData }) => ({
-      ...usuarioData,
-      endereco: enderecoData,
-    }));
+    return resultado.map((linha) => this.montarUsuarioComEndereco(linha));
   }
 
   /**
