@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsInt, IsNumber, IsOptional, IsString, IsUUID, IsNotEmpty, Min, MaxLength, IsDateString } from 'class-validator';
+import { IsNotFutureDate } from '../../../../core/validators/date.validators';
 
 /**
  * DTO para criação de registro de alimentação
@@ -21,7 +22,7 @@ export class CreateRegistroAlimentacaoDto {
   })
   @IsUUID()
   @IsNotEmpty()
-  id_propriedade: string;
+  id_propriedade!: string;
 
   @ApiProperty({
     description: 'ID do grupo de búfalos que receberá a alimentação (UUID). O grupo deve pertencer à mesma propriedade.',
@@ -30,7 +31,7 @@ export class CreateRegistroAlimentacaoDto {
   })
   @IsUUID()
   @IsNotEmpty()
-  id_grupo: string;
+  id_grupo!: string;
 
   @ApiProperty({
     description:
@@ -40,7 +41,7 @@ export class CreateRegistroAlimentacaoDto {
   })
   @IsUUID()
   @IsNotEmpty()
-  id_aliment_def: string;
+  id_aliment_def!: string;
 
   @ApiProperty({
     description: 'Quantidade de alimento fornecida (número decimal positivo).',
@@ -51,7 +52,7 @@ export class CreateRegistroAlimentacaoDto {
   @IsNumber()
   @IsNotEmpty()
   @Min(0.01)
-  quantidade: number;
+  quantidade!: number;
 
   @ApiProperty({
     description: 'Unidade de medida da quantidade fornecida. Ex: kg, g, litros, L, sacos, etc.',
@@ -62,7 +63,7 @@ export class CreateRegistroAlimentacaoDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  unidade_medida: string;
+  unidade_medida!: string;
 
   @ApiProperty({
     description: 'Frequência de alimentação por dia (quantas vezes ao dia o alimento é fornecido). Número inteiro positivo.',
@@ -83,5 +84,6 @@ export class CreateRegistroAlimentacaoDto {
   })
   @IsDateString()
   @IsOptional()
+  @IsNotFutureDate()
   dt_registro?: string;
 }

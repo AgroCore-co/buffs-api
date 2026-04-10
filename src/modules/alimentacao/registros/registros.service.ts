@@ -1,92 +1,94 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
-import { CreateRegistroAlimentacaoDto } from './dto/create-registro.dto';
 import { UpdateRegistroAlimentacaoDto } from './dto/update-registro.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
-import { RegistrosRepositoryDrizzle } from './repositories/registros.repository.drizzle';
+import { CreateRegistroPayload, RegistrosRepositoryDrizzle } from './repositories/registros.repository.drizzle';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { calculatePaginationParams, createPaginatedResponse } from '../../../core/utils/pagination.utils';
-import { DatabaseService } from '../../../core/database/database.service';
-import { eq, and, isNull } from 'drizzle-orm';
-import { alimentacaodef, grupo } from '../../../database/schema';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 
-type CreateRegistroPayload = CreateRegistroAlimentacaoDto & { id_usuario: string };
+type RegistroEntity = {
+  idRegistro: string;
+  idPropriedade: string | null;
+  idGrupo: string | null;
+  idAlimentDef: string | null;
+  idUsuario: string | null;
+  quantidade: string | null;
+  unidadeMedida: string | null;
+  freqDia: number | null;
+  dtRegistro: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  deletedAt: string | null;
+};
 
 @Injectable()
 export class RegistrosService {
   constructor(
     private readonly registrosRepo: RegistrosRepositoryDrizzle,
     private readonly logger: LoggerService,
-    private readonly databaseService: DatabaseService,
+    private readonly authHelper: AuthHelperService,
   ) {}
 
-  async create(dto: CreateRegistroPayload) {
-    // Validar se o grupo pertence à propriedade
-    const grupoData = await this.databaseService.db.query.grupo.findFirst({
-      where: and(eq(grupo.idGrupo, dto.id_grupo), isNull(grupo.deletedAt)),
-      columns: {
-        idPropriedade: true,
-      },
-    });
+  private toError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+  }
 
-    if (!grupoData) {
+  private async findOneOrThrow(idRegistro: string): Promise<RegistroEntity> {
+    const { data, error } = await this.registrosRepo.findOne(idRegistro);
+
+    if (error || !data) {
+      throw new NotFoundException('Registro de alimentação não encontrado.');
+    }
+
+    return data;
+  }
+
+  private async validateOwnership(userId: string, idPropriedade: string | null): Promise<void> {
+    if (!idPropriedade) {
+      throw new NotFoundException('Registro de alimentação sem propriedade vinculada.');
+    }
+
+    await this.authHelper.validatePropriedadeAccess(userId, idPropriedade);
+  }
+
+  async create(dto: CreateRegistroPayload) {
+    await this.validateOwnership(dto.id_usuario, dto.id_propriedade);
+
+    const { data, error, validationError } = await this.registrosRepo.create(dto);
+
+    if (validationError === 'GROUP_NOT_FOUND') {
       throw new NotFoundException('Grupo não encontrado.');
     }
 
-    if (grupoData.idPropriedade !== dto.id_propriedade) {
+    if (validationError === 'GROUP_PROPERTY_MISMATCH') {
       throw new BadRequestException('O grupo informado não pertence à propriedade especificada.');
     }
 
-    // Validar se a definição de alimentação pertence à propriedade
-    const alimentDefData = await this.databaseService.db.query.alimentacaodef.findFirst({
-      where: and(eq(alimentacaodef.idAlimentDef, dto.id_aliment_def), isNull(alimentacaodef.deletedAt)),
-      columns: {
-        idPropriedade: true,
-      },
-    });
-
-    if (!alimentDefData) {
+    if (validationError === 'ALIMENT_DEF_NOT_FOUND') {
       throw new NotFoundException('Definição de alimentação não encontrada.');
     }
 
-    if (alimentDefData.idPropriedade !== dto.id_propriedade) {
+    if (validationError === 'ALIMENT_DEF_PROPERTY_MISMATCH') {
       throw new BadRequestException('A definição de alimentação informada não pertence à propriedade especificada.');
     }
 
-    // Criar o registro de alimentação
-    const { data, error } = await this.registrosRepo.create(dto);
-    if (error || !data) {
-      this.logger.logError(error, { module: 'RegistrosAlimentacao', method: 'create' });
-      throw new InternalServerErrorException(`Falha ao criar registro de alimentação: ${error?.message}`);
+    if (validationError === 'INSERT_FAILED') {
+      throw new InternalServerErrorException('Falha ao criar registro de alimentação.');
     }
+
+    if (error || !data) {
+      this.logger.logError(this.toError(error), { module: 'RegistrosAlimentacao', method: 'create' });
+      const errorMessage = error instanceof Error ? error.message : 'erro desconhecido';
+      throw new InternalServerErrorException(`Falha ao criar registro de alimentação: ${errorMessage}`);
+    }
+
     return formatDateFields(data);
   }
 
-  async findAll(paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
-    const { page = 1, limit = 10 } = paginationDto;
-    const { offset } = calculatePaginationParams(page, limit);
+  async findByPropriedade(idPropriedade: string, paginationDto: PaginationDto = {}, userId: string): Promise<PaginatedResponse<unknown>> {
+    await this.validateOwnership(userId, idPropriedade);
 
-    // Busca total de registros
-    const { count: totalCount, error: countError } = await this.registrosRepo.countAll();
-
-    if (countError) {
-      this.logger.logError(countError, { module: 'RegistrosAlimentacao', method: 'findAll', step: 'count' });
-      throw new InternalServerErrorException('Falha ao contar registros de alimentação.');
-    }
-
-    // Busca registros paginados
-    const { data, error } = await this.registrosRepo.findAll(limit, offset);
-
-    if (error) {
-      this.logger.logError(error, { module: 'RegistrosAlimentacao', method: 'findAll' });
-      throw new InternalServerErrorException('Falha ao buscar registros de alimentação.');
-    }
-
-    const formattedData = formatDateFieldsArray(data ?? []);
-    return createPaginatedResponse(formattedData, totalCount, page, limit);
-  }
-
-  async findByPropriedade(idPropriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
     const { page = 1, limit = 10 } = paginationDto;
     const { offset } = calculatePaginationParams(page, limit);
 
@@ -94,7 +96,7 @@ export class RegistrosService {
     const { count: totalCount, error: countError } = await this.registrosRepo.countByPropriedade(idPropriedade);
 
     if (countError) {
-      this.logger.logError(countError, {
+      this.logger.logError(this.toError(countError), {
         module: 'RegistrosAlimentacao',
         method: 'findByPropriedade',
         idPropriedade,
@@ -107,7 +109,7 @@ export class RegistrosService {
     const { data, error } = await this.registrosRepo.findByPropriedade(idPropriedade, limit, offset);
 
     if (error) {
-      this.logger.logError(error, { module: 'RegistrosAlimentacao', method: 'findByPropriedade', idPropriedade });
+      this.logger.logError(this.toError(error), { module: 'RegistrosAlimentacao', method: 'findByPropriedade', idPropriedade });
       throw new InternalServerErrorException('Falha ao buscar registros de alimentação da propriedade.');
     }
 
@@ -115,23 +117,26 @@ export class RegistrosService {
     return createPaginatedResponse(formattedData, totalCount, page, limit);
   }
 
-  async findOne(id_registro: string) {
-    const { data, error } = await this.registrosRepo.findOne(id_registro);
-    if (error || !data) throw new NotFoundException('Registro de alimentação não encontrado.');
+  async findOne(id_registro: string, userId: string) {
+    const data = await this.findOneOrThrow(id_registro);
+    await this.validateOwnership(userId, data.idPropriedade);
     return formatDateFields(data);
   }
 
-  async update(id_registro: string, dto: UpdateRegistroAlimentacaoDto) {
-    await this.findOne(id_registro);
+  async update(id_registro: string, dto: UpdateRegistroAlimentacaoDto, userId: string) {
+    const existing = await this.findOneOrThrow(id_registro);
+    await this.validateOwnership(userId, existing.idPropriedade);
+
     const { data, error } = await this.registrosRepo.update(id_registro, dto);
     if (error || !data) throw new InternalServerErrorException('Falha ao atualizar registro de alimentação.');
     return formatDateFields(data);
   }
 
-  async remove(id_registro: string) {
-    await this.findOne(id_registro);
+  async remove(id_registro: string, userId: string): Promise<void> {
+    const existing = await this.findOneOrThrow(id_registro);
+    await this.validateOwnership(userId, existing.idPropriedade);
+
     const { error } = await this.registrosRepo.remove(id_registro);
     if (error) throw new InternalServerErrorException('Falha ao remover registro de alimentação.');
-    return { message: 'Registro removido com sucesso' };
   }
 }

@@ -55,7 +55,7 @@
   Definicoes mudam menos que registros e podem ser cacheadas com TTL maior.
 
 - Regra principal:
-  Endpoint por propriedade usa CacheTTL 1800s e endpoint por id usa CacheTTL 3600s.
+  Endpoint por propriedade usa CacheTTL.LONG (30 min em ms) e endpoint por id usa CacheTTL.VERY_LONG (1h em ms).
 
 - Excecoes:
   Sem excecoes.
@@ -64,7 +64,7 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Decorators CacheTTL aplicados nos endpoints de listagem/consulta do controller.
+  Decorators CacheTTL aplicados nos endpoints de listagem/consulta do controller usando constantes centralizadas de cache.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/alimentacao-def/alimentacao-def.controller.ts
@@ -101,7 +101,7 @@
   Definicao pertence a uma propriedade e migracao entre propriedades deve ser fluxo explicito, nao update comum.
 
 - Regra principal:
-  Ainda que DTO de update herde campos do create, repositorio deve ignorar id_propriedade na atualizacao.
+  DTO de update nao deve expor id_propriedade e o repositorio deve atualizar apenas campos permitidos.
 
 - Excecoes:
   Sem excecoes.
@@ -110,7 +110,7 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Implementacao de update atualiza somente tipo_alimentacao e descricao (mais updatedAt).
+  UpdateAlimentacaoDefDto omite id_propriedade e implementacao de update atualiza somente tipo_alimentacao e descricao (mais updatedAt).
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/alimentacao-def/dto/update-alimentacao-def.dto.ts

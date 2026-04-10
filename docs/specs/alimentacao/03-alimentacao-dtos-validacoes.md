@@ -35,10 +35,10 @@
   freq_dia e dt_registro sao opcionais.
 
 - Erros esperados:
-  400 para ids invalidos, quantidade <= 0, unidade vazia ou dt_registro fora de formato ISO.
+  400 para ids invalidos, quantidade <= 0, unidade vazia, dt_registro fora de formato ISO ou dt_registro no futuro.
 
 - Criterio de aceite:
-  DTO valida campos obrigatorios e limites minimos antes de chegar ao service.
+  DTO valida campos obrigatorios, limites minimos e regra de data nao futura antes de chegar ao service.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/registros/dto/create-registro.dto.ts
@@ -58,7 +58,7 @@
   Todos os campos sao opcionais (patch parcial).
 
 - Erros esperados:
-  400 para valores fora de faixa ou formato invalido.
+  400 para valores fora de faixa, formato invalido ou dt_registro no futuro.
 
 - Criterio de aceite:
   Campos estruturais de vinculo nao aparecem no DTO de update.
@@ -84,11 +84,11 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  No estado atual nao foram encontrados testes especificos de alimentacao em test/.
+  Existem testes unitarios dedicados para AlimentacaoDefService e RegistrosService cobrindo ownership, regras de validacao cruzada e semantica de remocao.
 
 - Rastreabilidade para codigo e testes:
-  src/modules/alimentacao/
-  test/
+  src/modules/alimentacao/alimentacao-def/alimentacao-def.service.spec.ts
+  src/modules/alimentacao/registros/registros.service.spec.ts
 
 - Status:
-  parcial
+  implementada

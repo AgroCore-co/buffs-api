@@ -30,7 +30,7 @@
   Registro nao pode associar grupo de uma propriedade com id_propriedade diferente.
 
 - Regra principal:
-  Antes de inserir, service deve validar que id_grupo existe e que grupo.idPropriedade == dto.id_propriedade.
+  Fluxo de criacao deve validar que id_grupo existe e que grupo.idPropriedade == dto.id_propriedade no mesmo contexto transacional do insert.
 
 - Excecoes:
   Sem excecoes.
@@ -39,10 +39,11 @@
   NotFoundException para grupo inexistente; BadRequestException para grupo de outra propriedade.
 
 - Criterio de aceite:
-  Registro e bloqueado quando grupo nao existir ou nao pertencer a propriedade informada.
+  Registro e bloqueado quando grupo nao existir ou nao pertencer a propriedade informada, sem janela entre validacao e persistencia.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/registros/registros.service.ts
+  src/modules/alimentacao/registros/repositories/registros.repository.drizzle.ts
 
 - Status:
   implementada
@@ -53,7 +54,7 @@
   Definicao de alimento nao pode ser reutilizada entre propriedades sem controle.
 
 - Regra principal:
-  Service deve validar que id_aliment_def existe e pertence a mesma propriedade do registro.
+  Fluxo de criacao deve validar que id_aliment_def existe e pertence a mesma propriedade do registro no mesmo contexto transacional do insert.
 
 - Excecoes:
   Sem excecoes.
@@ -62,10 +63,11 @@
   NotFoundException para definicao inexistente; BadRequestException para definicao de outra propriedade.
 
 - Criterio de aceite:
-  Registro e bloqueado em divergencia de propriedade da definicao.
+  Registro e bloqueado em divergencia de propriedade da definicao e em caso de definicao removida/inexistente no momento da transacao.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/registros/registros.service.ts
+  src/modules/alimentacao/registros/repositories/registros.repository.drizzle.ts
 
 - Status:
   implementada

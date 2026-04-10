@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, ParseUUIDPipe, UseGuards, Query, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, ParseUUIDPipe, UseGuards, Query, ForbiddenException, HttpCode } from '@nestjs/common';
 import { RegistrosService } from './registros.service';
 import { CreateRegistroAlimentacaoDto } from './dto/create-registro.dto';
 import { UpdateRegistroAlimentacaoDto } from './dto/update-registro.dto';
@@ -6,13 +6,22 @@ import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
 import { User } from '../../auth/decorators/user.decorator';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { PropertyExistsGuard } from '../../../core/guards/property-exists.guard';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
 @ApiTags('Alimentação - Registros')
 @Controller('alimentacao/registros')
 export class RegistrosController {
-  constructor(private readonly service: RegistrosService) {}
+  constructor(
+    private readonly service: RegistrosService,
+    private readonly authHelperService: AuthHelperService,
+  ) {}
+
+  private async resolveUserId(user: { email?: string }): Promise<string> {
+    return this.authHelperService.getUserId(user);
+  }
 
   @Post()
   @ApiOperation({
@@ -44,6 +53,7 @@ export class RegistrosController {
   }
 
   @Get('propriedade/:id_propriedade')
+  @UseGuards(PropertyExistsGuard)
   @ApiOperation({
     summary: 'Lista todos os registros de alimentação de uma propriedade',
     description: `Retorna todos os registros de alimentação de uma propriedade específica.
@@ -60,16 +70,22 @@ export class RegistrosController {
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
   @ApiResponse({ status: 200, description: 'Lista de registros da propriedade retornada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) idPropriedade: string, @Query() paginationDto: PaginationDto) {
-    return this.service.findByPropriedade(idPropriedade, paginationDto);
+  async findByPropriedade(
+    @Param('id_propriedade', ParseUUIDPipe) idPropriedade: string,
+    @Query() paginationDto: PaginationDto,
+    @User() user: { email?: string },
+  ) {
+    const userId = await this.resolveUserId(user);
+    return this.service.findByPropriedade(idPropriedade, paginationDto, userId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Busca um registro por ID' })
   @ApiResponse({ status: 200, description: 'Registro encontrado.' })
   @ApiResponse({ status: 404, description: 'Registro não encontrado.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: { email?: string }) {
+    const userId = await this.resolveUserId(user);
+    return this.service.findOne(id, userId);
   }
 
   @Patch(':id')
@@ -90,14 +106,17 @@ export class RegistrosController {
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Registro não encontrado.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRegistroAlimentacaoDto) {
-    return this.service.update(id, dto);
+  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRegistroAlimentacaoDto, @User() user: { email?: string }) {
+    const userId = await this.resolveUserId(user);
+    return this.service.update(id, dto, userId);
   }
 
   @Delete(':id')
+  @HttpCode(204)
   @ApiOperation({ summary: 'Remove um registro de alimentação' })
-  @ApiResponse({ status: 200, description: 'Registro removido.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.remove(id);
+  @ApiResponse({ status: 204, description: 'Registro removido.' })
+  async remove(@Param('id', ParseUUIDPipe) id: string, @User() user: { email?: string }) {
+    const userId = await this.resolveUserId(user);
+    await this.service.remove(id, userId);
   }
 }

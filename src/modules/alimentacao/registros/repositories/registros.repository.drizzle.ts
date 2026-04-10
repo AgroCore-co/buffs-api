@@ -1,7 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { eq, desc, count, and, isNull } from 'drizzle-orm';
-import { alimregistro } from 'src/database/schema';
+import { alimregistro, alimentacaodef, grupo } from 'src/database/schema';
+import { CreateRegistroAlimentacaoDto } from '../dto/create-registro.dto';
+import { UpdateRegistroAlimentacaoDto } from '../dto/update-registro.dto';
+
+type AlimRegistroInsert = typeof alimregistro.$inferInsert;
+type AlimRegistroSelect = typeof alimregistro.$inferSelect;
+
+export type CreateRegistroPayload = CreateRegistroAlimentacaoDto & { id_usuario: string };
+
+export type CreateRegistroValidationError =
+  | 'GROUP_NOT_FOUND'
+  | 'GROUP_PROPERTY_MISMATCH'
+  | 'ALIMENT_DEF_NOT_FOUND'
+  | 'ALIMENT_DEF_PROPERTY_MISMATCH'
+  | 'INSERT_FAILED';
+
+type CreateRegistroResult = {
+  data: AlimRegistroSelect | null;
+  error: unknown | null;
+  validationError: CreateRegistroValidationError | null;
+};
 
 /**
  * Repository Drizzle para alimregistro (Registros de Alimentação)
@@ -11,58 +31,66 @@ export class RegistrosRepositoryDrizzle {
   constructor(private readonly databaseService: DatabaseService) {}
 
   /**
-   * Cria novo registro de alimentação
-   * Mapeia snake_case (DTO) para camelCase (schema)
+   * Cria novo registro com validações de consistência em transação única.
+   * Evita race condition entre validação de vínculos e insert.
    */
-  async create(data: any) {
+  async create(data: CreateRegistroPayload): Promise<CreateRegistroResult> {
     try {
-      const mappedData = {
-        idPropriedade: data.id_propriedade,
-        idGrupo: data.id_grupo,
-        idAlimentDef: data.id_aliment_def,
-        idUsuario: data.id_usuario,
-        quantidade: data.quantidade,
-        unidadeMedida: data.unidade_medida,
-        freqDia: data.freq_dia,
-        dtRegistro: data.dt_registro,
-      };
+      return await this.databaseService.db.transaction(async (tx) => {
+        const grupoData = await tx.query.grupo.findFirst({
+          where: and(eq(grupo.idGrupo, data.id_grupo), isNull(grupo.deletedAt)),
+          columns: {
+            idPropriedade: true,
+          },
+        });
 
-      const result = await this.databaseService.db.insert(alimregistro).values(mappedData).returning();
+        if (!grupoData) {
+          return { data: null, error: null, validationError: 'GROUP_NOT_FOUND' };
+        }
 
-      return { data: result[0], error: null };
-    } catch (error) {
-      return { data: null, error };
-    }
-  }
+        if (grupoData.idPropriedade !== data.id_propriedade) {
+          return { data: null, error: null, validationError: 'GROUP_PROPERTY_MISMATCH' };
+        }
 
-  /**
-   * Busca todos os registros de alimentação com paginação
-   */
-  async findAll(limit: number, offset: number) {
-    try {
-      const result = await this.databaseService.db.query.alimregistro.findMany({
-        where: isNull(alimregistro.deletedAt),
-        orderBy: [desc(alimregistro.createdAt)],
-        limit,
-        offset,
+        const alimentDefData = await tx.query.alimentacaodef.findFirst({
+          where: and(eq(alimentacaodef.idAlimentDef, data.id_aliment_def), isNull(alimentacaodef.deletedAt)),
+          columns: {
+            idPropriedade: true,
+          },
+        });
+
+        if (!alimentDefData) {
+          return { data: null, error: null, validationError: 'ALIMENT_DEF_NOT_FOUND' };
+        }
+
+        if (alimentDefData.idPropriedade !== data.id_propriedade) {
+          return { data: null, error: null, validationError: 'ALIMENT_DEF_PROPERTY_MISMATCH' };
+        }
+
+        const mappedData: Partial<AlimRegistroInsert> = {
+          idPropriedade: data.id_propriedade,
+          idGrupo: data.id_grupo,
+          idAlimentDef: data.id_aliment_def,
+          idUsuario: data.id_usuario,
+          quantidade: data.quantidade.toString(),
+          unidadeMedida: data.unidade_medida,
+          freqDia: data.freq_dia,
+          dtRegistro: data.dt_registro,
+        };
+
+        const result = await tx
+          .insert(alimregistro)
+          .values(mappedData as AlimRegistroInsert)
+          .returning();
+
+        if (!result[0]) {
+          return { data: null, error: null, validationError: 'INSERT_FAILED' };
+        }
+
+        return { data: result[0], error: null, validationError: null };
       });
-
-      return { data: result, error: null };
     } catch (error) {
-      return { data: [], error };
-    }
-  }
-
-  /**
-   * Conta total de registros de alimentação
-   */
-  async countAll() {
-    try {
-      const result = await this.databaseService.db.select({ count: count() }).from(alimregistro).where(isNull(alimregistro.deletedAt));
-
-      return { count: result[0]?.count || 0, error: null };
-    } catch (error) {
-      return { count: 0, error };
+      return { data: null, error, validationError: null };
     }
   }
 
@@ -141,14 +169,14 @@ export class RegistrosRepositoryDrizzle {
    * Atualiza registro de alimentação
    * Mapeia snake_case (DTO) para camelCase (schema)
    */
-  async update(idRegistro: string, data: any) {
+  async update(idRegistro: string, data: UpdateRegistroAlimentacaoDto): Promise<{ data: AlimRegistroSelect | null; error: unknown | null }> {
     try {
-      const updateData: any = {
+      const updateData: Partial<AlimRegistroInsert> = {
         updatedAt: new Date().toISOString(),
       };
 
       // Mapeia snake_case para camelCase
-      if (data.quantidade !== undefined) updateData.quantidade = data.quantidade;
+      if (data.quantidade !== undefined) updateData.quantidade = data.quantidade.toString();
       if (data.unidade_medida !== undefined) updateData.unidadeMedida = data.unidade_medida;
       if (data.freq_dia !== undefined) updateData.freqDia = data.freq_dia;
       if (data.dt_registro !== undefined) updateData.dtRegistro = data.dt_registro;
