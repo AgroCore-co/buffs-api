@@ -247,26 +247,27 @@
 - Status:
   implementada
 
-## ALERTA-SCH-011 - Calculo de prioridade por gravidade existe, mas nao e persistido em dois nichos
+## ALERTA-SCH-011 - Calculo de prioridade por gravidade e persistido em dois nichos
 
 - Contexto de negocio:
-  A gravidade da queda de producao e da janela de secagem deveria influenciar prioridade final do alerta.
+  A gravidade da queda de producao e da janela de secagem deve influenciar prioridade final do alerta.
 
 - Regra principal:
-  Alertas de producao e manejo deveriam persistir prioridade calculada (ALTA/MEDIA) no DTO de criacao.
+  Alertas de producao e manejo devem persistir prioridade calculada (ALTA/MEDIA) no DTO de criacao.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, a prioridade calculada localmente pode ser ignorada, deixando o alerta dependente de classificacao assincrona por IA.
+  Nao aplicavel.
 
 - Criterio de aceite:
-  AlertaProducaoService e AlertaManejoService calculam variavel prioridade, porem nao a enviam em CreateAlertaDto.
+  AlertaProducaoService e AlertaManejoService calculam a variavel prioridade e a enviam no campo prioridade do CreateAlertaDto.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alerta/services/alerta-producao.service.ts
   src/modules/alerta/services/alerta-manejo.service.ts
+  src/modules/alerta/dto/create-alerta.dto.ts
 
 - Status:
-  parcial
+  implementada

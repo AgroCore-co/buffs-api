@@ -6,20 +6,21 @@
   O sistema de alertas precisa cobrir sinais clinicos, agenda sanitaria, ciclo reprodutivo, manejo pre-parto e oscilacoes de producao.
 
 - Regra principal:
-  AlertasModule deve registrar servicos de dominio para CLINICO, SANITARIO, REPRODUCAO, MANEJO e PRODUCAO.
+  AlertasProvidersModule deve registrar servicos de dominio para CLINICO, SANITARIO, REPRODUCAO, MANEJO e PRODUCAO, exportando-os para o modulo HTTP e para o modulo de consumer.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  Falha de DI se algum servico de nicho nao for provido no modulo.
+  Falha de DI se algum servico de nicho nao for provido no modulo de providers.
 
 - Criterio de aceite:
-  O modulo expoe AlertaClinicoService, AlertaSanitarioService, AlertaReproducaoService, AlertaManejoService e AlertaProducaoService.
+  AlertasProvidersModule expoe AlertaClinicoService, AlertaSanitarioService, AlertaReproducaoService, AlertaManejoService e AlertaProducaoService, e os modulos AlertasModule/AlertsConsumerModule importam esse modulo.
 
 - Rastreabilidade para codigo e testes:
+  src/modules/alerta/alerta.providers.module.ts
   src/modules/alerta/alerta.module.ts
-  src/modules/alerta/dto/create-alerta.dto.ts
+  src/modules/alerta/consumers/alerts-consumer.module.ts
 
 - Status:
   implementada
@@ -120,31 +121,29 @@
 - Status:
   implementada
 
-## ALERTA-ARCH-006 - Validacao de ownership por propriedade nao e explicita no modulo
+## ALERTA-ARCH-006 - Validacao de ownership por propriedade e explicita no modulo
 
 - Contexto de negocio:
   Em ambiente multi-tenant, autenticacao isolada nao garante por si so que o usuario tenha vinculo com a propriedade consultada.
 
 - Regra principal:
-  Endpoints por propriedade deveriam validar ownership com helper central do Core antes de listar/processar alertas.
+  Endpoints por propriedade devem validar ownership com helper central do Core antes de listar/processar alertas.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, usuario autenticado pode tentar consultar/verificar propriedade sem validacao explicita de vinculo dentro do modulo.
+  404 quando o usuario nao possui vinculo com a propriedade consultada/processada.
 
 - Criterio de aceite:
-  O modulo aplica guard de autenticacao, mas nao chama AuthHelperService.validatePropriedadeAccess nos fluxos de propriedade.
+  Os fluxos findByPropriedade e verificarAlertas chamam validatePropertyAccess, que usa AuthHelperService.getUserId e AuthHelperService.validatePropriedadeAccess.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alerta/alerta.controller.ts
-  src/modules/alerta/alerta.service.ts
-  src/modules/alerta/services/alertas-verificacao.service.ts
   src/core/services/auth-helper.service.ts
 
 - Status:
-  parcial
+  implementada
 
 ## ALERTA-ARCH-007 - Nao ha cobertura automatizada dedicada para o modulo
 

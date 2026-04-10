@@ -161,49 +161,49 @@
 - Status:
   implementada
 
-## ALERTA-DTO-008 - Exemplos Swagger de IDs divergem da validacao real
+## ALERTA-DTO-008 - Exemplos Swagger de IDs seguem o formato UUID validado no contrato
 
 - Contexto de negocio:
   Documentacao de API deveria orientar o consumidor para formato aceito pelo validador.
 
 - Regra principal:
-  Exemplos de animal_id e id_evento_origem deveriam usar UUID quando o campo e @IsUUID.
+  Exemplos de animal_id e id_evento_origem devem usar UUID quando o campo e @IsUUID.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  Consumidores podem replicar exemplos numericos e receber 400 por formato invalido.
+  400 quando valores enviados para campos UUID nao estiverem no formato valido.
 
 - Criterio de aceite:
-  DTO traz examples numericos para campos validados como UUID.
+  DTO traz examples UUID para campos validados como UUID.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alerta/dto/create-alerta.dto.ts
 
 - Status:
-  parcial
+  implementada
 
-## ALERTA-DTO-009 - Query de nichos no endpoint manual nao aplica validacao formal de enum
+## ALERTA-DTO-009 - Query de nichos no endpoint manual aplica validacao formal de enum
 
 - Contexto de negocio:
   Se o cliente enviar nicho invalido, o processamento manual deveria rejeitar entrada explicitamente.
 
 - Regra principal:
-  Parametro query nichos deveria ser validado com enum antes de executar verificacao.
+  Parametro query nichos deve ser validado contra enum oficial antes de executar verificacao.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, nicho invalido pode cair no default do switch com total zero, sem erro explicito de contrato.
+  400 (BadRequestException) quando houver nicho fora de CLINICO, SANITARIO, REPRODUCAO, MANEJO ou PRODUCAO.
 
 - Criterio de aceite:
-  AlertasVerificacaoService normaliza nichos por cast para NichoAlerta[] sem validacao de valor.
+  AlertasController e AlertasVerificacaoService normalizam nichos e validam valores contra Object.values(NichoAlerta), lancando erro para itens invalidos.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alerta/alerta.controller.ts
   src/modules/alerta/services/alertas-verificacao.service.ts
 
 - Status:
-  parcial
+  implementada
