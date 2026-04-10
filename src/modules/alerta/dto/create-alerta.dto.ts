@@ -17,7 +17,7 @@ export enum PrioridadeAlerta {
 }
 
 export class CreateAlertaDto {
-  @ApiProperty({ description: 'ID do búfalo relacionado ao alerta', example: 12, required: false })
+  @ApiProperty({ description: 'ID do búfalo relacionado ao alerta', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', required: false })
   @IsUUID()
   @IsOptional()
   animal_id?: string;
@@ -77,7 +77,7 @@ export class CreateAlertaDto {
   @IsOptional()
   visto?: boolean;
 
-  @ApiProperty({ description: 'ID do evento que originou o alerta', required: false, example: 123 })
+  @ApiProperty({ description: 'ID do evento que originou o alerta', required: false, example: '9f7c4a2d-1d4a-4d65-8bb5-d6d1dc0c9fa2' })
   @IsUUID()
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))

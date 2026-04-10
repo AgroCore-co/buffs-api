@@ -91,7 +91,7 @@ export class AlertasService {
       const { data, error } = await this.alertaRepo.create(alertaParaInserir);
 
       if (error || !data) {
-        console.error('Erro ao criar alerta:', getErrorMessage(error));
+        this.logger.error(`Erro ao criar alerta: ${getErrorMessage(error)}`);
         throw new InternalServerErrorException(`Falha ao criar o alerta: ${getErrorMessage(error)}`);
       }
 
@@ -202,18 +202,30 @@ export class AlertasService {
    */
   async createIfNotExists(createAlertaDto: CreateAlertaDto) {
     try {
+      const tipoEventoOrigem = createAlertaDto.tipo_evento_origem;
+      const idEventoOrigem = createAlertaDto.id_evento_origem;
+      const possuiTipoEventoOrigem = Boolean(tipoEventoOrigem);
+      const possuiIdEventoOrigem = Boolean(idEventoOrigem);
+
+      if (possuiTipoEventoOrigem !== possuiIdEventoOrigem) {
+        this.logger.warn(
+          `Alerta com chave de origem incompleta (tipo=${createAlertaDto.tipo_evento_origem ?? 'N/A'}, id=${createAlertaDto.id_evento_origem ?? 'N/A'}). ` +
+            'Fluxo seguirá sem deduplicação por origem.',
+        );
+      }
+
       // Verifica se já existe um alerta com os mesmos critérios
-      if (createAlertaDto.tipo_evento_origem && createAlertaDto.id_evento_origem) {
+      if (tipoEventoOrigem && idEventoOrigem) {
         // Busca todos os alertas existentes (pode haver duplicatas)
         const { data: existingAlerts, error: searchError } = await this.alertaRepo.findExisting(
-          createAlertaDto.tipo_evento_origem,
-          createAlertaDto.id_evento_origem,
+          tipoEventoOrigem,
+          idEventoOrigem,
           createAlertaDto.animal_id,
           createAlertaDto.nicho,
         );
 
         if (searchError) {
-          console.error('Erro ao verificar alerta existente:', getErrorMessage(searchError));
+          this.logger.error(`Erro ao verificar alerta existente: ${getErrorMessage(searchError)}`);
           throw new InternalServerErrorException(`Erro ao verificar alerta existente: ${getErrorMessage(searchError)}`);
         }
 
@@ -236,8 +248,8 @@ export class AlertasService {
               // data_alerta é sempre string no DTO (IsDateString)
               const dataAlerta = createAlertaDto.data_alerta.split('T')[0];
               const { data: alertaMesmaData } = await this.alertaRepo.findRecorrenteSameDate(
-                createAlertaDto.tipo_evento_origem,
-                createAlertaDto.id_evento_origem,
+                tipoEventoOrigem,
+                idEventoOrigem,
                 createAlertaDto.animal_id,
                 dataAlerta,
               );
@@ -257,7 +269,7 @@ export class AlertasService {
       if (error instanceof InternalServerErrorException) {
         throw error;
       }
-      console.error('Erro inesperado ao criar alerta condicional:', error);
+      this.logger.error(`Erro inesperado ao criar alerta condicional: ${getErrorMessage(error)}`);
       throw new InternalServerErrorException('Ocorreu um erro inesperado ao verificar/criar o alerta.');
     }
   }

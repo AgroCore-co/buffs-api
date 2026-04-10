@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { AppConsumerModule } from './app.consumer.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
@@ -12,11 +13,11 @@ async function bootstrap() {
     logger: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['log', 'debug', 'error', 'verbose', 'warn'],
   });
 
-  // ── RabbitMQ Microservice (Hybrid App) ────────────────────────────
+  // ── RabbitMQ Consumer em contexto isolado ──────────────────────────
   const configService = app.get(ConfigService);
   const rabbitmqUrl = configService.get<string>('RABBITMQ_URL', RABBITMQ_DEFAULT_URL);
 
-  app.connectMicroservice<MicroserviceOptions>({
+  const alertsConsumer = await NestFactory.createMicroservice<MicroserviceOptions>(AppConsumerModule, {
     transport: Transport.RMQ,
     options: {
       urls: [rabbitmqUrl],
@@ -31,7 +32,7 @@ async function bootstrap() {
       prefetchCount: 1,
     },
   });
-  // ──────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────
 
   app.use(
     helmet({
@@ -285,8 +286,8 @@ Authorization: Bearer <access_token>
   // Graceful shutdown para AWS App Runner
   app.enableShutdownHooks();
 
-  // Iniciar consumers RabbitMQ + servidor HTTP
-  await app.startAllMicroservices();
+  // Inicia consumer isolado e, em seguida, servidor HTTP
+  await alertsConsumer.listen();
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port, '0.0.0.0');

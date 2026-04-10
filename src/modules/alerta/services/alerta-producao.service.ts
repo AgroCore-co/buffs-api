@@ -30,31 +30,17 @@ export class AlertaProducaoService {
     this.logger.log(`Verificando queda de produção${id_propriedade ? ` para propriedade ${id_propriedade}` : ''}...`);
 
     try {
-      // Buscar IDs dos búfalos da propriedade se fornecida
-      let ids_bufalos: string[] | undefined;
-      if (id_propriedade) {
-        const bufalos = await this.bufaloRepo.buscarIdsBufalosPorPropriedade(id_propriedade);
-        ids_bufalos = bufalos;
-        if (!ids_bufalos || ids_bufalos.length === 0) {
-          this.logger.log('Nenhum búfalo encontrado na propriedade.');
-          return 0;
-        }
-      }
-
       // Buscar produções dos últimos 37 dias (7 recentes + 30 histórico)
       const diasTotal = AlertaConstants.DIAS_ANALISE_PRODUCAO_RECENTE + AlertaConstants.DIAS_ANALISE_PRODUCAO_HISTORICO;
-      const producoes = await this.producaoRepo.buscarProducoesRecentes(diasTotal);
+      const producoes = await this.producaoRepo.buscarProducoesRecentes(diasTotal, id_propriedade);
 
       if (!producoes || producoes.length === 0) {
         this.logger.log('Nenhuma produção encontrada.');
         return 0;
       }
 
-      // Filtrar por propriedade se necessário
-      const producoesValidas = ids_bufalos ? producoes.filter((p: any) => ids_bufalos.includes(p.idBufala)) : producoes;
-
       // Agrupar por búfala
-      const producoesPorBufala = this.agruparProducoesPorBufala(producoesValidas);
+      const producoesPorBufala = this.agruparProducoesPorBufala(producoes);
 
       let alertasCriados = 0;
       const hoje = new Date();
@@ -132,9 +118,18 @@ export class AlertaProducaoService {
     }
 
     // Calcular médias
-    const mediaRecente = producoesRecentes.reduce((sum, p) => sum + parseFloat(p.quantidade), 0) / producoesRecentes.length;
+    const mediaRecente = producoesRecentes.reduce((sum, p) => sum + this.normalizarQtOrdenha(p.qtOrdenha), 0) / producoesRecentes.length;
 
-    const mediaHistorica = producoesHistoricas.reduce((sum, p) => sum + parseFloat(p.quantidade), 0) / producoesHistoricas.length;
+    const mediaHistorica = producoesHistoricas.reduce((sum, p) => sum + this.normalizarQtOrdenha(p.qtOrdenha), 0) / producoesHistoricas.length;
+
+    if (mediaHistorica <= 0) {
+      return {
+        houveQueda: false,
+        percentualQueda: 0,
+        mediaRecente: 0,
+        mediaHistorica: 0,
+      };
+    }
 
     // Calcular percentual de queda
     const percentualQueda = ((mediaHistorica - mediaRecente) / mediaHistorica) * 100;
@@ -145,6 +140,11 @@ export class AlertaProducaoService {
       mediaRecente: Math.round(mediaRecente * 100) / 100,
       mediaHistorica: Math.round(mediaHistorica * 100) / 100,
     };
+  }
+
+  private normalizarQtOrdenha(valor: string | number | null | undefined): number {
+    const quantidade = typeof valor === 'number' ? valor : Number(valor ?? 0);
+    return Number.isFinite(quantidade) ? quantidade : 0;
   }
 
   /**
@@ -176,6 +176,7 @@ export class AlertaProducaoService {
         motivo: `Queda de ${analise.percentualQueda}% na produção de leite de ${bufalaData.nome}.`,
         nicho: NichoAlerta.PRODUCAO,
         data_alerta: hoje.toISOString().split('T')[0],
+        prioridade,
         texto_ocorrencia_clinica: `Búfala ${bufalaData.nome} apresentou queda significativa de ${analise.percentualQueda}% na produção de leite. Média dos últimos 7 dias: ${analise.mediaRecente}L/dia. Média dos 30 dias anteriores: ${analise.mediaHistorica}L/dia. Redução pode indicar problemas de saúde (mastite, infecções), deficiência nutricional, estresse, problemas no manejo de ordenha ou início de gestação. Necessário investigar causa e implementar ações corretivas.`,
         observacao: `Média últimos 7 dias: ${analise.mediaRecente}L. Média 30 dias anteriores: ${analise.mediaHistorica}L. Investigar saúde, alimentação e condições de manejo.`,
         id_evento_origem: id_bufala,

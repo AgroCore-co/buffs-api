@@ -6,6 +6,12 @@ import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizz
 import { CreateAlertaDto, NichoAlerta, PrioridadeAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, formatarDataBR } from '../utils/alerta.constants';
 
+interface SecagemCandidata {
+  reproducao: any;
+  dataPrevistaParto: Date;
+  diasAteParto: number;
+}
+
 /**
  * Serviço de domínio para alertas de MANEJO.
  * Contém toda a lógica de negócio para verificação de:
@@ -38,31 +44,66 @@ export class AlertaManejoService {
         return 0;
       }
 
-      let alertasCriados = 0;
       const hoje = new Date();
+      const candidatasSecagem: SecagemCandidata[] = [];
 
       for (const rep of reproducoes) {
+        if (!rep.dtEvento || !rep.idBufala) {
+          continue;
+        }
+
+        const dataEvento = new Date(rep.dtEvento);
+        const dataPrevistaParto = new Date(dataEvento);
+        dataPrevistaParto.setDate(dataEvento.getDate() + AlertaConstants.TEMPO_GESTACAO_DIAS);
+
+        const diffTime = dataPrevistaParto.getTime() - hoje.getTime();
+        const diasAteParto = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diasAteParto > 0 && diasAteParto <= AlertaConstants.DIAS_SECAGEM_ANTES_PARTO) {
+          candidatasSecagem.push({
+            reproducao: rep,
+            dataPrevistaParto,
+            diasAteParto,
+          });
+        }
+      }
+
+      if (!candidatasSecagem.length) {
+        this.logger.log('Nenhuma búfala na janela de secagem encontrada.');
+        return 0;
+      }
+
+      const idsBufalas = Array.from(new Set(candidatasSecagem.map((item) => item.reproducao.idBufala)));
+      const [ordenhasRecentes, bufalasCompletas] = await Promise.all([
+        this.producaoRepo.buscarOrdenhasRecentesBatch(idsBufalas, AlertaConstants.DIAS_VERIFICACAO_ORDENHA_SECAGEM),
+        this.bufaloRepo.buscarBufalosCompletosBatch(idsBufalas),
+      ]);
+
+      const idsEmOrdenha = new Set(ordenhasRecentes.map((ordenha) => ordenha.idBufala).filter((id): id is string => Boolean(id)));
+      const bufalaMap = new Map(bufalasCompletas.map((bufala) => [bufala.idBufalo, bufala]));
+
+      let alertasCriados = 0;
+
+      for (const candidata of candidatasSecagem) {
+        const idBufala = candidata.reproducao.idBufala;
+
+        if (!idsEmOrdenha.has(idBufala)) {
+          continue;
+        }
+
+        const bufalaData = bufalaMap.get(idBufala);
+        if (!bufalaData) {
+          this.logger.warn(`Dados da búfala ${idBufala} não encontrados no lote de secagem.`);
+          continue;
+        }
+
         try {
-          if (!rep.dtEvento) continue;
-
-          const dataEvento = new Date(rep.dtEvento);
-          const dataPrevistaParto = new Date(dataEvento);
-          dataPrevistaParto.setDate(dataEvento.getDate() + AlertaConstants.TEMPO_GESTACAO_DIAS);
-
-          const diffTime = dataPrevistaParto.getTime() - hoje.getTime();
-          const diasAteParto = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-          // Verifica se está dentro do período de secagem
-          if (diasAteParto > 0 && diasAteParto <= AlertaConstants.DIAS_SECAGEM_ANTES_PARTO) {
-            const aindaEmOrdenha = rep.idBufala ? await this.verificarSeAindaEmOrdenha(rep.idBufala) : false;
-
-            if (aindaEmOrdenha) {
-              const alertaCriado = await this.criarAlertaSecagem(rep, dataPrevistaParto, diasAteParto);
-              if (alertaCriado) alertasCriados++;
-            }
+          const alertaCriado = await this.criarAlertaSecagem(candidata.reproducao, candidata.dataPrevistaParto, candidata.diasAteParto, bufalaData);
+          if (alertaCriado) {
+            alertasCriados++;
           }
         } catch (error) {
-          this.logger.error(`Erro ao processar reprodução ${rep.idReproducao}:`, error);
+          this.logger.error(`Erro ao processar reprodução ${candidata.reproducao.idReproducao}:`, error);
         }
       }
 
@@ -75,22 +116,10 @@ export class AlertaManejoService {
   }
 
   /**
-   * Verifica se búfala ainda está em ordenha (tem registros recentes).
-   */
-  private async verificarSeAindaEmOrdenha(id_bufala: string): Promise<boolean> {
-    const ordenhas = await this.producaoRepo.buscarOrdenhasRecentes(id_bufala, AlertaConstants.DIAS_VERIFICACAO_ORDENHA_SECAGEM);
-
-    return !!(ordenhas && ordenhas.length > 0);
-  }
-
-  /**
    * Cria alerta de secagem pendente.
    */
-  private async criarAlertaSecagem(reproducao: any, dataPrevistaParto: Date, diasAteParto: number): Promise<boolean> {
+  private async criarAlertaSecagem(reproducao: any, dataPrevistaParto: Date, diasAteParto: number, bufalaData: any): Promise<boolean> {
     try {
-      const bufalaData = await this.bufaloRepo.buscarBufaloCompleto(reproducao.idBufala);
-      if (!bufalaData) return false;
-
       const grupoNome = bufalaData.grupo?.nomeGrupo ?? 'Não informado';
       const propriedadeNome = bufalaData.propriedade?.nome ?? 'Não informada';
 
@@ -107,6 +136,7 @@ export class AlertaManejoService {
         motivo: `Búfala ${bufalaData.nome} gestante precisa ser seca. Parto previsto em ${diasAteParto} dias (${formatarDataBR(dataPrevistaParto)}).`,
         nicho: NichoAlerta.MANEJO,
         data_alerta: new Date().toISOString().split('T')[0],
+        prioridade,
         texto_ocorrencia_clinica: `Búfala ${bufalaData.nome} está gestante com parto previsto para ${formatarDataBR(dataPrevistaParto)} (daqui a ${diasAteParto} dias) mas continua em ordenha. Necessário realizar secagem para permitir recuperação da glândula mamária e preparação adequada para próxima lactação. Recomenda-se secar entre 45-60 dias antes do parto através da suspensão gradual da ordenha, evitando mastite e garantindo saúde da vaca e do bezerro.`,
         observacao: `Recomenda-se secar 60 dias antes do parto. Suspender ordenha gradualmente para preparação do animal.`,
         id_evento_origem: reproducao.idReproducao,

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AlertasConsumer } from './alertas.consumer';
-import { AlertasModule } from '../alerta.module';
-import { GeminiModule } from 'src/core/gemini/gemini.module';
+import { AlertasProvidersModule } from '../alerta.providers.module';
 
 /**
  * Módulo dos consumers RabbitMQ para alertas.
@@ -10,7 +9,7 @@ import { GeminiModule } from 'src/core/gemini/gemini.module';
  * vindos da queue `buffs.alerts` configurada no main.ts (Hybrid App).
  */
 @Module({
-  imports: [AlertasModule, GeminiModule],
+  imports: [AlertasProvidersModule],
   controllers: [AlertasConsumer],
 })
 export class AlertsConsumerModule {}

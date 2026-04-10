@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
+import { LoggerService } from 'src/core/logger/logger.service';
 import { eq, and, desc, gte, lte, inArray, count, asc, type SQL } from 'drizzle-orm';
 import { alertas } from 'src/database/schema';
 import { type CreateAlertaDto, type UpdateAlertaDto } from '../dto/create-alerta.dto';
@@ -12,7 +13,18 @@ type AlertaInsert = typeof alertas.$inferInsert;
  */
 @Injectable()
 export class AlertaRepositoryDrizzle {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly logger: LoggerService,
+  ) {}
+
+  private logRepositoryError(method: string, error: unknown): void {
+    const normalizedError = error instanceof Error ? error : new Error(String(error));
+    this.logger.logError(normalizedError, {
+      repository: 'AlertaRepositoryDrizzle',
+      method,
+    });
+  }
 
   /**
    * Cria novo alerta
@@ -42,6 +54,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: result[0], error: null };
     } catch (error) {
+      this.logRepositoryError('create', error);
       return { data: null, error };
     }
   }
@@ -70,6 +83,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: result, error: null };
     } catch (error) {
+      this.logRepositoryError('findExisting', error);
       return { data: [], error };
     }
   }
@@ -100,6 +114,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: result ?? null, error: null };
     } catch (error) {
+      this.logRepositoryError('findRecorrenteSameDate', error);
       return { data: null, error };
     }
   }
@@ -138,6 +153,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: result, error: null };
     } catch (error) {
+      this.logRepositoryError('findAll', error);
       return { data: [], error };
     }
   }
@@ -171,6 +187,7 @@ export class AlertaRepositoryDrizzle {
 
       return { count: result[0]?.count ?? 0, error: null };
     } catch (error) {
+      this.logRepositoryError('countAll', error);
       return { count: 0, error };
     }
   }
@@ -218,6 +235,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: result, error: null };
     } catch (error) {
+      this.logRepositoryError('findByPropriedade', error);
       return { data: [], error };
     }
   }
@@ -248,6 +266,7 @@ export class AlertaRepositoryDrizzle {
 
       return { count: result[0]?.count ?? 0, error: null };
     } catch (error) {
+      this.logRepositoryError('countByPropriedade', error);
       return { count: 0, error };
     }
   }
@@ -267,6 +286,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: result, error: null };
     } catch (error) {
+      this.logRepositoryError('findOne', error);
       return { data: null, error };
     }
   }
@@ -303,6 +323,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: result[0], error: null };
     } catch (error) {
+      this.logRepositoryError('update', error);
       return { data: null, error };
     }
   }
@@ -332,6 +353,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: result[0], error: null };
     } catch (error) {
+      this.logRepositoryError('atualizarPrioridade', error);
       return { data: null, error };
     }
   }
@@ -345,6 +367,7 @@ export class AlertaRepositoryDrizzle {
 
       return { data: null, error: null };
     } catch (error) {
+      this.logRepositoryError('remove', error);
       return { data: null, error };
     }
   }

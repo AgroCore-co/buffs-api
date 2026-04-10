@@ -15,6 +15,10 @@ export class SanitarioRepositoryDrizzle {
     private readonly logger: LoggerService,
   ) {}
 
+  private toError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
   /**
    * Busca tratamentos com retorno agendado nos próximos X dias.
    */
@@ -45,17 +49,28 @@ export class SanitarioRepositoryDrizzle {
           idSanit: true,
           idBufalo: true,
           doenca: true,
+          observacao: true,
+          idMedicao: true,
           dtRetorno: true,
+        },
+        with: {
+          medicacoe: {
+            columns: {
+              tipoTratamento: true,
+              medicacao: true,
+            },
+          },
         },
       });
     } catch (error) {
-      this.logger.logError(error, {
+      const normalizedError = this.toError(error);
+      this.logger.logError(normalizedError, {
         repository: 'SanitarioRepositoryDrizzle',
         method: 'buscarTratamentosComRetorno',
         diasAntecedencia,
         ids_bufalos,
       });
-      throw new InternalServerErrorException(`Erro ao buscar tratamentos com retorno: ${error.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar tratamentos com retorno: ${normalizedError.message}`);
     }
   }
 
@@ -75,13 +90,14 @@ export class SanitarioRepositoryDrizzle {
         },
       });
     } catch (error) {
-      this.logger.logError(error, {
+      const normalizedError = this.toError(error);
+      this.logger.logError(normalizedError, {
         repository: 'SanitarioRepositoryDrizzle',
         method: 'buscarTratamentosRecentes',
         id_bufalo,
         diasAtras,
       });
-      throw new InternalServerErrorException(`Erro ao buscar tratamentos recentes: ${error.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar tratamentos recentes: ${normalizedError.message}`);
     }
   }
 
@@ -106,13 +122,14 @@ export class SanitarioRepositoryDrizzle {
         },
       });
     } catch (error) {
-      this.logger.logError(error, {
+      const normalizedError = this.toError(error);
+      this.logger.logError(normalizedError, {
         repository: 'SanitarioRepositoryDrizzle',
         method: 'buscarTratamentosRecentesBatch',
         ids_bufalos,
         diasAtras,
       });
-      throw new InternalServerErrorException(`Erro ao buscar tratamentos recentes em lote: ${error.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar tratamentos recentes em lote: ${normalizedError.message}`);
     }
   }
 
@@ -128,42 +145,65 @@ export class SanitarioRepositoryDrizzle {
       const hojeStr = hoje.toISOString();
       const dataLimiteStr = dataLimite.toISOString();
 
+      const medicacoesVacinacao = await this.databaseService.db.query.medicacoes.findMany({
+        where: and(eq(medicacoes.tipoTratamento, 'Vacinação'), isNull(medicacoes.deletedAt)),
+        columns: {
+          idMedicacao: true,
+          medicacao: true,
+        },
+      });
+
+      if (!medicacoesVacinacao.length) {
+        return [];
+      }
+
+      const idsMedicacoesVacinacao = medicacoesVacinacao.map((medicacao) => medicacao.idMedicacao).filter((id): id is string => Boolean(id));
+
+      if (!idsMedicacoesVacinacao.length) {
+        return [];
+      }
+
+      const nomeVacinaPorMedicacao = new Map(
+        medicacoesVacinacao
+          .filter((medicacao) => Boolean(medicacao.idMedicacao))
+          .map((medicacao) => [medicacao.idMedicacao as string, medicacao.medicacao ?? null]),
+      );
+
       const conditions: any[] = [
         gte(dadossanitarios.dtAplicacao, hojeStr),
         lte(dadossanitarios.dtAplicacao, dataLimiteStr),
         isNull(dadossanitarios.deletedAt),
+        inArray(dadossanitarios.idMedicao, idsMedicacoesVacinacao),
       ];
 
       if (ids_bufalos && ids_bufalos.length > 0) {
         conditions.push(inArray(dadossanitarios.idBufalo, ids_bufalos));
       }
 
-      return await this.databaseService.db.query.dadossanitarios.findMany({
+      const vacinacoes = await this.databaseService.db.query.dadossanitarios.findMany({
         where: and(...conditions),
         columns: {
           idSanit: true,
           dtAplicacao: true,
           idBufalo: true,
           doenca: true,
-        },
-        with: {
-          medicacoe: {
-            columns: {
-              tipoTratamento: true,
-              medicacao: true,
-            },
-            where: eq(medicacoes.tipoTratamento, 'Vacinação'),
-          },
+          idMedicao: true,
         },
       });
+
+      return vacinacoes.map((vacinacao) => ({
+        ...vacinacao,
+        tipoVacina: vacinacao.idMedicao ? (nomeVacinaPorMedicacao.get(vacinacao.idMedicao) ?? null) : null,
+      }));
     } catch (error) {
-      this.logger.logError(error, {
+      const normalizedError = this.toError(error);
+      this.logger.logError(normalizedError, {
         repository: 'SanitarioRepositoryDrizzle',
         method: 'buscarVacinacoesProgramadas',
         diasAntecedencia,
         ids_bufalos,
       });
-      throw new InternalServerErrorException(`Erro ao buscar vacinações programadas: ${error.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar vacinações programadas: ${normalizedError.message}`);
     }
   }
 }

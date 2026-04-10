@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { eq, and, lte, desc } from 'drizzle-orm';
+import { eq, and, lte, desc, inArray, asc } from 'drizzle-orm';
 import { dadosreproducao } from 'src/database/schema';
 
 /**
@@ -101,6 +101,35 @@ export class ReproducaoRepositoryDrizzle {
         id_bufala,
       });
       throw new InternalServerErrorException(`Erro ao buscar última cobertura: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca coberturas ordenadas por data para múltiplas búfalas.
+   * O primeiro item de cada idBufala representa a cobertura mais recente.
+   */
+  async buscarUltimasCoberturasBatch(ids_bufalas: string[]) {
+    try {
+      if (!ids_bufalas.length) {
+        return [];
+      }
+
+      return await this.databaseService.db.query.dadosreproducao.findMany({
+        where: inArray(dadosreproducao.idBufala, ids_bufalas),
+        columns: {
+          idBufala: true,
+          dtEvento: true,
+          status: true,
+        },
+        orderBy: [asc(dadosreproducao.idBufala), desc(dadosreproducao.dtEvento)],
+      });
+    } catch (error) {
+      this.logger.logError(error, {
+        repository: 'ReproducaoRepositoryDrizzle',
+        method: 'buscarUltimasCoberturasBatch',
+        ids_bufalas,
+      });
+      throw new InternalServerErrorException(`Erro ao buscar últimas coberturas em lote: ${error.message}`);
     }
   }
 }

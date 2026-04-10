@@ -14,7 +14,6 @@ import { ProducaoModule } from './modules/producao/producao.module';
 import { HealthModule } from './health/health.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AlertasModule } from './modules/alerta/alerta.module';
-import { AlertsConsumerModule } from './modules/alerta/consumers/alerts-consumer.module';
 import { DataIngestionModule } from './modules/data-ingestion/data-ingestion.module';
 import { SyncModule } from './modules/sync/sync.module';
 
@@ -41,7 +40,6 @@ import { SyncModule } from './modules/sync/sync.module';
     HealthModule,
     DashboardModule,
     AlertasModule,
-    AlertsConsumerModule,
     DataIngestionModule,
     SyncModule,
   ],
