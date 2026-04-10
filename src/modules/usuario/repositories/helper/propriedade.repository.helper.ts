@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { propriedade } from '../../../../database/schema';
 
 @Injectable()
@@ -32,5 +32,21 @@ export class PropriedadeRepositoryHelper {
       .limit(1);
 
     return resultado.length > 0 ? resultado[0] : null;
+  }
+
+  /**
+   * Lista os IDs dos donos para um conjunto de propriedades
+   */
+  async listarDonosPorPropriedades(idsPropriedades: string[]) {
+    if (idsPropriedades.length === 0) {
+      return [];
+    }
+
+    const resultado = await this.db.db
+      .select({ id_dono: propriedade.idDono })
+      .from(propriedade)
+      .where(and(inArray(propriedade.idPropriedade, idsPropriedades), isNull(propriedade.deletedAt)));
+
+    return Array.from(new Set(resultado.map((r) => r.id_dono).filter((idDono): idDono is string => Boolean(idDono))));
   }
 }

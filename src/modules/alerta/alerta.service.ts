@@ -85,8 +85,13 @@ export class AlertasService {
    */
   async create(createAlertaDto: CreateAlertaDto) {
     try {
+      const alertaDtoComPrioridade: CreateAlertaDto = {
+        ...createAlertaDto,
+        prioridade: createAlertaDto.prioridade ?? PrioridadeAlerta.MEDIA,
+      };
+
       // Remove texto_ocorrencia_clinica antes de inserir (campo não existe no banco)
-      const { texto_ocorrencia_clinica, ...alertaParaInserir } = createAlertaDto;
+      const { texto_ocorrencia_clinica, ...alertaParaInserir } = alertaDtoComPrioridade;
 
       const { data, error } = await this.alertaRepo.create(alertaParaInserir);
 

@@ -1,29 +1,32 @@
- 
 import { pgTable, uuid, varchar, timestamp, index, foreignKey, integer, text, boolean, numeric, unique, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { geometry } from './custom-types';
 
-export const endereco = pgTable('endereco', {
-  idEndereco: uuid('id_endereco')
-    .default(sql`uuid_generate_v4()`)
-    .primaryKey()
-    .notNull(),
-  pais: varchar({ length: 50 }).notNull(),
-  estado: varchar({ length: 50 }).notNull(),
-  cidade: varchar({ length: 50 }).notNull(),
-  bairro: varchar({ length: 50 }),
-  rua: varchar({ length: 100 }),
-  cep: varchar({ length: 10 }),
-  numero: varchar({ length: 10 }),
-  pontoReferencia: varchar('ponto_referencia', { length: 150 }),
-  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
-  deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
-}, (table) => [
-  index('idx_endereco_deleted_at')
-    .using('btree', table.deletedAt.asc().nullsLast().op('timestamptz_ops'))
-    .where(sql`(deleted_at IS NULL)`),
-]);
+export const endereco = pgTable(
+  'endereco',
+  {
+    idEndereco: uuid('id_endereco')
+      .default(sql`uuid_generate_v4()`)
+      .primaryKey()
+      .notNull(),
+    pais: varchar({ length: 50 }).notNull(),
+    estado: varchar({ length: 50 }).notNull(),
+    cidade: varchar({ length: 50 }).notNull(),
+    bairro: varchar({ length: 50 }),
+    rua: varchar({ length: 100 }),
+    cep: varchar({ length: 10 }),
+    numero: varchar({ length: 10 }),
+    pontoReferencia: varchar('ponto_referencia', { length: 150 }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_endereco_deleted_at')
+      .using('btree', table.deletedAt.asc().nullsLast().op('timestamptz_ops'))
+      .where(sql`(deleted_at IS NULL)`),
+  ],
+);
 
 export const ciclolactacao = pgTable(
   'ciclolactacao',
@@ -74,7 +77,7 @@ export const alertas = pgTable(
     motivo: text().notNull(),
     nicho: varchar({ length: 20 }).notNull(),
     dataAlerta: timestamp('data_alerta', { withTimezone: true, mode: 'string' }).notNull(),
-    prioridade: varchar({ length: 20 }).notNull(),
+    prioridade: varchar({ length: 20 }).default('MEDIA').notNull(),
     observacao: text(),
     visto: boolean().default(false),
     idEventoOrigem: uuid('id_evento_origem'),

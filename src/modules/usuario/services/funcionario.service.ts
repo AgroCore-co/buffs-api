@@ -1,34 +1,22 @@
-import {
-  Injectable,
-  ConflictException,
-  ForbiddenException,
-  BadRequestException,
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
-import { SupabaseService } from 'src/core/supabase/supabase.service';
+import { Injectable, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { LoggerService } from 'src/core/logger/logger.service';
 import { AuthHelperService } from 'src/core/services/auth-helper.service';
 import { CreateFuncionarioDto } from '../dto/create-funcionario.dto';
 import { Cargo } from '../enums/cargo.enum';
-import { SupabaseClient } from '@supabase/supabase-js';
 import { formatDateFields } from '../../../core/utils/date-formatter.utils';
 import { UsuarioRepositoryDrizzle, UsuarioPropriedadeRepositoryDrizzle, PropriedadeRepositoryHelper } from '../repositories';
+import { AuthFacadeService } from '../../auth/auth-facade.service';
 
 @Injectable()
 export class FuncionarioService {
-  private readonly adminSupabase: SupabaseClient;
-
   constructor(
-    private readonly supabaseService: SupabaseService,
     private readonly logger: LoggerService,
     private readonly authHelper: AuthHelperService,
+    private readonly authFacade: AuthFacadeService,
     private readonly usuarioRepository: UsuarioRepositoryDrizzle,
     private readonly usuarioPropriedadeRepository: UsuarioPropriedadeRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryHelper,
-  ) {
-    this.adminSupabase = this.supabaseService.getAdminClient();
-  }
+  ) {}
 
   /**
    * Busca o usuário completo pelo auth_id
@@ -58,78 +46,28 @@ export class FuncionarioService {
    * @param authId auth_id do proprietário (logado) que está realizando a ação.
    */
   async createFuncionario(createFuncionarioDto: CreateFuncionarioDto, authId: string) {
-    this.logger.log(`[FuncionarioService] createFuncionario chamado`, { authId });
-
     if (createFuncionarioDto.cargo === Cargo.PROPRIETARIO) {
       throw new BadRequestException('Não é possível criar um usuário com cargo PROPRIETARIO por este endpoint.');
     }
 
-    const proprietario = await this.getUserByAuthId(authId);
-    const propriedadesDoProprietario = await this.getUserPropriedades(proprietario.idUsuario);
-
-    if (createFuncionarioDto.idPropriedade && !propriedadesDoProprietario.includes(createFuncionarioDto.idPropriedade)) {
-      throw new ForbiddenException('Você só pode criar funcionários para suas próprias propriedades.');
-    }
-
-    const { data: authUser, error: authError } = await this.adminSupabase.auth.admin.createUser({
+    this.logger.log('[FuncionarioService] createFuncionario delegando para AuthFacade', {
+      authId,
       email: createFuncionarioDto.email,
-      password: createFuncionarioDto.password,
-      email_confirm: true,
-      user_metadata: {
-        nome: createFuncionarioDto.nome,
-        cargo: createFuncionarioDto.cargo,
-      },
+      cargo: createFuncionarioDto.cargo,
     });
 
-    if (authError) {
-      this.logger.logError(authError, { method: 'createFuncionario', step: 'supabaseAuth' });
-      if (authError.message.includes('already exists')) {
-        throw new ConflictException('Este email já está registrado no sistema de autenticação.');
-      }
-      throw new InternalServerErrorException(`Erro ao criar conta de autenticação: ${authError.message}`);
-    }
-
-    try {
-      const existingUser = await this.usuarioRepository.existePorEmail(createFuncionarioDto.email);
-
-      if (existingUser) {
-        throw new ConflictException('Já existe um perfil de usuário com este email.');
-      }
-
-      const novoFuncionario = await this.usuarioRepository.criarFuncionario({
-        authId: authUser.user.id,
-        nome: createFuncionarioDto.nome,
+    return this.authFacade.registerFuncionario(
+      {
         email: createFuncionarioDto.email,
+        password: createFuncionarioDto.password,
+        nome: createFuncionarioDto.nome,
         telefone: createFuncionarioDto.telefone,
-        cargo: createFuncionarioDto.cargo,
-        id_endereco: createFuncionarioDto.idEndereco,
-      });
-
-      const propriedadesParaVincular = createFuncionarioDto.idPropriedade ? [createFuncionarioDto.idPropriedade] : propriedadesDoProprietario;
-
-      await this.usuarioPropriedadeRepository.vincular(novoFuncionario.idUsuario, propriedadesParaVincular);
-
-      return {
-        id_usuario: novoFuncionario.idUsuario,
-        auth_id: novoFuncionario.authId,
-        nome: novoFuncionario.nome,
-        email: novoFuncionario.email,
-        telefone: novoFuncionario.telefone,
-        cargo: novoFuncionario.cargo,
-        id_endereco: novoFuncionario.idEndereco,
-        created_at: novoFuncionario.createdAt,
-        updated_at: novoFuncionario.updatedAt,
-        propriedades_vinculadas: propriedadesParaVincular,
-        auth_credentials: {
-          email: createFuncionarioDto.email,
-          temp_password: createFuncionarioDto.password,
-        },
-      };
-    } catch (error) {
-      this.logger.logError(error as Error, { message: 'Erro na transação, realizando rollback do Auth User...', authUserId: authUser.user.id });
-      await this.adminSupabase.auth.admin.deleteUser(authUser.user.id);
-      throw error;
-    }
+        cargo: createFuncionarioDto.cargo as Cargo.GERENTE | Cargo.FUNCIONARIO | Cargo.VETERINARIO,
+        idEndereco: createFuncionarioDto.idEndereco,
+        idPropriedade: createFuncionarioDto.idPropriedade,
+      },
+      authId,
+    );
   }
 
   /**
@@ -213,6 +151,8 @@ export class FuncionarioService {
     if (!desvinculado) {
       throw new NotFoundException('Vínculo não encontrado.');
     }
+
+    await this.authHelper.invalidarCachePropriedades(idUsuario);
 
     return { message: 'Funcionário desvinculado com sucesso.' };
   }

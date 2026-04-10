@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, or, sql } from 'drizzle-orm';
+import { eq, inArray, or, sql } from 'drizzle-orm';
 import { usuario, endereco } from '../../../database/schema';
 import { CreateUsuarioDto, UpdateUsuarioDto } from '../dto';
 import { Cargo } from '../enums/cargo.enum';
@@ -155,6 +155,23 @@ export class UsuarioRepositoryDrizzle {
    */
   async listarTodos() {
     const resultado = await this.db.db.select(usuarioComEnderecoSelect).from(usuario).leftJoin(endereco, eq(usuario.idEndereco, endereco.idEndereco));
+
+    return resultado.map((linha) => this.montarUsuarioComEndereco(linha));
+  }
+
+  /**
+   * Lista usuários por um conjunto de IDs
+   */
+  async listarPorIds(idsUsuarios: string[]) {
+    if (idsUsuarios.length === 0) {
+      return [];
+    }
+
+    const resultado = await this.db.db
+      .select(usuarioComEnderecoSelect)
+      .from(usuario)
+      .leftJoin(endereco, eq(usuario.idEndereco, endereco.idEndereco))
+      .where(inArray(usuario.idUsuario, idsUsuarios));
 
     return resultado.map((linha) => this.montarUsuarioComEndereco(linha));
   }

@@ -1,8 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseUUIDPipe, UseInterceptors } from '@nestjs/common';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { Controller, Get, Body, Patch, Param, Delete, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { UsuarioService } from '../services/usuario.service';
 import { FuncionarioService } from '../services/funcionario.service';
-import { CreateFuncionarioDto, CreateUsuarioDto, UpdateUsuarioDto, UpdateCargoDto } from '../dto';
+import { UpdateUsuarioDto, UpdateCargoDto } from '../dto';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -38,12 +37,56 @@ export class UsuarioController {
   @UseGuards(RolesGuard)
   @ApiOperation({
     summary: 'Lista todos os usuários (Admin)',
-    description: 'Lista todos os usuários do sistema. Apenas para proprietários e gerentes.',
+    description: 'Lista usuários do escopo de propriedades do solicitante. Apenas para proprietários e gerentes.',
   })
   @ApiResponse({ status: 200, description: 'Lista de usuários retornada com sucesso.' })
   @ApiResponse({ status: 403, description: 'Acesso negado.' })
-  findAll() {
-    return this.usuarioService.findAll();
+  findAll(@User() user: any) {
+    return this.usuarioService.findAll({
+      id_usuario: user.id_usuario,
+      cargo: user.cargo,
+    });
+  }
+
+  // ==================== FUNCIONÁRIO ROUTES (Consulta Apenas) ====================
+
+  @Get('funcionarios')
+  @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: 'Listar meus funcionários',
+    description: 'Lista todos os funcionários de todas as propriedades do proprietário/gerente logado.',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de funcionários retornada com sucesso.' })
+  listarMeusFuncionarios(@User('sub') authId: string) {
+    return this.funcionarioService.listarMeusFuncionarios(authId);
+  }
+
+  @Get('funcionarios/propriedade/:idPropriedade')
+  @ApiOperation({
+    summary: 'Listar funcionários de uma propriedade',
+    description: 'Retorna todos os funcionários vinculados a uma propriedade específica.',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de funcionários da propriedade retornada.' })
+  @ApiResponse({ status: 403, description: 'Acesso negado. Você não é proprietário desta propriedade.' })
+  listarFuncionariosPorPropriedade(@Param('idPropriedade', ParseUUIDPipe) idPropriedade: string, @User('sub') authId: string) {
+    return this.funcionarioService.listarFuncionariosPorPropriedade(idPropriedade, authId);
+  }
+
+  @Delete('funcionarios/:idUsuario/propriedade/:idPropriedade')
+  @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
+  @UseGuards(RolesGuard)
+  @ApiOperation({
+    summary: 'Desvincular um funcionário de uma propriedade',
+    description: 'Remove o vínculo entre um funcionário e uma propriedade específica.',
+  })
+  @ApiResponse({ status: 200, description: 'Funcionário desvinculado com sucesso.' })
+  desvincularFuncionario(
+    @Param('idUsuario', ParseUUIDPipe) idUsuario: string,
+    @Param('idPropriedade', ParseUUIDPipe) idPropriedade: string,
+    @User('sub') authId: string,
+  ) {
+    return this.funcionarioService.desvincularFuncionario(idUsuario, idPropriedade, authId);
   }
 
   @Get(':id')
@@ -86,7 +129,7 @@ export class UsuarioController {
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
   updateCargo(@Param('id', ParseUUIDPipe) id: string, @Body() updateCargoDto: UpdateCargoDto, @User() user: any) {
     return this.usuarioService.updateCargo(id, updateCargoDto.cargo, {
-      id_usuario: user.id,
+      id_usuario: user.id_usuario,
       cargo: user.cargo,
     });
   }
@@ -102,46 +145,5 @@ export class UsuarioController {
   @ApiResponse({ status: 403, description: 'Acesso negado.' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.usuarioService.remove(id);
-  }
-
-  // ==================== FUNCIONÁRIO ROUTES (Consulta Apenas) ====================
-
-  @Get('funcionarios')
-  @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
-  @UseGuards(RolesGuard)
-  @ApiOperation({
-    summary: 'Listar meus funcionários',
-    description: 'Lista todos os funcionários de todas as propriedades do proprietário/gerente logado.',
-  })
-  @ApiResponse({ status: 200, description: 'Lista de funcionários retornada com sucesso.' })
-  listarMeusFuncionarios(@User('sub') authId: string) {
-    return this.funcionarioService.listarMeusFuncionarios(authId);
-  }
-
-  @Get('funcionarios/propriedade/:idPropriedade')
-  @ApiOperation({
-    summary: 'Listar funcionários de uma propriedade',
-    description: 'Retorna todos os funcionários vinculados a uma propriedade específica.',
-  })
-  @ApiResponse({ status: 200, description: 'Lista de funcionários da propriedade retornada.' })
-  @ApiResponse({ status: 403, description: 'Acesso negado. Você não é proprietário desta propriedade.' })
-  listarFuncionariosPorPropriedade(@Param('idPropriedade', ParseUUIDPipe) idPropriedade: string, @User('sub') authId: string) {
-    return this.funcionarioService.listarFuncionariosPorPropriedade(idPropriedade, authId);
-  }
-
-  @Delete('funcionarios/:idUsuario/propriedade/:idPropriedade')
-  @Roles(Cargo.PROPRIETARIO, Cargo.GERENTE)
-  @UseGuards(RolesGuard)
-  @ApiOperation({
-    summary: 'Desvincular um funcionário de uma propriedade',
-    description: 'Remove o vínculo entre um funcionário e uma propriedade específica.',
-  })
-  @ApiResponse({ status: 200, description: 'Funcionário desvinculado com sucesso.' })
-  desvincularFuncionario(
-    @Param('idUsuario', ParseUUIDPipe) idUsuario: string,
-    @Param('idPropriedade', ParseUUIDPipe) idPropriedade: string,
-    @User('sub') authId: string,
-  ) {
-    return this.funcionarioService.desvincularFuncionario(idUsuario, idPropriedade, authId);
   }
 }

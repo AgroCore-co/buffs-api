@@ -1,0 +1,3 @@
+ALTER TABLE alertas
+ALTER COLUMN prioridade
+SET DEFAULT 'MEDIA';

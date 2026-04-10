@@ -1,6 +1,6 @@
 import { Controller, Post, Body, UseGuards, Headers, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthFacadeService } from './auth-facade.service';
 import { SignInDto, RefreshDto, SignUpProprietarioDto, SignUpFuncionarioDto } from './dto';
@@ -12,6 +12,7 @@ import { Cargo } from '../usuario/enums/cargo.enum';
 
 @ApiTags('Autenticação')
 @Controller('auth')
+@UseGuards(ThrottlerGuard)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
