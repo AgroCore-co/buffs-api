@@ -21,6 +21,7 @@ Objetivos:
 - reproducao/: Especificacoes do modulo de cobertura, genealogia, material genetico e simulacao de acasalamento.
 - producao/: Especificacoes do modulo de lactacao, ordenha, estoque diario, retiradas, laticinios e predicao de producao.
 - alerta/: Especificacoes do modulo de alertas (scheduler, verificacoes por nicho, idempotencia e classificacao por IA).
+- sync/: Especificacoes do modulo de sincronizacao offline-first para consumo mobile por propriedade.
 - data-ingestion/: Especificacoes do modulo de importacao/exportacao de planilhas e integracao com ETL.
 - infra/: Especificacoes do repositorio de infraestrutura (docker compose local/producao, operacao e seguranca).
 
