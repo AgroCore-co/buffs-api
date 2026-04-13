@@ -22,6 +22,7 @@ import { User } from '../../auth/decorators/user.decorator';
 import { NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { PropertyExistsGuard } from '../../../core/guards/property-exists.guard';
 
 /**
  * Controlador REST para gerenciamento de búfalos.
@@ -52,7 +53,7 @@ import { LoggerService } from '../../../core/logger/logger.service';
  * @see {@link BufaloService}
  */
 @ApiBearerAuth('JWT-auth')
-@UseGuards(SupabaseAuthGuard)
+@UseGuards(SupabaseAuthGuard, PropertyExistsGuard)
 @ApiTags('Rebanho - Búfalos')
 @Controller('bufalos')
 export class BufaloController {

@@ -5,7 +5,9 @@ import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateGrupoDto, UpdateGrupoDto } from './dto';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
+import { User } from '../../auth/decorators/user.decorator';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
+import { PropertyExistsGuard } from '../../../core/guards/property-exists.guard';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -26,12 +28,13 @@ export class GrupoController {
   })
   @ApiResponse({ status: 200, description: 'Lista de grupos retornada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findAll() {
+  findAll(@User() user: any) {
     this.logger.logApiRequest('GET', '/grupos', undefined, { module: 'GrupoController', method: 'findAll' });
-    return this.grupoService.findAll();
+    return this.grupoService.findAll(user);
   }
 
   @Get('propriedade/:id_propriedade')
+  @UseGuards(PropertyExistsGuard)
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(3600)
   @ApiOperation({ summary: 'Lista grupos por propriedade com paginação' })
@@ -39,13 +42,13 @@ export class GrupoController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista retornada com sucesso.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto, @User() user: any) {
     this.logger.logApiRequest('GET', `/grupos/propriedade/${id_propriedade}`, undefined, {
       module: 'GrupoController',
       method: 'findByPropriedade',
       propriedadeId: id_propriedade,
     });
-    return this.grupoService.findByPropriedade(id_propriedade, paginationDto);
+    return this.grupoService.findByPropriedade(id_propriedade, paginationDto, user);
   }
 
   @Get(':id')
@@ -59,9 +62,9 @@ export class GrupoController {
   @ApiResponse({ status: 200, description: 'Grupo encontrado com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Grupo não encontrado.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('GET', `/grupos/${id}`, undefined, { module: 'GrupoController', method: 'findOne', grupoId: id });
-    return this.grupoService.findOne(id);
+    return this.grupoService.findOne(id, user);
   }
 
   @Post()
@@ -72,9 +75,9 @@ export class GrupoController {
   @ApiResponse({ status: 201, description: 'Grupo criado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  create(@Body() createGrupoDto: CreateGrupoDto) {
+  create(@Body() createGrupoDto: CreateGrupoDto, @User() user: any) {
     this.logger.logApiRequest('POST', '/grupos', undefined, { module: 'GrupoController', method: 'create' });
-    return this.grupoService.create(createGrupoDto);
+    return this.grupoService.create(createGrupoDto, user);
   }
 
   @Patch(':id')
@@ -87,9 +90,9 @@ export class GrupoController {
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Grupo não encontrado.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() updateGrupoDto: UpdateGrupoDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() updateGrupoDto: UpdateGrupoDto, @User() user: any) {
     this.logger.logApiRequest('PATCH', `/grupos/${id}`, undefined, { module: 'GrupoController', method: 'update', grupoId: id });
-    return this.grupoService.update(id, updateGrupoDto);
+    return this.grupoService.update(id, updateGrupoDto, user);
   }
 
   @Delete(':id')
@@ -101,9 +104,9 @@ export class GrupoController {
   @ApiResponse({ status: 200, description: 'Grupo removido com sucesso (soft delete).' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Grupo não encontrado.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('DELETE', `/grupos/${id}`, undefined, { module: 'GrupoController', method: 'remove', grupoId: id });
-    return this.grupoService.remove(id);
+    return this.grupoService.remove(id, user);
   }
 
   @Post(':id/restore')
@@ -115,9 +118,9 @@ export class GrupoController {
   @ApiResponse({ status: 200, description: 'Grupo restaurado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Grupo não encontrado.' })
   @ApiResponse({ status: 400, description: 'Grupo não está removido.' })
-  restore(@Param('id', ParseUUIDPipe) id: string) {
+  restore(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('POST', `/grupos/${id}/restore`, undefined, { module: 'GrupoController', method: 'restore', grupoId: id });
-    return this.grupoService.restore(id);
+    return this.grupoService.restore(id, user);
   }
 
   @Get('deleted/all')
@@ -126,8 +129,8 @@ export class GrupoController {
     description: 'Retorna todos os grupos, incluindo os removidos (soft delete).',
   })
   @ApiResponse({ status: 200, description: 'Lista completa retornada com sucesso.' })
-  findAllWithDeleted() {
+  findAllWithDeleted(@User() user: any) {
     this.logger.logApiRequest('GET', '/grupos/deleted/all', undefined, { module: 'GrupoController', method: 'findAllWithDeleted' });
-    return this.grupoService.findAllWithDeleted();
+    return this.grupoService.findAllWithDeleted(user);
   }
 }

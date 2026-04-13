@@ -159,8 +159,12 @@ export const movlote = pgTable(
     idPropriedade: uuid('id_propriedade'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
   },
   (table) => [
+    index('idx_movlote_deleted_at')
+      .using('btree', table.deletedAt.asc().nullsLast().op('timestamptz_ops'))
+      .where(sql`(deleted_at IS NULL)`),
     foreignKey({
       columns: [table.idGrupo],
       foreignColumns: [grupo.idGrupo],

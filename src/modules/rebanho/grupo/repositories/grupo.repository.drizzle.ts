@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { eq, and, isNull, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, isNull, desc, asc, sql, inArray } from 'drizzle-orm';
 import { grupo } from '../../../../database/schema';
 import { CreateGrupoDto } from '../dto/create-grupo.dto';
 import { UpdateGrupoDto } from '../dto/update-grupo.dto';
@@ -38,6 +38,17 @@ export class GrupoRepositoryDrizzle {
   async findAll() {
     return await this.databaseService.db.query.grupo.findMany({
       where: isNull(grupo.deletedAt),
+      orderBy: [asc(grupo.nomeGrupo)],
+    });
+  }
+
+  async findByPropriedades(idPropriedades: string[]) {
+    if (idPropriedades.length === 0) {
+      return [];
+    }
+
+    return await this.databaseService.db.query.grupo.findMany({
+      where: and(inArray(grupo.idPropriedade, idPropriedades), isNull(grupo.deletedAt)),
       orderBy: [asc(grupo.nomeGrupo)],
     });
   }
@@ -85,6 +96,17 @@ export class GrupoRepositoryDrizzle {
 
   async findAllWithDeleted() {
     return await this.databaseService.db.query.grupo.findMany({
+      orderBy: [desc(grupo.deletedAt), asc(grupo.nomeGrupo)],
+    });
+  }
+
+  async findAllWithDeletedByPropriedades(idPropriedades: string[]) {
+    if (idPropriedades.length === 0) {
+      return [];
+    }
+
+    return await this.databaseService.db.query.grupo.findMany({
+      where: inArray(grupo.idPropriedade, idPropriedades),
       orderBy: [desc(grupo.deletedAt), asc(grupo.nomeGrupo)],
     });
   }

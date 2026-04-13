@@ -11,6 +11,7 @@ import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { formatDateFields } from '../../../core/utils/date-formatter.utils';
 import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { CacheService } from '../../../core/cache/cache.service';
 
 import { BufaloRepositoryDrizzle } from './repositories/bufalo.repository.drizzle';
 import { UsuarioPropriedadeRepositoryDrizzle } from './repositories/usuario-propriedade.repository.drizzle';
@@ -59,6 +60,7 @@ export class BufaloService implements ISoftDelete {
     private readonly filtrosService: BufaloFiltrosService,
     private readonly authHelper: AuthHelperService,
     private readonly loggerService: LoggerService,
+    private readonly cacheService: CacheService,
   ) {}
 
   // ==================== AUTENTICAÇÃO E AUTORIZAÇÃO ====================
@@ -69,6 +71,13 @@ export class BufaloService implements ISoftDelete {
    */
   async invalidarCachePropriedades(userId: string): Promise<void> {
     await this.authHelper.invalidarCachePropriedades(userId);
+  }
+
+  /**
+   * Invalida cache HTTP e demais chaves em memória compartilhada.
+   */
+  private async invalidateCache(): Promise<void> {
+    await this.cacheService.reset();
   }
 
   /**
@@ -93,6 +102,21 @@ export class BufaloService implements ISoftDelete {
     }
 
     await this.authHelper.validatePropriedadeAccess(userId, bufalo.idPropriedade);
+  }
+
+  /**
+   * Valida acesso ao búfalo incluindo registros removidos logicamente.
+   * Necessário para operações de restore.
+   */
+  private async validateBufaloAccessIncludingDeleted(bufaloId: string, userId: string): Promise<any> {
+    const bufalo = await this.bufaloRepo.findByIdIncludingDeleted(bufaloId);
+
+    if (!bufalo?.idPropriedade) {
+      throw new NotFoundException(`Búfalo com ID ${bufaloId} não encontrado.`);
+    }
+
+    await this.authHelper.validatePropriedadeAccess(userId, bufalo.idPropriedade);
+    return bufalo;
   }
 
   /**
@@ -389,6 +413,7 @@ export class BufaloService implements ISoftDelete {
 
       // 3. Cria no banco
       const novoBufalo = await this.bufaloRepo.create(dadosFinais);
+      await this.invalidateCache();
 
       this.loggerService.log(`Búfalo criado: ${novoBufalo.nome || novoBufalo.brinco}`, { service: 'BufaloService', method: 'create' });
       return novoBufalo;
@@ -572,9 +597,12 @@ export class BufaloService implements ISoftDelete {
     // Valida acesso
     await this.validateBufaloAccess(id, userId);
 
-    // Busca dados atuais uma única vez (reusado por genealogia e maturidade)
-    const precisaDados = updateDto.idPai !== undefined || updateDto.idMae !== undefined || updateDto.dtNascimento || updateDto.sexo;
-    const bufaloAtual = precisaDados ? await this.bufaloRepo.findById(id) : null;
+    const houveAlteracaoGenealogia = updateDto.idPai !== undefined || updateDto.idMae !== undefined || updateDto.idRaca !== undefined;
+
+    // Busca dados atuais uma única vez (reusado por genealogia, maturidade e categoria)
+    const precisaDados =
+      houveAlteracaoGenealogia || updateDto.dtNascimento !== undefined || updateDto.sexo !== undefined || updateDto.idPropriedade !== undefined;
+    const bufaloAtual = precisaDados ? await this.bufaloRepo.findByIdIncludingDeleted(id) : null;
 
     // Valida genealogia se houver mudança de pai/mãe
     if (updateDto.idPai !== undefined || updateDto.idMae !== undefined) {
@@ -588,7 +616,7 @@ export class BufaloService implements ISoftDelete {
     // Se mudou data de nascimento ou sexo, recalcula maturidade
     let dadosAtualizados = { ...updateDto };
 
-    if (updateDto.dtNascimento || updateDto.sexo) {
+    if (updateDto.dtNascimento !== undefined || updateDto.sexo !== undefined) {
       const dadosCompletos = {
         ...bufaloAtual,
         ...updateDto,
@@ -597,8 +625,34 @@ export class BufaloService implements ISoftDelete {
       dadosAtualizados = this.maturidadeService.processarDadosMaturidade(dadosCompletos);
     }
 
+    // Recalcula categoria quando genealogia/raça são alteradas para evitar categoria desatualizada.
+    if (houveAlteracaoGenealogia) {
+      const dadosCompletos = {
+        ...bufaloAtual,
+        ...dadosAtualizados,
+      };
+
+      if (dadosCompletos.idRaca && (dadosCompletos.idPai || dadosCompletos.idMae)) {
+        const arvoreGenealogica = await this.genealogiaService.construirArvoreParaCategoriaFromData(
+          dadosCompletos.idRaca,
+          dadosCompletos.idPai,
+          dadosCompletos.idMae,
+          1,
+        );
+
+        if (arvoreGenealogica) {
+          const propriedade = dadosCompletos.idPropriedade
+            ? await this.usuarioPropriedadeRepo.buscarPropriedadePorId(dadosCompletos.idPropriedade)
+            : null;
+          const categoria = this.categoriaService.processarCategoriaABCB(arvoreGenealogica, propriedade?.pAbcb || false);
+          dadosAtualizados = { ...dadosAtualizados, categoria };
+        }
+      }
+    }
+
     // Atualiza no banco
     const bufaloAtualizado = await this.bufaloRepo.update(id, dadosAtualizados);
+    await this.invalidateCache();
 
     this.loggerService.log(`Búfalo atualizado: ${id}`, { service: 'BufaloService', method: 'update' });
     return bufaloAtualizado;
@@ -630,6 +684,7 @@ export class BufaloService implements ISoftDelete {
 
     // Marca como deletado (soft delete)
     const bufaloRemovido = await this.bufaloRepo.softDelete(id);
+    await this.invalidateCache();
 
     this.loggerService.log(`Búfalo removido (soft delete): ${id}`, { service: 'BufaloService', method: 'softDelete' });
     return {
@@ -644,11 +699,8 @@ export class BufaloService implements ISoftDelete {
   async restore(id: string, user: any) {
     const userId = await this.authHelper.getUserId(user);
 
-    // Valida acesso
-    await this.validateBufaloAccess(id, userId);
-
-    // Verifica se está deletado
-    const bufalo = await this.bufaloRepo.findById(id);
+    // Valida acesso inclusive para registros removidos.
+    const bufalo = await this.validateBufaloAccessIncludingDeleted(id, userId);
 
     if (!bufalo?.deletedAt) {
       throw new BadRequestException('Este búfalo não está removido.');
@@ -656,6 +708,7 @@ export class BufaloService implements ISoftDelete {
 
     // Restaura (remove deletedAt)
     const bufaloRestaurado = await this.bufaloRepo.restore(id);
+    await this.invalidateCache();
 
     this.loggerService.log(`Búfalo restaurado: ${id}`, { service: 'BufaloService', method: 'restore' });
     return {
@@ -689,6 +742,7 @@ export class BufaloService implements ISoftDelete {
 
     // Atualiza em lote
     const bufalosAtualizados = await this.bufaloRepo.updateMany(updateGrupoDto.idsBufalos, { idGrupo: updateGrupoDto.idNovoGrupo });
+    await this.invalidateCache();
 
     this.loggerService.log(`Grupo atualizado para ${updateGrupoDto.idsBufalos.length} búfalos`, { service: 'BufaloService', method: 'updateGrupo' });
     return {
@@ -845,7 +899,7 @@ export class BufaloService implements ISoftDelete {
   /**
    * Processa categoria ABCB de um búfalo específico.
    */
-  async processarCategoriaABCB(id_bufalo: string) {
+  async processarCategoriaABCB(id_bufalo: string, shouldInvalidateCache = true) {
     // Busca dados do búfalo
     const bufalo = await this.bufaloRepo.findById(id_bufalo);
 
@@ -868,6 +922,9 @@ export class BufaloService implements ISoftDelete {
 
     // Atualiza no banco
     await this.bufaloRepo.update(id_bufalo, { categoria });
+    if (shouldInvalidateCache) {
+      await this.invalidateCache();
+    }
 
     return {
       id_bufalo,
@@ -894,7 +951,7 @@ export class BufaloService implements ISoftDelete {
 
     for (const bufalo of bufalos || []) {
       try {
-        const resultado = await this.processarCategoriaABCB(bufalo.idBufalo);
+        const resultado = await this.processarCategoriaABCB(bufalo.idBufalo, false);
         resultados.push(resultado);
 
         if (resultado.categoria_antiga !== resultado.categoria_nova) {
@@ -904,6 +961,10 @@ export class BufaloService implements ISoftDelete {
         erros++;
         this.loggerService.logError(error, { service: 'BufaloService', method: 'processarCategoriaPropriedade', bufaloId: bufalo.idBufalo });
       }
+    }
+
+    if (atualizados > 0) {
+      await this.invalidateCache();
     }
 
     return {
@@ -988,6 +1049,7 @@ export class BufaloService implements ISoftDelete {
 
       // Inativa o búfalo usando o repository Drizzle
       const bufaloInativado = await this.bufaloRepo.inativar(id, inativarDto.dataBaixa, inativarDto.motivoInativo);
+      await this.invalidateCache();
 
       this.loggerService.log(`Búfalo inativado com sucesso: ${id}`, {
         module: 'BufaloService',
@@ -1069,6 +1131,7 @@ export class BufaloService implements ISoftDelete {
 
       // Reativa o búfalo usando o repository Drizzle
       const bufaloReativado = await this.bufaloRepo.reativar(id);
+      await this.invalidateCache();
 
       this.loggerService.log(`Búfalo reativado com sucesso: ${id}`, {
         module: 'BufaloService',

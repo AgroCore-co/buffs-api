@@ -31,6 +31,7 @@ describe('BufaloService', () => {
           provide: BufaloRepositoryDrizzle,
           useValue: {
             findById: jest.fn(),
+            findByIdIncludingDeleted: jest.fn(),
             findChildrenIds: jest.fn(),
             findActiveByIds: jest.fn(),
             findWithFilters: jest.fn(),
@@ -92,6 +93,7 @@ describe('BufaloService', () => {
             get: jest.fn(),
             set: jest.fn(),
             del: jest.fn(),
+            reset: jest.fn(),
           },
         },
         {
@@ -111,6 +113,8 @@ describe('BufaloService', () => {
     cacheService = module.get(CacheService);
     authHelper = module.get(AuthHelperService);
     filtrosService = module.get(BufaloFiltrosService);
+
+    bufaloRepo.findByIdIncludingDeleted.mockImplementation((id: string) => bufaloRepo.findById(id));
   });
 
   it('should be defined', () => {

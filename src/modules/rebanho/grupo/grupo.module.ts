@@ -5,10 +5,11 @@ import { SupabaseModule } from '../../../core/supabase/supabase.module';
 import { LoggerModule } from '../../../core/logger/logger.module';
 import { AuthModule } from '../../auth/auth.module';
 import { DatabaseModule } from '../../../core/database/database.module';
+import { CoreModule } from '../../../core/core.module';
 import { GrupoRepositoryDrizzle } from './repositories';
 
 @Module({
-  imports: [SupabaseModule, LoggerModule, AuthModule, DatabaseModule],
+  imports: [SupabaseModule, LoggerModule, AuthModule, DatabaseModule, CoreModule],
   controllers: [GrupoController],
   providers: [GrupoService, GrupoRepositoryDrizzle],
   exports: [GrupoService, GrupoRepositoryDrizzle],

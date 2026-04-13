@@ -8,38 +8,76 @@ import { createPaginatedResponse, calculatePaginationParams } from '../../../cor
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces';
 import { GrupoRepositoryDrizzle } from './repositories/grupo.repository.drizzle';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { CacheService } from '../../../core/cache/cache.service';
 
 @Injectable()
 export class GrupoService implements ISoftDelete {
   constructor(
     private readonly grupoRepository: GrupoRepositoryDrizzle,
     private readonly logger: LoggerService,
+    private readonly authHelper: AuthHelperService,
+    private readonly cacheService: CacheService,
   ) {}
 
-  async create(createGrupoDto: CreateGrupoDto) {
+  private async invalidateCache(): Promise<void> {
+    await this.cacheService.reset();
+  }
+
+  private async validatePropriedadeAccess(userId: string, idPropriedade?: string | null): Promise<void> {
+    if (!idPropriedade) {
+      throw new NotFoundException('Grupo sem propriedade vinculada.');
+    }
+
+    await this.authHelper.validatePropriedadeAccess(userId, idPropriedade);
+  }
+
+  private async findGrupoForUser(id: string, userId: string, includeDeleted = false) {
+    const grupo = includeDeleted ? await this.grupoRepository.findByIdWithDeleted(id) : await this.grupoRepository.findById(id);
+
+    if (!grupo) {
+      this.logger.warn('Grupo não encontrado', { module: 'GrupoService', method: 'findGrupoForUser', grupoId: id });
+      throw new NotFoundException('Grupo não encontrado.');
+    }
+
+    await this.validatePropriedadeAccess(userId, grupo.idPropriedade);
+    return grupo;
+  }
+
+  async create(createGrupoDto: CreateGrupoDto, user: any) {
     this.logger.log('Iniciando criação de grupo', { module: 'GrupoService', method: 'create' });
 
+    const userId = await this.authHelper.getUserId(user);
+    await this.validatePropriedadeAccess(userId, createGrupoDto.idPropriedade);
+
     const data = await this.grupoRepository.create(createGrupoDto);
+    await this.invalidateCache();
 
     this.logger.log('Grupo criado com sucesso', { module: 'GrupoService', method: 'create', grupoId: data.idGrupo });
     return formatDateFields(data);
   }
 
-  async findAll() {
+  async findAll(user: any) {
     this.logger.log('Iniciando busca de todos os grupos', { module: 'GrupoService', method: 'findAll' });
 
-    const data = await this.grupoRepository.findAll();
+    const userId = await this.authHelper.getUserId(user);
+    const propriedadesUsuario = await this.authHelper.getUserPropriedades(userId);
+
+    const data = await this.grupoRepository.findByPropriedades(propriedadesUsuario);
 
     this.logger.log(`Busca de grupos concluída - ${data.length} grupos encontrados`, { module: 'GrupoService', method: 'findAll' });
     return formatDateFieldsArray(data);
   }
 
-  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}, user: any): Promise<PaginatedResponse<any>> {
     this.logger.log('Iniciando busca de grupos por propriedade', {
       module: 'GrupoService',
       method: 'findByPropriedade',
       propriedadeId: id_propriedade,
     });
+
+    const userId = await this.authHelper.getUserId(user);
+    await this.validatePropriedadeAccess(userId, id_propriedade);
 
     const { page = 1, limit = 10 } = paginationDto;
     const { limit: limitValue } = calculatePaginationParams(page, limit);
@@ -55,42 +93,46 @@ export class GrupoService implements ISoftDelete {
     return createPaginatedResponse(formattedData, total, page, limitValue);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: any) {
     this.logger.log('Iniciando busca de grupo por ID', { module: 'GrupoService', method: 'findOne', grupoId: id });
 
-    const data = await this.grupoRepository.findById(id);
-
-    if (!data) {
-      this.logger.warn('Grupo não encontrado', { module: 'GrupoService', method: 'findOne', grupoId: id });
-      throw new NotFoundException('Grupo não encontrado.');
-    }
+    const userId = await this.authHelper.getUserId(user);
+    const data = await this.findGrupoForUser(id, userId);
 
     this.logger.log('Grupo encontrado com sucesso', { module: 'GrupoService', method: 'findOne', grupoId: id });
     return formatDateFields(data);
   }
 
-  async update(id: string, updateGrupoDto: UpdateGrupoDto) {
+  async update(id: string, updateGrupoDto: UpdateGrupoDto, user: any) {
     this.logger.log('Iniciando atualização de grupo', { module: 'GrupoService', method: 'update', grupoId: id });
 
-    // Primeiro verifica se o grupo existe
-    await this.findOne(id);
+    const userId = await this.authHelper.getUserId(user);
+    await this.findGrupoForUser(id, userId);
+
+    if (updateGrupoDto.idPropriedade) {
+      await this.validatePropriedadeAccess(userId, updateGrupoDto.idPropriedade);
+    }
 
     const data = await this.grupoRepository.update(id, updateGrupoDto);
+    await this.invalidateCache();
 
     this.logger.log('Grupo atualizado com sucesso', { module: 'GrupoService', method: 'update', grupoId: id });
     return formatDateFields(data);
   }
 
-  async remove(id: string) {
-    return this.softDelete(id);
+  async remove(id: string, user: any) {
+    return this.softDelete(id, user);
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user: any) {
     this.logger.log('Iniciando remoção de grupo (soft delete)', { module: 'GrupoService', method: 'softDelete', grupoId: id });
 
-    await this.findOne(id);
+    const userId = await this.authHelper.getUserId(user);
+
+    await this.findGrupoForUser(id, userId);
 
     const data = await this.grupoRepository.softDelete(id);
+    await this.invalidateCache();
 
     this.logger.log('Grupo removido com sucesso (soft delete)', { module: 'GrupoService', method: 'softDelete', grupoId: id });
     return {
@@ -99,20 +141,19 @@ export class GrupoService implements ISoftDelete {
     };
   }
 
-  async restore(id: string) {
+  async restore(id: string, user: any) {
     this.logger.log('Iniciando restauração de grupo', { module: 'GrupoService', method: 'restore', grupoId: id });
 
-    const grupo = await this.grupoRepository.findByIdWithDeleted(id);
+    const userId = await this.authHelper.getUserId(user);
 
-    if (!grupo) {
-      throw new NotFoundException(`Grupo com ID ${id} não encontrado`);
-    }
+    const grupo = await this.findGrupoForUser(id, userId, true);
 
     if (!grupo.deletedAt) {
       throw new BadRequestException('Este grupo não está removido');
     }
 
     const data = await this.grupoRepository.restore(id);
+    await this.invalidateCache();
 
     this.logger.log('Grupo restaurado com sucesso', { module: 'GrupoService', method: 'restore', grupoId: id });
     return {
@@ -121,10 +162,13 @@ export class GrupoService implements ISoftDelete {
     };
   }
 
-  async findAllWithDeleted(): Promise<any[]> {
+  async findAllWithDeleted(user: any): Promise<any[]> {
     this.logger.log('Buscando todos os grupos incluindo deletados', { module: 'GrupoService', method: 'findAllWithDeleted' });
 
-    const data = await this.grupoRepository.findAllWithDeleted();
+    const userId = await this.authHelper.getUserId(user);
+    const propriedadesUsuario = await this.authHelper.getUserPropriedades(userId);
+
+    const data = await this.grupoRepository.findAllWithDeletedByPropriedades(propriedadesUsuario);
 
     return formatDateFieldsArray(data || []);
   }

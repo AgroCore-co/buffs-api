@@ -19,6 +19,8 @@ import { bufalo, raca, grupo, propriedade } from 'src/database/schema';
  */
 @Injectable()
 export class BufaloRepositoryDrizzle {
+  private static readonly MATURITY_JOB_LOCK_KEY = 884221;
+
   constructor(private readonly databaseService: DatabaseService) {}
 
   /**
@@ -97,6 +99,78 @@ export class BufaloRepositoryDrizzle {
       return result || null;
     } catch (error) {
       throw new InternalServerErrorException(`Erro ao buscar búfalo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca búfalo por ID incluindo registros removidos logicamente.
+   * Usado em fluxos de restore e validações de ownership com soft-delete.
+   */
+  async findByIdIncludingDeleted(id_bufalo: string) {
+    try {
+      const result = await this.databaseService.db.query.bufalo.findFirst({
+        where: eq(bufalo.idBufalo, id_bufalo),
+        with: {
+          raca: {
+            columns: {
+              nome: true,
+            },
+          },
+          grupo: {
+            columns: {
+              nomeGrupo: true,
+            },
+          },
+          propriedade: {
+            columns: {
+              nome: true,
+              idDono: true,
+            },
+          },
+          bufalo_idPai: {
+            columns: {
+              brinco: true,
+              nome: true,
+            },
+          },
+          bufalo_idMae: {
+            columns: {
+              brinco: true,
+              nome: true,
+            },
+          },
+          materialgenetico_idPaiSemen: {
+            columns: {
+              identificador: true,
+              idBufaloOrigem: true,
+            },
+            with: {
+              bufalo: {
+                columns: {
+                  brinco: true,
+                },
+              },
+            },
+          },
+          materialgenetico_idMaeOvulo: {
+            columns: {
+              identificador: true,
+              idBufaloOrigem: true,
+            },
+            with: {
+              bufalo: {
+                columns: {
+                  brinco: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return result || null;
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao buscar búfalo (incluindo removidos): ${error.message}`);
     }
   }
 
@@ -783,6 +857,32 @@ export class BufaloRepositoryDrizzle {
       return bufaloReativado;
     } catch (error) {
       throw new InternalServerErrorException(`Erro ao reativar búfalo: ${error.message}`);
+    }
+  }
+
+  /**
+   * Tenta adquirir lock distribuído no PostgreSQL para execução do scheduler.
+   */
+  async tryAcquireMaturityJobLock(): Promise<boolean> {
+    try {
+      const result = await this.databaseService
+        .getPool()
+        .query<{ locked: boolean }>('SELECT pg_try_advisory_lock($1) AS locked', [BufaloRepositoryDrizzle.MATURITY_JOB_LOCK_KEY]);
+
+      return result.rows[0]?.locked === true;
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao adquirir lock de maturidade: ${error.message}`);
+    }
+  }
+
+  /**
+   * Libera lock distribuído no PostgreSQL para execução do scheduler.
+   */
+  async releaseMaturityJobLock(): Promise<void> {
+    try {
+      await this.databaseService.getPool().query('SELECT pg_advisory_unlock($1)', [BufaloRepositoryDrizzle.MATURITY_JOB_LOCK_KEY]);
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao liberar lock de maturidade: ${error.message}`);
     }
   }
 }
