@@ -15,7 +15,7 @@
   Em input invalido, formatadores retornam null em vez de lancar excecao.
 
 - Criterio de aceite:
-  Campos dt_* e *_at podem ser formatados automaticamente em respostas.
+  Campos com prefixo dt e sufixo at podem ser formatados automaticamente em respostas.
 
 - Rastreabilidade para codigo e testes:
   src/core/utils/date-formatter.utils.ts

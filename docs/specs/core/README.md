@@ -3,6 +3,7 @@
 Este diretorio contem as regras transversais do modulo Core.
 
 Documentos:
+
 - 00-core-visao-geral.md
 - 01-cache.md
 - 02-database.md
@@ -19,6 +20,7 @@ Documentos:
 - 13-validators.md
 
 Escopo coberto:
+
 - Infraestrutura compartilhada (cache, banco, supabase, mensageria, IA).
 - Contratos transversais (DTO, decorators, interfaces, validators, utils).
 - Servicos auxiliares de autenticacao/autorizacao.

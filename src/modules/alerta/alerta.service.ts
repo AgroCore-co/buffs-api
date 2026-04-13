@@ -85,6 +85,8 @@ export class AlertasService {
    */
   async create(createAlertaDto: CreateAlertaDto) {
     try {
+      const prioridadeFoiInformada = createAlertaDto.prioridade !== undefined;
+
       const alertaDtoComPrioridade: CreateAlertaDto = {
         ...createAlertaDto,
         prioridade: createAlertaDto.prioridade ?? PrioridadeAlerta.MEDIA,
@@ -105,7 +107,9 @@ export class AlertasService {
         const payload: AlertaCriadoPayload = {
           id_alerta: data.idAlerta,
           nicho: data.nicho,
-          prioridade: data.prioridade,
+          // Se a prioridade não veio na requisição, deixa o payload sem prioridade
+          // para o consumer executar classificação assíncrona com IA.
+          prioridade: prioridadeFoiInformada ? data.prioridade : undefined,
           titulo: data.motivo ?? 'Alerta',
           descricao: data.observacao,
           texto_ocorrencia_clinica: texto_ocorrencia_clinica ?? undefined,
