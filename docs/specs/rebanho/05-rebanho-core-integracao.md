@@ -54,46 +54,48 @@
 - Status:
   implementada
 
-## REB-CORE-003 - AuthHelperService centraliza autorizacao por propriedade no subdominio de bufalo
+## REB-CORE-003 - AuthHelperService centraliza autorizacao por propriedade no modulo
 
 - Contexto de negocio:
   Operacoes de animal precisam validar ownership por propriedade em ambiente multi-tenant.
 
 - Regra principal:
-  BufaloService deve delegar identificacao do usuario e validacao de acesso para AuthHelperService.
-
-- Excecoes:
-  Fluxos de grupo e mov-lote nao reutilizam esse helper no estado atual.
-
-- Erros esperados:
-  NotFoundException para recursos fora do escopo do usuario.
-
-- Criterio de aceite:
-  BufaloService chama getUserId/getUserPropriedades/validatePropriedadeAccess e expoe invalidarCachePropriedades.
-
-- Rastreabilidade para codigo e testes:
-  src/modules/rebanho/bufalo/bufalo.service.ts
-  src/core/services/auth-helper.service.ts
-
-- Status:
-  implementada
-
-## REB-CORE-004 - Ownership central nao esta uniforme em todo o modulo
-
-- Contexto de negocio:
-  Regras de seguranca por propriedade devem ser consistentes entre todos os subdominios do rebanho.
-
-- Regra principal:
-  Endpoints de grupo e mov-lote por propriedade deveriam validar escopo do usuario com helper central ou guard especializado.
+  Services de rebanho com escopo de propriedade devem delegar identificacao do usuario e validacao de acesso para AuthHelperService.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, fluxos podem aceitar id_propriedade valido sem validar vinculo do usuario em todas as operacoes.
+  NotFoundException para recursos fora do escopo do usuario.
 
 - Criterio de aceite:
-  GrupoService e MovLoteService nao utilizam AuthHelperService/PropertyExistsGuard para ownership.
+  BufaloService, GrupoService e MovLoteService usam getUserId/getUserPropriedades/validatePropriedadeAccess nos fluxos de ownership.
+
+- Rastreabilidade para codigo e testes:
+  src/modules/rebanho/bufalo/bufalo.service.ts
+  src/modules/rebanho/grupo/grupo.service.ts
+  src/modules/rebanho/mov-lote/mov-lote.service.ts
+  src/core/services/auth-helper.service.ts
+
+- Status:
+  implementada
+
+## REB-CORE-004 - Ownership central esta uniforme em todo o modulo
+
+- Contexto de negocio:
+  Regras de seguranca por propriedade devem ser consistentes entre todos os subdominios do rebanho.
+
+- Regra principal:
+  Endpoints de grupo e mov-lote por propriedade devem validar escopo do usuario com helper central e guard especializado.
+
+- Excecoes:
+  Sem excecoes.
+
+- Erros esperados:
+  NotFoundException para recursos fora do escopo do usuario.
+
+- Criterio de aceite:
+  GrupoService e MovLoteService utilizam AuthHelperService para ownership e rotas por propriedade aplicam PropertyExistsGuard.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/grupo/grupo.service.ts
@@ -102,7 +104,7 @@
   src/core/guards/property-exists.guard.ts
 
 - Status:
-  parcial
+  implementada
 
 ## REB-CORE-005 - Reuso de artefatos compartilhados do Core e amplo, mas nao uniforme
 
@@ -153,24 +155,27 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Integracao de cache existe em bufalo/grupo/raca e nao ha invalidacao explicita para todos os cenarios de escrita.
+  Integracao de cache existe em bufalo/grupo/raca, com invalidacao explicita no service layer apos operacoes de escrita nos tres subdominios.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/bufalo/bufalo.controller.ts
+  src/modules/rebanho/bufalo/bufalo.service.ts
   src/modules/rebanho/grupo/grupo.controller.ts
+  src/modules/rebanho/grupo/grupo.service.ts
   src/modules/rebanho/raca/raca.controller.ts
+  src/modules/rebanho/raca/raca.service.ts
   src/modules/rebanho/mov-lote/mov-lote.controller.ts
 
 - Status:
-  parcial
+  implementada
 
-## REB-CORE-007 - CacheService do Core nao aparece em runtime do modulo
+## REB-CORE-007 - CacheService do Core e usado em runtime para invalidacao
 
 - Contexto de negocio:
   Padrao de cache central poderia ser usado no service layer para invalidacao controlada.
 
 - Regra principal:
-  No estado atual, CacheService nao e injetado nos services de runtime do modulo rebanho, aparecendo apenas em testes de bufalo.
+  CacheService deve ser injetado em services de runtime para invalidacao de cache apos escrita.
 
 - Excecoes:
   Sem excecoes.
@@ -179,23 +184,26 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Nao ha uso runtime de CacheService em src/modules/rebanho; referencia existente esta em bufalo.service.spec.ts.
+  Ha uso runtime de CacheService em bufalo, grupo e raca para invalidacao de cache apos create/update/delete/restore.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/
+  src/modules/rebanho/bufalo/bufalo.service.ts
+  src/modules/rebanho/grupo/grupo.service.ts
+  src/modules/rebanho/raca/raca.service.ts
   src/modules/rebanho/bufalo/bufalo.service.spec.ts
   src/core/cache/cache.service.ts
 
 - Status:
-  parcial
+  implementada
 
-## REB-TEST-001 - Integracao com Core possui cobertura forte em bufalo e lacuna nos demais subdominios
+## REB-TEST-001 - Integracao com Core possui cobertura unit de service nos quatro subdominios
 
 - Contexto de negocio:
   Regras de autorizacao, maturidade e filtragem em bufalo possuem alta criticidade e precisam ser validadas continuamente.
 
 - Regra principal:
-  Cobertura atual valida principalmente bufalo (unit + scheduler + e2e), com ausencia de suites equivalentes para grupo/raca/mov-lote.
+  Cobertura atual valida bufalo (unit + scheduler + e2e) e possui suites unitarias de service para grupo, raca e mov-lote.
 
 - Excecoes:
   Alguns cenarios de e2e estao marcados como skip por restricoes do ambiente de execucao.
@@ -204,14 +212,17 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Existem testes dedicados para bufalo e nao foram encontrados .spec.ts dedicados para grupo/raca/mov-lote.
+  Existem testes dedicados para bufalo, grupo, raca e mov-lote no modulo rebanho.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/bufalo/bufalo.service.spec.ts
   src/modules/rebanho/bufalo/bufalo.scheduler.spec.ts
   src/modules/rebanho/bufalo/services/bufalo-maturidade.service.spec.ts
+  src/modules/rebanho/grupo/grupo.service.spec.ts
+  src/modules/rebanho/raca/raca.service.spec.ts
+  src/modules/rebanho/mov-lote/mov-lote.service.spec.ts
   test/rebanho.e2e-spec.ts
   src/modules/rebanho/**/*.spec.ts
 
 - Status:
-  parcial
+  implementada

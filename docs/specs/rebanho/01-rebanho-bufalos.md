@@ -173,26 +173,26 @@
 - Status:
   implementada
 
-## REB-BUF-008 - Restauracao de soft delete esta inconsistente com busca de ativo
+## REB-BUF-008 - Restauracao de soft delete consulta registros removidos
 
 - Contexto de negocio:
   Processo de restauracao precisa localizar registros removidos logicamente para reabilitar o animal.
 
 - Regra principal:
-  Fluxo de restore deveria consultar registro inclusive deletado antes de validar estado removido.
+  Fluxo de restore deve consultar registro inclusive deletado antes de validar estado removido e ownership.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, restore tende a retornar not found ou nao removido porque a busca base (findById) filtra deletedAt nulo.
+  NotFoundException quando animal nao existir/nao pertencer ao escopo do usuario; BadRequestException quando animal nao estiver removido.
 
 - Criterio de aceite:
-  Implementacao atual de restore depende de findById (somente ativos), gerando inconsistencia para restaurar animal removido.
+  Restore usa busca incluindo removidos e valida acesso por propriedade antes de limpar deletedAt.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/bufalo/bufalo.service.ts
   src/modules/rebanho/bufalo/repositories/bufalo.repository.drizzle.ts
 
 - Status:
-  parcial
+  implementada

@@ -49,22 +49,22 @@
 - Status:
   implementada
 
-## REB-GRP-003 - Ownership por propriedade nao e validado explicitamente em grupos
+## REB-GRP-003 - Ownership por propriedade e validado explicitamente em grupos
 
 - Contexto de negocio:
   Somente autenticacao nao garante que usuario pode acessar qualquer id_propriedade informado em query/path.
 
 - Regra principal:
-  Endpoints de grupo por propriedade deveriam validar vinculo usuario-propriedade antes da consulta/escrita.
+  Endpoints e operacoes de grupo devem validar vinculo usuario-propriedade antes de leitura/escrita.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, fluxo depende apenas de autenticacao e pode nao bloquear acesso por escopo de propriedade no service.
+  NotFoundException quando grupo/propriedade nao existir ou estiver fora do escopo do usuario.
 
 - Criterio de aceite:
-  GrupoController/GrupoService nao recebem usuario nas operacoes de propriedade e nao usam helper central de ownership.
+  GrupoController repassa usuario para service, GrupoService usa AuthHelperService (getUserId/validatePropriedadeAccess) e rota por propriedade aplica PropertyExistsGuard.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/grupo/grupo.controller.ts
@@ -72,7 +72,7 @@
   src/core/services/auth-helper.service.ts
 
 - Status:
-  parcial
+  implementada
 
 ## REB-RAC-001 - Catalogo de racas possui CRUD com remocao logica
 
@@ -107,17 +107,19 @@
   Endpoints GET de raca e principais GET de grupo aplicam CacheInterceptor e CacheTTL.
 
 - Excecoes:
-  Operacoes de escrita nao possuem invalidacao explicita no modulo.
+  Sem excecoes.
 
 - Erros esperados:
   Nao aplicavel.
 
 - Criterio de aceite:
-  Controllers de raca e grupo contem @UseInterceptors(CacheInterceptor) e @CacheTTL nos endpoints de leitura.
+  Controllers de raca e grupo contem @UseInterceptors(CacheInterceptor) e @CacheTTL nos endpoints de leitura; services invalidam cache apos operacoes de escrita.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/raca/raca.controller.ts
   src/modules/rebanho/grupo/grupo.controller.ts
+  src/modules/rebanho/raca/raca.service.ts
+  src/modules/rebanho/grupo/grupo.service.ts
 
 - Status:
   implementada
