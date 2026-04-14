@@ -176,6 +176,33 @@ export class DadosSanitariosRepositoryDrizzle {
     }
   }
 
+  async findByIdIncludingDeleted(idSanit: string) {
+    try {
+      const result = await this.databaseService.db.query.dadossanitarios.findFirst({
+        where: eq(dadossanitarios.idSanit, idSanit),
+        with: {
+          bufalo: {
+            columns: {
+              brinco: true,
+              nome: true,
+            },
+          },
+          medicacoe: {
+            columns: {
+              medicacao: true,
+              tipoTratamento: true,
+              descricao: true,
+            },
+          },
+        },
+      });
+
+      return result || null;
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao buscar dado sanitário (incluindo removidos): ${error.message}`);
+    }
+  }
+
   async update(idSanit: string, dto: UpdateDadosSanitariosDto, doencaNormalizada?: string) {
     try {
       const updateData: Record<string, any> = {

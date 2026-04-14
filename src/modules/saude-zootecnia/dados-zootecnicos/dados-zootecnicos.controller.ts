@@ -5,13 +5,22 @@ import { User } from '../../auth/decorators/user.decorator';
 import { DadosZootecnicosService } from './dados-zootecnicos.service';
 import { CreateDadoZootecnicoDto, UpdateDadoZootecnicoDto } from './dto';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { PropertyExistsGuard } from '../../../core/guards/property-exists.guard';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
 @ApiTags('Saúde/Zootecnia - Dados Zootécnicos')
 @Controller('dados-zootecnicos')
 export class DadosZootecnicosController {
-  constructor(private readonly service: DadosZootecnicosService) {}
+  constructor(
+    private readonly service: DadosZootecnicosService,
+    private readonly authHelperService: AuthHelperService,
+  ) {}
+
+  private async resolveUserId(user: { email?: string }): Promise<string> {
+    return this.authHelperService.getUserId(user);
+  }
 
   // --- ROTAS ANINHADAS SOB UM BÚFALO ---
 
@@ -56,8 +65,14 @@ export class DadosZootecnicosController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista de registros retornada com sucesso.' })
-  findAllByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
-    return this.service.findAllByPropriedade(id_propriedade, paginationDto);
+  @UseGuards(PropertyExistsGuard)
+  async findAllByPropriedade(
+    @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
+    @Query() paginationDto: PaginationDto,
+    @User() user: { email?: string },
+  ) {
+    const userId = await this.resolveUserId(user);
+    return this.service.findAllByPropriedade(id_propriedade, paginationDto, userId);
   }
 
   // --- ROTAS DIRETAS PARA UM REGISTRO ESPECÍFICO ---

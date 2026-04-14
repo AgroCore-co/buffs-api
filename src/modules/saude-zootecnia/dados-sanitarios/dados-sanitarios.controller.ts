@@ -5,13 +5,22 @@ import { User } from '../../auth/decorators/user.decorator';
 import { DadosSanitariosService } from './dados-sanitarios.service';
 import { CreateDadosSanitariosDto, UpdateDadosSanitariosDto, FrequenciaDoencasResponseDto } from './dto';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { PropertyExistsGuard } from '../../../core/guards/property-exists.guard';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
 @ApiTags('Saúde/Zootecnia - Dados Sanitários')
 @Controller('dados-sanitarios')
 export class DadosSanitariosController {
-  constructor(private readonly service: DadosSanitariosService) {}
+  constructor(
+    private readonly service: DadosSanitariosService,
+    private readonly authHelperService: AuthHelperService,
+  ) {}
+
+  private async resolveUserId(user: { email?: string }): Promise<string> {
+    return this.authHelperService.getUserId(user);
+  }
 
   @Post()
   @ApiOperation({
@@ -100,8 +109,14 @@ export class DadosSanitariosController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (começa em 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Número de itens por página (máximo 100)' })
   @ApiResponse({ status: 200, description: 'Registros encontrados.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
-    return this.service.findByPropriedade(id_propriedade, paginationDto);
+  @UseGuards(PropertyExistsGuard)
+  async findByPropriedade(
+    @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
+    @Query() paginationDto: PaginationDto,
+    @User() user: { email?: string },
+  ) {
+    const userId = await this.resolveUserId(user);
+    return this.service.findByPropriedade(id_propriedade, paginationDto, userId);
   }
 
   @Get('propriedade/:id_propriedade/frequencia-doencas')
@@ -146,12 +161,15 @@ export class DadosSanitariosController {
     status: 404,
     description: 'Propriedade não encontrada.',
   })
+  @UseGuards(PropertyExistsGuard)
   async getFrequenciaDoencas(
     @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
     @Query('agruparSimilares', new DefaultValuePipe(false), ParseBoolPipe) agruparSimilares: boolean,
     @Query('limiarSimilaridade', new DefaultValuePipe(0.8)) limiarSimilaridade: number,
+    @User() user: { email?: string },
   ): Promise<FrequenciaDoencasResponseDto> {
-    return this.service.getFrequenciaDoencas(id_propriedade, agruparSimilares, limiarSimilaridade);
+    const userId = await this.resolveUserId(user);
+    return this.service.getFrequenciaDoencas(id_propriedade, agruparSimilares, limiarSimilaridade, userId);
   }
 
   @Get(':id')

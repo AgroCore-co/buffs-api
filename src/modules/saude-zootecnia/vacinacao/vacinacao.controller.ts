@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseUUIDPipe, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseUUIDPipe, UseGuards, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { User } from '../../auth/decorators/user.decorator';
 import { VacinacaoService } from './vacinacao.service';
 import { CreateVacinacaoDto, UpdateVacinacaoDto } from './dto';
+import { PaginationDto } from '../../../core/dto/pagination.dto';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -25,18 +26,22 @@ export class VacinacaoController {
   @Get('/bufalo/:id_bufalo')
   @ApiOperation({ summary: 'Lista todos os registos de vacinação de um búfalo' })
   @ApiParam({ name: 'id_bufalo', description: 'ID do búfalo a ser consultado', type: 'string' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista retornada com sucesso.' })
-  findAllByBufalo(@Param('id_bufalo', ParseUUIDPipe) id_bufalo: string) {
-    return this.service.findAllByBufalo(id_bufalo);
+  findAllByBufalo(@Param('id_bufalo', ParseUUIDPipe) id_bufalo: string, @Query() paginationDto: PaginationDto) {
+    return this.service.findAllByBufalo(id_bufalo, paginationDto);
   }
 
   // Rota específica para buscar apenas vacinas (IDs específicos)
   @Get('/bufalo/:id_bufalo/vacinas')
   @ApiOperation({ summary: 'Lista apenas vacinas específicas de um búfalo' })
   @ApiParam({ name: 'id_bufalo', description: 'ID do búfalo a ser consultado', type: 'string' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista de vacinas retornada com sucesso.' })
-  findVacinasByBufalo(@Param('id_bufalo', ParseUUIDPipe) id_bufalo: string) {
-    return this.service.findVacinasByBufaloId(id_bufalo);
+  findVacinasByBufalo(@Param('id_bufalo', ParseUUIDPipe) id_bufalo: string, @Query() paginationDto: PaginationDto) {
+    return this.service.findVacinasByBufaloId(id_bufalo, paginationDto);
   }
 
   // Rotas diretas para um registo de vacinação específico

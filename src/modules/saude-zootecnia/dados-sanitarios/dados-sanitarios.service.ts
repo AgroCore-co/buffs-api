@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateDadosSanitariosDto } from './dto/create-dados-sanitarios.dto';
 import { UpdateDadosSanitariosDto } from './dto/update-dados-sanitarios.dto';
@@ -14,16 +14,19 @@ import { ISoftDelete } from '../../../core/interfaces';
 import { DadosSanitariosRepositoryDrizzle } from './repositories';
 import { DatabaseService } from '../../../core/database/database.service';
 import { UserHelper } from '../../../core/utils';
+import { getErrorMessage } from '../../../core/utils/error.utils';
 import { bufalo } from 'src/database/schema';
 import { eq } from 'drizzle-orm';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 
 @Injectable()
 export class DadosSanitariosService implements ISoftDelete {
   constructor(
     private readonly repository: DadosSanitariosRepositoryDrizzle,
-    private readonly alertasService: AlertasService,
     private readonly logger: LoggerService,
     private readonly databaseService: DatabaseService,
+    private readonly authHelper: AuthHelperService,
+    @Optional() private readonly alertasService?: AlertasService,
   ) {}
 
   /**
@@ -59,6 +62,14 @@ export class DadosSanitariosService implements ISoftDelete {
 
     // 5. CRIAR ALERTA CLÍNICO AUTOMÁTICO para doenças graves
     try {
+      if (!this.alertasService) {
+        this.logger.warn('AlertasService indisponível - criação de alerta clínico ignorada', {
+          module: 'DadosSanitariosService',
+          method: 'create',
+        });
+        return formatDateFields(data);
+      }
+
       const doencasGraves = [
         'brucelose',
         'tuberculose',
@@ -120,7 +131,7 @@ export class DadosSanitariosService implements ISoftDelete {
       }
     } catch (alertaError) {
       // Não bloqueia o fluxo se o alerta falhar
-      this.logger.error('Erro ao criar alerta clínico', alertaError.message, { module: 'DadosSanitariosService', method: 'create' });
+      this.logger.error('Erro ao criar alerta clínico', getErrorMessage(alertaError), { module: 'DadosSanitariosService', method: 'create' });
     }
 
     return formatDateFields(data);
@@ -144,7 +155,9 @@ export class DadosSanitariosService implements ISoftDelete {
     return createPaginatedResponse(formatDateFieldsArray(data), total, page, limit);
   }
 
-  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}, userId: string): Promise<PaginatedResponse<any>> {
+    await this.authHelper.validatePropriedadeAccess(userId, id_propriedade);
+
     const { page = 1, limit = 10 } = paginationDto;
     const { offset } = calculatePaginationParams(page, limit);
 
@@ -199,7 +212,7 @@ export class DadosSanitariosService implements ISoftDelete {
   }
 
   async restore(id: string) {
-    const registro = await this.repository.findById(id);
+    const registro = await this.repository.findByIdIncludingDeleted(id);
 
     if (!registro) {
       throw new NotFoundException(`Dado sanitário com ID ${id} não encontrado`);
@@ -228,7 +241,14 @@ export class DadosSanitariosService implements ISoftDelete {
    * @param agruparSimilares Se true, agrupa doenças com nomes similares (ex: erros de digitação)
    * @param limiarSimilaridade Limiar de similaridade para agrupamento (0-1, padrão 0.8)
    */
-  async getFrequenciaDoencas(id_propriedade: string, agruparSimilares = false, limiarSimilaridade = 0.8): Promise<FrequenciaDoencasResponseDto> {
+  async getFrequenciaDoencas(
+    id_propriedade: string,
+    agruparSimilares = false,
+    limiarSimilaridade = 0.8,
+    userId: string,
+  ): Promise<FrequenciaDoencasResponseDto> {
+    await this.authHelper.validatePropriedadeAccess(userId, id_propriedade);
+
     // Buscar dados do repository
     const frequenciaData = await this.repository.findFrequenciaDoencas(id_propriedade);
     const totalRegistros = await this.repository.countTotalRegistros(id_propriedade);
@@ -338,7 +358,7 @@ export class DadosSanitariosService implements ISoftDelete {
           erros.push({
             id: registro.idSanit,
             doenca_original: registro.doenca || '',
-            erro: error.message,
+            erro: getErrorMessage(error),
           });
         }
       }

@@ -1,15 +1,25 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
+import { User } from '../../auth/decorators/user.decorator';
 import { MedicamentosService } from './medicamentos.service';
 import { CreateMedicacaoDto, UpdateMedicacaoDto } from './dto';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { PropertyExistsGuard } from '../../../core/guards/property-exists.guard';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
 @ApiTags('Saúde/Zootecnia - Medicamentos')
 @Controller('medicamentos')
 export class MedicamentosController {
-  constructor(private readonly service: MedicamentosService) {}
+  constructor(
+    private readonly service: MedicamentosService,
+    private readonly authHelperService: AuthHelperService,
+  ) {}
+
+  private async resolveUserId(user: { email?: string }): Promise<string> {
+    return this.authHelperService.getUserId(user);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Cria uma nova medicação' })
@@ -29,8 +39,10 @@ export class MedicamentosController {
   @ApiOperation({ summary: 'Lista todas as medicações de uma propriedade específica' })
   @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade', type: 'string' })
   @ApiResponse({ status: 200, description: 'Lista de medicações da propriedade retornada com sucesso.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string) {
-    return this.service.findByPropriedade(id_propriedade);
+  @UseGuards(PropertyExistsGuard)
+  async findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @User() user: { email?: string }) {
+    const userId = await this.resolveUserId(user);
+    return this.service.findByPropriedade(id_propriedade, userId);
   }
 
   @Get(':id')
