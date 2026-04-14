@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { CreateRetiradaDto } from './dto/create-retirada.dto';
 import { UpdateRetiradaDto } from './dto/update-retirada.dto';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
@@ -12,9 +13,13 @@ export class RetiradaService implements ISoftDelete {
   constructor(
     private readonly repository: RetiradaRepositoryDrizzle,
     private readonly logger: LoggerService,
+    private readonly authHelper: AuthHelperService,
   ) {}
 
-  async create(dto: CreateRetiradaDto, id_funcionario: string) {
+  async create(dto: CreateRetiradaDto, user: any) {
+    const id_funcionario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(id_funcionario, dto.idPropriedade);
+
     this.logger.log('Iniciando criação de coleta', {
       module: 'RetiradaService',
       method: 'create',
@@ -46,6 +51,8 @@ export class RetiradaService implements ISoftDelete {
         deleted_at: data.deletedAt,
       };
     } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+
       this.logger.logError(error, {
         module: 'ColetaService',
         method: 'create',
@@ -95,7 +102,10 @@ export class RetiradaService implements ISoftDelete {
     }
   }
 
-  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<any> {
+  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}, user: any): Promise<any> {
+    const idUsuario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(idUsuario, id_propriedade);
+
     this.logger.log('Iniciando busca de coletas por propriedade', {
       module: 'RetiradaService',
       method: 'findByPropriedade',
@@ -159,7 +169,7 @@ export class RetiradaService implements ISoftDelete {
     }
   }
 
-  async findOne(id_coleta: string) {
+  async findOne(id_coleta: string, user: any) {
     this.logger.log('Iniciando busca de coleta por ID', {
       module: 'RetiradaService',
       method: 'findOne',
@@ -176,6 +186,11 @@ export class RetiradaService implements ISoftDelete {
           coletaId: id_coleta,
         });
         throw new NotFoundException(`Coleta com ID ${id_coleta} não encontrada.`);
+      }
+
+      const idUsuario = await this.authHelper.getUserId(user);
+      if (data.idPropriedade) {
+        await this.authHelper.validatePropriedadeAccess(idUsuario, data.idPropriedade);
       }
 
       this.logger.log('Coleta encontrada com sucesso', {
@@ -209,14 +224,14 @@ export class RetiradaService implements ISoftDelete {
     }
   }
 
-  async update(id_coleta: string, dto: UpdateRetiradaDto) {
+  async update(id_coleta: string, dto: UpdateRetiradaDto, user: any) {
     this.logger.log('Iniciando atualização de coleta', {
       module: 'ColetaService',
       method: 'update',
       coletaId: id_coleta,
     });
 
-    await this.findOne(id_coleta);
+    await this.findOne(id_coleta, user);
 
     try {
       const data = await this.repository.atualizar(id_coleta, dto);
@@ -254,18 +269,18 @@ export class RetiradaService implements ISoftDelete {
     }
   }
 
-  async remove(id_coleta: string) {
-    return this.softDelete(id_coleta);
+  async remove(id_coleta: string, user: any) {
+    return this.softDelete(id_coleta, user);
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user?: any) {
     this.logger.log('Iniciando remoção de coleta (soft delete)', {
       module: 'ColetaService',
       method: 'softDelete',
       coletaId: id,
     });
 
-    await this.findOne(id);
+    await this.findOne(id, user);
 
     try {
       const data = await this.repository.softDelete(id);
@@ -306,7 +321,7 @@ export class RetiradaService implements ISoftDelete {
     }
   }
 
-  async restore(id: string) {
+  async restore(id: string, user?: any) {
     this.logger.log('Iniciando restauração de coleta', {
       module: 'ColetaService',
       method: 'restore',
@@ -314,10 +329,15 @@ export class RetiradaService implements ISoftDelete {
     });
 
     try {
-      const coletaExistente = await this.repository.buscarPorId(id);
+      const idUsuario = await this.authHelper.getUserId(user);
+      const coletaExistente = await this.repository.buscarPorIdComDeletados(id);
 
       if (!coletaExistente) {
         throw new NotFoundException(`Coleta com ID ${id} não encontrada`);
+      }
+
+      if (coletaExistente.idPropriedade) {
+        await this.authHelper.validatePropriedadeAccess(idUsuario, coletaExistente.idPropriedade);
       }
 
       if (!coletaExistente.deletedAt) {
@@ -364,14 +384,16 @@ export class RetiradaService implements ISoftDelete {
     }
   }
 
-  async findAllWithDeleted(): Promise<any[]> {
+  async findAllWithDeleted(user?: any): Promise<any[]> {
     this.logger.log('Buscando todas as coletas incluindo deletadas', {
       module: 'ColetaService',
       method: 'findAllWithDeleted',
     });
 
     try {
-      const data = await this.repository.listarComDeletados();
+      const idUsuario = await this.authHelper.getUserId(user);
+      const propriedadesUsuario = await this.authHelper.getUserPropriedades(idUsuario);
+      const data = await this.repository.listarComDeletadosPorPropriedades(propriedadesUsuario);
 
       return data.map((coleta) => ({
         id_coleta: coleta.idColeta,

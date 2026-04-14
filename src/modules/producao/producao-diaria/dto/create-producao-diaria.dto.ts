@@ -8,11 +8,6 @@ export class CreateProducaoDiariaDto {
   @IsNotEmpty({ message: 'O idPropriedade é obrigatório' })
   idPropriedade: string;
 
-  @ApiProperty({ example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', description: 'ID do usuário que registrou o estoque' })
-  @IsUUID('4', { message: 'O idUsuario deve ser um UUID válido' })
-  @IsNotEmpty({ message: 'O idUsuario é obrigatório' })
-  idUsuario: string;
-
   @ApiProperty({ example: 1200.75, description: 'Quantidade de leite em estoque (em litros)' })
   @IsNumber({}, { message: 'A quantidade deve ser um número' })
   @IsPositive({ message: 'A quantidade deve ser um número positivo' })

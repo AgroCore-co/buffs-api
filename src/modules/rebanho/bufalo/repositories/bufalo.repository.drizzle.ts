@@ -249,14 +249,23 @@ export class BufaloRepositoryDrizzle {
         conditions.push(ilike(bufalo.nome, `${filtros.nome}%`));
       }
 
-      // Construir ordenação dinamicamente
+      // Construir ordenação dinamicamente com mapeamento explícito para evitar
+      // inferência ampla de tipos do objeto de tabela do Drizzle.
+      const sortableFields: Record<string, any> = {
+        status: bufalo.status,
+        dt_nascimento: bufalo.dtNascimento,
+        dtNascimento: bufalo.dtNascimento,
+        created_at: bufalo.createdAt,
+        createdAt: bufalo.createdAt,
+        nome: bufalo.nome,
+        brinco: bufalo.brinco,
+      };
+
       const orderByClause: any[] = [];
       for (const order of orderBy) {
-        const fieldName = order.field as keyof typeof bufalo;
-        const field = bufalo[fieldName];
-        // Verifica se é uma coluna válida (não é função ou objeto Table)
-        if (field && typeof field === 'object' && 'name' in field) {
-          orderByClause.push(order.ascending ? asc(field) : desc(field));
+        const column = sortableFields[order.field];
+        if (column) {
+          orderByClause.push(order.ascending ? asc(column) : desc(column));
         }
       }
 
@@ -355,6 +364,40 @@ export class BufaloRepositoryDrizzle {
       return result;
     } catch (error) {
       throw new InternalServerErrorException(`Erro ao buscar búfalos por IDs: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca múltiplos búfalos ativos por ID com dados detalhados para cenários analíticos.
+   */
+  async findActiveByIdsWithDetails(ids: string[]) {
+    if (!ids || ids.length === 0) {
+      return [];
+    }
+
+    try {
+      const db = this.databaseService.db;
+
+      const result = await db.query.bufalo.findMany({
+        where: and(inArray(bufalo.idBufalo, ids), isNull(bufalo.deletedAt), eq(bufalo.status, true)),
+        columns: {
+          idBufalo: true,
+          brinco: true,
+          nome: true,
+          dtNascimento: true,
+        },
+        with: {
+          raca: {
+            columns: {
+              nome: true,
+            },
+          },
+        },
+      });
+
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao buscar búfalos detalhados por IDs: ${error.message}`);
     }
   }
 

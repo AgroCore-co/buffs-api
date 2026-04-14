@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, and, desc, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, isNull, sql } from 'drizzle-orm';
 import { coleta, industria } from '../../../../database/schema';
 import { CreateRetiradaDto, UpdateRetiradaDto } from '../dto';
 
@@ -122,6 +122,12 @@ export class RetiradaRepositoryDrizzle {
     return resultado.length > 0 ? resultado[0] : null;
   }
 
+  async buscarPorIdComDeletados(idColeta: string) {
+    const resultado = await this.databaseService.db.select().from(coleta).where(eq(coleta.idColeta, idColeta)).limit(1);
+
+    return resultado.length > 0 ? resultado[0] : null;
+  }
+
   /**
    * Atualiza coleta existente
    */
@@ -173,5 +179,13 @@ export class RetiradaRepositoryDrizzle {
    */
   async listarComDeletados() {
     return await this.databaseService.db.select().from(coleta).orderBy(desc(coleta.dtColeta));
+  }
+
+  async listarComDeletadosPorPropriedades(idsPropriedades: string[]) {
+    if (!idsPropriedades.length) {
+      return [];
+    }
+
+    return await this.databaseService.db.select().from(coleta).where(inArray(coleta.idPropriedade, idsPropriedades)).orderBy(desc(coleta.dtColeta));
   }
 }

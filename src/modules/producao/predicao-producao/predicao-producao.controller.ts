@@ -1,5 +1,4 @@
-import { Controller, Post, Body, UseGuards, UseInterceptors } from '@nestjs/common';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { User } from '../../auth/decorators/user.decorator';
@@ -16,14 +15,12 @@ import { PredicaoProducaoInputDto, PredicaoProducaoResponseDto } from './dto';
 @UseGuards(SupabaseAuthGuard)
 @ApiTags('IA - Predição de Produção')
 @Controller('producao/predicao')
-@UseInterceptors(CacheInterceptor)
 export class PredicaoProducaoController {
   constructor(private readonly predicaoProducaoService: PredicaoProducaoService) {}
 
   @Post()
-  @CacheTTL(600) // 10 minutos
   @ApiOperation({
-    summary: 'Predizer produção individual de leite (Cache: 10min)',
+    summary: 'Predizer produção individual de leite',
     description:
       'Prediz a produção de leite de uma fêmea para o próximo ciclo de lactação, ' +
       'classificando seu potencial produtivo e comparando com a média da propriedade.',
@@ -37,6 +34,7 @@ export class PredicaoProducaoController {
   @ApiResponse({ status: 404, description: 'Fêmea não encontrada.' })
   @ApiResponse({ status: 503, description: 'Serviço de IA temporariamente indisponível.' })
   async predizerProducao(@Body() predicaoInput: PredicaoProducaoInputDto, @User() user: any): Promise<PredicaoProducaoResponseDto> {
-    return this.predicaoProducaoService.predizerProducaoIndividual(predicaoInput.idFemea, user.sub);
+    const userId = user?.id_usuario || user?.sub;
+    return this.predicaoProducaoService.predizerProducaoIndividual(predicaoInput.idFemea, userId);
   }
 }

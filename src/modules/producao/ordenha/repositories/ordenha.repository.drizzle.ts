@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, and, desc, asc, gte, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, gte, isNull, inArray, sql } from 'drizzle-orm';
 import { dadoslactacao } from '../../../../database/schema';
 import { CreateDadosLactacaoDto, UpdateDadosLactacaoDto } from '../dto';
 
@@ -114,6 +114,81 @@ export class OrdenhaRepositoryDrizzle {
       .orderBy(desc(dadoslactacao.dtOrdenha));
   }
 
+  async obterEstatisticasPorCiclos(idsCiclos: string[]) {
+    if (!idsCiclos.length) {
+      return new Map<
+        string,
+        {
+          totalProduzido: number;
+          totalOrdenhas: number;
+          ultimaOrdenha: { data: string; quantidade: number; periodo: string | null } | null;
+        }
+      >();
+    }
+
+    const [totais, ultimasOrdenhas] = await Promise.all([
+      this.db.db
+        .select({
+          idCicloLactacao: dadoslactacao.idCicloLactacao,
+          totalProduzido: sql<number>`coalesce(sum(${dadoslactacao.qtOrdenha}), 0)`,
+          totalOrdenhas: sql<number>`count(*)::int`,
+        })
+        .from(dadoslactacao)
+        .where(and(inArray(dadoslactacao.idCicloLactacao, idsCiclos), isNull(dadoslactacao.deletedAt)))
+        .groupBy(dadoslactacao.idCicloLactacao),
+      this.db.db
+        .selectDistinctOn([dadoslactacao.idCicloLactacao], {
+          idCicloLactacao: dadoslactacao.idCicloLactacao,
+          dtOrdenha: dadoslactacao.dtOrdenha,
+          qtOrdenha: dadoslactacao.qtOrdenha,
+          periodo: dadoslactacao.periodo,
+        })
+        .from(dadoslactacao)
+        .where(and(inArray(dadoslactacao.idCicloLactacao, idsCiclos), isNull(dadoslactacao.deletedAt)))
+        .orderBy(dadoslactacao.idCicloLactacao, desc(dadoslactacao.dtOrdenha)),
+    ]);
+
+    const ultimasOrdenhasMap = new Map<
+      string,
+      {
+        data: string;
+        quantidade: number;
+        periodo: string | null;
+      }
+    >();
+
+    for (const ultima of ultimasOrdenhas) {
+      if (!ultima.idCicloLactacao || !ultima.dtOrdenha) continue;
+
+      ultimasOrdenhasMap.set(ultima.idCicloLactacao, {
+        data: ultima.dtOrdenha,
+        quantidade: Number(ultima.qtOrdenha) || 0,
+        periodo: ultima.periodo,
+      });
+    }
+
+    const estatisticasMap = new Map<
+      string,
+      {
+        totalProduzido: number;
+        totalOrdenhas: number;
+        ultimaOrdenha: { data: string; quantidade: number; periodo: string | null } | null;
+      }
+    >();
+
+    for (const total of totais) {
+      if (!total.idCicloLactacao) continue;
+
+      estatisticasMap.set(total.idCicloLactacao, {
+        totalProduzido: Number(total.totalProduzido) || 0,
+        totalOrdenhas: total.totalOrdenhas || 0,
+        ultimaOrdenha: ultimasOrdenhasMap.get(total.idCicloLactacao) ?? null,
+      });
+    }
+
+    return estatisticasMap;
+  }
+
   async listarRecentesPorBufala(idBufala: string, dataInicio: Date) {
     return await this.db.db
       .select({ dtOrdenha: dadoslactacao.dtOrdenha, qtOrdenha: dadoslactacao.qtOrdenha })
@@ -128,6 +203,12 @@ export class OrdenhaRepositoryDrizzle {
       .from(dadoslactacao)
       .where(and(eq(dadoslactacao.idLact, idLact), isNull(dadoslactacao.deletedAt)))
       .limit(1);
+
+    return resultado.length > 0 ? resultado[0] : null;
+  }
+
+  async buscarPorIdComDeletados(idLact: string) {
+    const resultado = await this.db.db.select().from(dadoslactacao).where(eq(dadoslactacao.idLact, idLact)).limit(1);
 
     return resultado.length > 0 ? resultado[0] : null;
   }
@@ -172,5 +253,17 @@ export class OrdenhaRepositoryDrizzle {
 
   async listarComDeletados() {
     return await this.db.db.select().from(dadoslactacao).orderBy(desc(dadoslactacao.dtOrdenha));
+  }
+
+  async listarComDeletadosPorPropriedades(idsPropriedades: string[]) {
+    if (!idsPropriedades.length) {
+      return [];
+    }
+
+    return await this.db.db
+      .select()
+      .from(dadoslactacao)
+      .where(inArray(dadoslactacao.idPropriedade, idsPropriedades))
+      .orderBy(desc(dadoslactacao.dtOrdenha));
   }
 }

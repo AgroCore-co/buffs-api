@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { CreateDadosLactacaoDto } from './dto/create-ordenha.dto';
@@ -9,6 +9,7 @@ import { GeminiService } from '../../../core/gemini/gemini.service';
 import { FemeaEmLactacaoDto } from './dto/femea-em-lactacao.dto';
 import { ResumoProducaoBufalaDto } from './dto/resumo-producao-bufala.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
+import { createPaginatedResponse } from '../../../core/utils/pagination.utils';
 import { ISoftDelete } from '../../../core/interfaces/soft-delete.interface';
 import { OrdenhaRepositoryDrizzle } from './repositories';
 import { BufaloRepositoryDrizzle } from '../../rebanho/bufalo/repositories/bufalo.repository.drizzle';
@@ -16,8 +17,6 @@ import { LactacaoRepositoryDrizzle } from '../lactacao/repositories';
 
 @Injectable()
 export class OrdenhaService implements ISoftDelete {
-  private readonly logger = new Logger(OrdenhaService.name);
-
   constructor(
     private readonly controleRepository: OrdenhaRepositoryDrizzle,
     private readonly authHelper: AuthHelperService,
@@ -48,6 +47,8 @@ export class OrdenhaService implements ISoftDelete {
     });
 
     try {
+      await this.authHelper.validatePropriedadeAccess(idUsuario, createDto.idPropriedade);
+
       // Check if bufala exists
       const bufala = await this.bufaloRepository.findById(createDto.idBufala);
       if (!bufala) {
@@ -57,6 +58,23 @@ export class OrdenhaService implements ISoftDelete {
           bufalaId: createDto.idBufala,
         });
         throw new BadRequestException(`A búfala com id ${createDto.idBufala} não foi encontrada.`);
+      }
+
+      const ciclo = await this.cicloRepository.buscarPorId(createDto.idCicloLactacao);
+      if (!ciclo) {
+        throw new BadRequestException(`Ciclo de lactação com ID ${createDto.idCicloLactacao} não encontrado.`);
+      }
+
+      if (ciclo.idBufala !== createDto.idBufala) {
+        throw new BadRequestException('O ciclo informado não pertence à búfala selecionada.');
+      }
+
+      if (ciclo.idPropriedade && ciclo.idPropriedade !== createDto.idPropriedade) {
+        throw new BadRequestException('O ciclo informado não pertence à propriedade selecionada.');
+      }
+
+      if (ciclo.status !== 'Em Lactação') {
+        throw new BadRequestException('Não é permitido registrar ordenha para ciclo que não está em lactação ativa.');
       }
 
       const lactacaoData = await this.controleRepository.criar(createDto, idUsuario);
@@ -74,7 +92,7 @@ export class OrdenhaService implements ISoftDelete {
 
       return formatDateFields(lactacaoData);
     } catch (error) {
-      if (error instanceof BadRequestException) throw error;
+      if (error instanceof BadRequestException || error instanceof NotFoundException) throw error;
 
       this.customLogger.logError(error, {
         module: 'OrdenhaService',
@@ -145,12 +163,7 @@ export class OrdenhaService implements ISoftDelete {
         limit,
       });
 
-      return {
-        data: formatDateFieldsArray(registros),
-        total,
-        page,
-        limit,
-      };
+      return createPaginatedResponse(formatDateFieldsArray(registros), total, page, limit);
     } catch (error) {
       this.customLogger.logError(error, {
         module: 'OrdenhaService',
@@ -160,7 +173,10 @@ export class OrdenhaService implements ISoftDelete {
     }
   }
 
-  async findAllByPropriedade(id_propriedade: string, page = 1, limit = 10) {
+  async findAllByPropriedade(id_propriedade: string, page = 1, limit = 10, user: any) {
+    const idUsuario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(idUsuario, id_propriedade);
+
     this.customLogger.log('Iniciando busca de registros de lactação por propriedade', {
       module: 'OrdenhaService',
       method: 'findAllByPropriedade',
@@ -178,12 +194,7 @@ export class OrdenhaService implements ISoftDelete {
         propriedadeId: id_propriedade,
       });
 
-      return {
-        data: formatDateFieldsArray(registros),
-        total,
-        page,
-        limit,
-      };
+      return createPaginatedResponse(formatDateFieldsArray(registros), total, page, limit);
     } catch (error) {
       this.customLogger.logError(error, {
         module: 'OrdenhaService',
@@ -249,13 +260,7 @@ export class OrdenhaService implements ISoftDelete {
         total,
       });
 
-      return {
-        message: `Dados de lactação da búfala ${id_bufala} recuperados com sucesso`,
-        total,
-        page,
-        limit,
-        dados: formatDateFieldsArray(enrichedData),
-      };
+      return createPaginatedResponse(formatDateFieldsArray(enrichedData), total, page, limit);
     } catch (error) {
       this.customLogger.logError(error, {
         module: 'OrdenhaService',
@@ -279,14 +284,17 @@ export class OrdenhaService implements ISoftDelete {
 
     const data = await this.controleRepository.buscarPorId(id);
 
-    if (data?.idUsuario !== idUsuario) {
-      this.customLogger.warn('Registro de lactação não encontrado ou não pertence ao usuário', {
+    if (!data) {
+      this.customLogger.warn('Registro de lactação não encontrado', {
         module: 'OrdenhaService',
         method: 'findOne',
         lactacaoId: id,
-        userId: idUsuario,
       });
-      throw new NotFoundException(`Registro de lactação com ID ${id} não encontrado ou não pertence a este usuário.`);
+      throw new NotFoundException(`Registro de lactação com ID ${id} não encontrado.`);
+    }
+
+    if (data.idPropriedade) {
+      await this.authHelper.validatePropriedadeAccess(idUsuario, data.idPropriedade);
     }
 
     this.customLogger.log('Registro de lactação encontrado com sucesso', {
@@ -372,6 +380,21 @@ export class OrdenhaService implements ISoftDelete {
     });
 
     try {
+      const idUsuario = user ? await this.authHelper.getUserId(user) : null;
+      const registroExistente = await this.controleRepository.buscarPorIdComDeletados(id);
+
+      if (!registroExistente) {
+        throw new NotFoundException(`Registro de lactação com ID ${id} não encontrado.`);
+      }
+
+      if (idUsuario && registroExistente.idPropriedade) {
+        await this.authHelper.validatePropriedadeAccess(idUsuario, registroExistente.idPropriedade);
+      }
+
+      if (!registroExistente.deletedAt) {
+        throw new BadRequestException('Este registro não está removido.');
+      }
+
       const data = await this.controleRepository.restaurar(id);
 
       if (!data) {
@@ -389,6 +412,10 @@ export class OrdenhaService implements ISoftDelete {
         data: formatDateFields(data),
       };
     } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
       this.customLogger.logError(error, {
         module: 'OrdenhaService',
         method: 'restore',
@@ -405,7 +432,9 @@ export class OrdenhaService implements ISoftDelete {
     });
 
     try {
-      const data = await this.controleRepository.listarComDeletados();
+      const idUsuario = await this.authHelper.getUserId(user);
+      const propriedadesUsuario = await this.authHelper.getUserPropriedades(idUsuario);
+      const data = await this.controleRepository.listarComDeletadosPorPropriedades(propriedadesUsuario);
       return formatDateFieldsArray(data || []);
     } catch (error) {
       this.customLogger.logError(error, {
@@ -448,18 +477,13 @@ export class OrdenhaService implements ISoftDelete {
 
     const { registros, total } = await this.controleRepository.listarPorCiclo(id_ciclo_lactacao, page, limit);
 
-    return {
-      data: formatDateFieldsArray(registros),
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return createPaginatedResponse(formatDateFieldsArray(registros), total, page, limit);
   }
 
-  async findFemeasEmLactacao(id_propriedade: string): Promise<FemeaEmLactacaoDto[]> {
+  async findFemeasEmLactacao(id_propriedade: string, user: any): Promise<FemeaEmLactacaoDto[]> {
+    const idUsuario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(idUsuario, id_propriedade);
+
     this.customLogger.log('Buscando fêmeas em lactação', {
       module: 'OrdenhaService',
       method: 'findFemeasEmLactacao',
@@ -474,30 +498,37 @@ export class OrdenhaService implements ISoftDelete {
       return [];
     }
 
+    const idsBufalas = Array.from(new Set(ativos.map((ciclo) => ciclo.idBufala).filter((id): id is string => Boolean(id))));
+    const idsCiclos = ativos.map((ciclo) => ciclo.idCicloLactacao);
+
+    const [bufalas, ciclosPorBufala, estatisticasPorCiclo] = await Promise.all([
+      this.bufaloRepository.findActiveByIdsWithDetails(idsBufalas),
+      this.cicloRepository.contarPorBufalas(idsBufalas),
+      this.controleRepository.obterEstatisticasPorCiclos(idsCiclos),
+    ]);
+
+    const bufalasMap = new Map(bufalas.map((bufala) => [bufala.idBufalo, bufala]));
+
     const resultado: FemeaEmLactacaoDto[] = [];
 
     for (const ciclo of ativos) {
-      // Need bufalo details. listarPorPropriedade returns bufalo with nome/brinco.
-      // I need dt_nascimento and id_raca.
-      // I should fetch bufalo details.
       if (!ciclo.idBufala) continue;
 
-      const bufala = await this.bufaloRepository.findById(ciclo.idBufala);
+      const bufala = bufalasMap.get(ciclo.idBufala);
       if (!bufala) continue;
 
       // 2. Calcular dias em lactação
       const diasEmLactacao = Math.floor((new Date().getTime() - new Date(ciclo.dtParto).getTime()) / (1000 * 60 * 60 * 24));
 
-      // 3. Buscar estatísticas de produção do ciclo
-      const lactacoes = await this.controleRepository.listarTodosPorCiclo(ciclo.idCicloLactacao);
-
-      const totalProduzido = lactacoes?.reduce((sum, l) => sum + (Number(l.qtOrdenha) || 0), 0) || 0;
-      const diasComOrdenha = lactacoes?.length || 0;
+      // 3. Buscar estatísticas agregadas de produção do ciclo
+      const estatisticas = estatisticasPorCiclo.get(ciclo.idCicloLactacao);
+      const totalProduzido = estatisticas?.totalProduzido || 0;
+      const diasComOrdenha = estatisticas?.totalOrdenhas || 0;
       const mediaDiaria = diasComOrdenha > 0 ? totalProduzido / diasComOrdenha : 0;
-      const ultimaOrdenha = lactacoes?.[0] || null;
+      const ultimaOrdenha = estatisticas?.ultimaOrdenha || null;
 
       // 4. Buscar raça
-      const nomeRaca = bufala.raca?.nome || 'Sem raça definida';
+      const nomeRaca = (bufala as any).raca?.nome || 'Sem raça definida';
 
       // 5. Calcular idade em meses
       const idadeMeses = bufala.dtNascimento
@@ -505,10 +536,7 @@ export class OrdenhaService implements ISoftDelete {
         : 0;
 
       // 6. Contar número do ciclo
-      // This requires counting cycles for this bufala.
-      // I can use listarPorBufala from CicloRepository and count.
-      const ciclosBufala = await this.cicloRepository.listarPorBufala(bufala.idBufalo);
-      const count = ciclosBufala.length;
+      const count = ciclosPorBufala.get(bufala.idBufalo) || 0;
 
       resultado.push({
         idBufalo: bufala.idBufalo,
@@ -530,8 +558,8 @@ export class OrdenhaService implements ISoftDelete {
           media_diaria: parseFloat(mediaDiaria.toFixed(2)),
           ultima_ordenha: ultimaOrdenha
             ? {
-                data: ultimaOrdenha.dtOrdenha,
-                quantidade: Number(ultimaOrdenha.qtOrdenha),
+                data: ultimaOrdenha.data,
+                quantidade: ultimaOrdenha.quantidade,
                 periodo: ultimaOrdenha.periodo || '',
               }
             : null,
@@ -565,6 +593,8 @@ export class OrdenhaService implements ISoftDelete {
   }
 
   async getResumoProducaoBufala(id_bufala: string, user: any): Promise<ResumoProducaoBufalaDto> {
+    const idUsuario = await this.authHelper.getUserId(user);
+
     this.customLogger.log('Buscando resumo de produção da búfala', {
       module: 'OrdenhaService',
       method: 'getResumoProducaoBufala',
@@ -578,24 +608,31 @@ export class OrdenhaService implements ISoftDelete {
       throw new NotFoundException(`Búfala com ID ${id_bufala} não encontrada.`);
     }
 
-    // 2. Buscar ciclo atual (ativo)
-    const cicloAtual = await this.cicloRepository.buscarCicloAtivo(id_bufala);
+    const idPropriedade = bufala.idPropriedade || bufala.propriedade?.idPropriedade;
+    if (idPropriedade) {
+      await this.authHelper.validatePropriedadeAccess(idUsuario, idPropriedade);
+    }
+
+    const [cicloAtual, ciclosBufala] = await Promise.all([
+      this.cicloRepository.buscarCicloAtivo(id_bufala),
+      this.cicloRepository.listarPorBufala(id_bufala),
+    ]);
+
+    const idsCiclos = ciclosBufala.map((c) => c.idCicloLactacao);
+    const estatisticasPorCiclo = await this.controleRepository.obterEstatisticasPorCiclos(idsCiclos);
 
     let cicloAtualProcessado: any = null;
 
     if (cicloAtual) {
       const diasEmLactacao = Math.floor((new Date().getTime() - new Date(cicloAtual.dtParto).getTime()) / (1000 * 60 * 60 * 24));
 
-      const ordenhasCiclo = await this.controleRepository.listarTodosPorCiclo(cicloAtual.idCicloLactacao);
-
-      const totalProduzido = ordenhasCiclo?.reduce((sum, o) => sum + (Number(o.qtOrdenha) || 0), 0) || 0;
-      const diasComOrdenha = ordenhasCiclo?.length || 0;
+      const estatisticasCicloAtual = estatisticasPorCiclo.get(cicloAtual.idCicloLactacao);
+      const totalProduzido = estatisticasCicloAtual?.totalProduzido || 0;
+      const diasComOrdenha = estatisticasCicloAtual?.totalOrdenhas || 0;
       const mediaDiaria = diasComOrdenha > 0 ? totalProduzido / diasComOrdenha : 0;
-      const ultimaOrdenha = ordenhasCiclo?.[0] || null;
+      const ultimaOrdenha = estatisticasCicloAtual?.ultimaOrdenha || null;
 
       // Contar número do ciclo
-      const ciclosBufala = await this.cicloRepository.listarPorBufala(id_bufala);
-      // Filter cycles before or equal to current
       const count = ciclosBufala.filter((c) => new Date(c.dtParto) <= new Date(cicloAtual.dtParto)).length;
 
       cicloAtualProcessado = {
@@ -608,8 +645,8 @@ export class OrdenhaService implements ISoftDelete {
         dt_secagem_prevista: cicloAtual.dtSecagemPrevista,
         ultima_ordenha: ultimaOrdenha
           ? {
-              data: ultimaOrdenha.dtOrdenha,
-              quantidade: Number(ultimaOrdenha.qtOrdenha),
+              data: ultimaOrdenha.data,
+              quantidade: ultimaOrdenha.quantidade,
               periodo: ultimaOrdenha.periodo,
             }
           : null,
@@ -617,7 +654,6 @@ export class OrdenhaService implements ISoftDelete {
     }
 
     // 3. Buscar ciclos anteriores finalizados
-    const ciclosBufala = await this.cicloRepository.listarPorBufala(id_bufala);
     const ciclosAnteriores = ciclosBufala
       .filter((c) => c.status === 'Seca')
       .sort((a, b) => new Date(a.dtParto).getTime() - new Date(b.dtParto).getTime());
@@ -630,9 +666,8 @@ export class OrdenhaService implements ISoftDelete {
         const dtSecagem = ciclo.dtSecagemReal ? new Date(ciclo.dtSecagemReal) : null;
         const duracaoDias = dtSecagem ? Math.floor((dtSecagem.getTime() - dtParto.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
-        const ordenhas = await this.controleRepository.listarTodosPorCiclo(ciclo.idCicloLactacao);
-
-        const totalProduzido = ordenhas?.reduce((sum, o) => sum + (Number(o.qtOrdenha) || 0), 0) || 0;
+        const estatisticasCiclo = estatisticasPorCiclo.get(ciclo.idCicloLactacao);
+        const totalProduzido = estatisticasCiclo?.totalProduzido || 0;
         const mediaDiaria = duracaoDias > 0 ? totalProduzido / duracaoDias : 0;
 
         const count = ciclosBufala.filter((c) => new Date(c.dtParto) <= new Date(ciclo.dtParto)).length;

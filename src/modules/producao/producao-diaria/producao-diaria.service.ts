@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { CreateProducaoDiariaDto } from './dto/create-producao-diaria.dto';
 import { UpdateProducaoDiariaDto } from './dto/update-producao-diaria.dto';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
@@ -13,24 +14,28 @@ export class ProducaoDiariaService implements ISoftDelete {
   constructor(
     private readonly repository: ProducaoDiariaRepositoryDrizzle,
     private readonly logger: LoggerService,
+    private readonly authHelper: AuthHelperService,
   ) {}
 
-  async create(dto: CreateProducaoDiariaDto) {
+  async create(dto: CreateProducaoDiariaDto, user: any) {
+    const idUsuario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(idUsuario, dto.idPropriedade);
+
     this.logger.log('Iniciando criação de registro de estoque de leite', {
       module: 'ProducaoDiariaService',
       method: 'create',
-      usuarioId: dto.idUsuario,
+      usuarioId: idUsuario,
       propriedadeId: dto.idPropriedade,
     });
 
     try {
-      const data = await this.repository.criar(dto);
+      const data = await this.repository.criar(dto, idUsuario);
 
       this.logger.log('Registro de estoque de leite criado com sucesso', {
         module: 'ProducaoDiariaService',
         method: 'create',
         estoqueId: data.idEstoque,
-        usuarioId: dto.idUsuario,
+        usuarioId: idUsuario,
       });
 
       return {
@@ -48,7 +53,7 @@ export class ProducaoDiariaService implements ISoftDelete {
       this.logger.logError(error, {
         module: 'ProducaoDiariaService',
         method: 'create',
-        usuarioId: dto.idUsuario,
+        usuarioId: idUsuario,
       });
       throw new InternalServerErrorException(`Falha ao criar registro de estoque: ${error.message}`);
     }
@@ -92,7 +97,10 @@ export class ProducaoDiariaService implements ISoftDelete {
     }
   }
 
-  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}, user: any): Promise<PaginatedResponse<any>> {
+    const idUsuario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(idUsuario, id_propriedade);
+
     this.logger.log('Iniciando busca de estoque por propriedade', {
       module: 'ProducaoDiariaService',
       method: 'findByPropriedade',
@@ -131,7 +139,7 @@ export class ProducaoDiariaService implements ISoftDelete {
     }
   }
 
-  async findOne(id_estoque: string) {
+  async findOne(id_estoque: string, user: any) {
     this.logger.log('Iniciando busca de registro de estoque por ID', {
       module: 'ProducaoDiariaService',
       method: 'findOne',
@@ -148,6 +156,11 @@ export class ProducaoDiariaService implements ISoftDelete {
           estoqueId: id_estoque,
         });
         throw new NotFoundException(`Registro de estoque com ID ${id_estoque} não encontrado.`);
+      }
+
+      const idUsuario = await this.authHelper.getUserId(user);
+      if (data.idPropriedade) {
+        await this.authHelper.validatePropriedadeAccess(idUsuario, data.idPropriedade);
       }
 
       this.logger.log('Registro de estoque encontrado com sucesso', {
@@ -179,14 +192,14 @@ export class ProducaoDiariaService implements ISoftDelete {
     }
   }
 
-  async update(id_estoque: string, dto: UpdateProducaoDiariaDto) {
+  async update(id_estoque: string, dto: UpdateProducaoDiariaDto, user: any) {
     this.logger.log('Iniciando atualização de registro de estoque', {
       module: 'ProducaoDiariaService',
       method: 'update',
       estoqueId: id_estoque,
     });
 
-    await this.findOne(id_estoque);
+    await this.findOne(id_estoque, user);
 
     try {
       const data = await this.repository.atualizar(id_estoque, dto);
@@ -222,18 +235,18 @@ export class ProducaoDiariaService implements ISoftDelete {
     }
   }
 
-  async remove(id_estoque: string) {
-    return this.softDelete(id_estoque);
+  async remove(id_estoque: string, user: any) {
+    return this.softDelete(id_estoque, user);
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user?: any) {
     this.logger.log('Iniciando remoção de registro de estoque (soft delete)', {
       module: 'ProducaoDiariaService',
       method: 'softDelete',
       estoqueId: id,
     });
 
-    await this.findOne(id);
+    await this.findOne(id, user);
 
     try {
       const data = await this.repository.softDelete(id);
@@ -272,7 +285,7 @@ export class ProducaoDiariaService implements ISoftDelete {
     }
   }
 
-  async restore(id: string) {
+  async restore(id: string, user?: any) {
     this.logger.log('Iniciando restauração de registro de estoque', {
       module: 'ProducaoDiariaService',
       method: 'restore',
@@ -280,10 +293,15 @@ export class ProducaoDiariaService implements ISoftDelete {
     });
 
     try {
-      const estoqueExistente = await this.repository.buscarPorId(id);
+      const idUsuario = await this.authHelper.getUserId(user);
+      const estoqueExistente = await this.repository.buscarPorIdComDeletados(id);
 
       if (!estoqueExistente) {
         throw new NotFoundException(`Registro de estoque com ID ${id} não encontrado`);
+      }
+
+      if (estoqueExistente.idPropriedade) {
+        await this.authHelper.validatePropriedadeAccess(idUsuario, estoqueExistente.idPropriedade);
       }
 
       if (!estoqueExistente.deletedAt) {
@@ -328,14 +346,16 @@ export class ProducaoDiariaService implements ISoftDelete {
     }
   }
 
-  async findAllWithDeleted(): Promise<any[]> {
+  async findAllWithDeleted(user?: any): Promise<any[]> {
     this.logger.log('Buscando todos os registros de estoque incluindo deletados', {
       module: 'ProducaoDiariaService',
       method: 'findAllWithDeleted',
     });
 
     try {
-      const data = await this.repository.listarComDeletados();
+      const idUsuario = await this.authHelper.getUserId(user);
+      const propriedadesUsuario = await this.authHelper.getUserPropriedades(idUsuario);
+      const data = await this.repository.listarComDeletadosPorPropriedades(propriedadesUsuario);
 
       return data.map((estoque) => ({
         id_estoque: estoque.idEstoque,
