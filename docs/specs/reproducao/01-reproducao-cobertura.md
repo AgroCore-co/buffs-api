@@ -211,26 +211,31 @@
 - Status:
   implementada
 
-## REPRO-COB-009 - Ownership por usuario nao e aplicado de forma explicita na camada de cobertura
+## REPRO-COB-009 - Ownership por usuario e aplicado de forma explicita na camada de cobertura
 
 - Contexto de negocio:
   Regras multi-tenant exigem validar se o usuario autenticado tem vinculo com a propriedade informada no payload.
 
 - Regra principal:
-  Operacoes de cobertura deveriam validar ownership por id_usuario + idPropriedade antes de CRUD.
+  Operacoes de cobertura validam ownership por usuario e propriedade antes de CRUD/listagens/recomendacoes.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, o fluxo pode aceitar idPropriedade sem validacao explicita de vinculo do usuario na camada de cobertura.
+  - NotFoundException para registro sem propriedade vinculada.
+  - Erro de acesso (AuthHelperService.validatePropriedadeAccess) quando usuario nao possui vinculo com a propriedade.
 
 - Criterio de aceite:
-  Metodo create recebe auth_uuid, porem nao usa esse parametro nas validacoes/repositorio.
+  - Controller propaga @User para create, listagens, findOne, update, remove, restore, registrarParto e recomendacoes.
+  - findAll/findAllWithDeleted filtram por propriedades do usuario (getUserPropriedades + repositorio por propriedades).
+  - Operacoes por propriedade ou por recurso (findByPropriedade, findOne, update, remove, restore, registrarParto, recomendacoes) validam ownership antes de prosseguir.
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/cobertura/cobertura.controller.ts
   src/modules/reproducao/cobertura/cobertura.service.ts
+  src/modules/reproducao/cobertura/repositories/cobertura.repository.drizzle.ts
+  src/modules/reproducao/cobertura/cobertura.service.spec.ts
 
 - Status:
-  parcial
+  implementada

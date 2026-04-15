@@ -50,53 +50,65 @@
 - Status:
   implementada
 
-## REPRO-MAT-003 - Regras condicionais por origem ainda nao estao completas na camada de servico
+## REPRO-MAT-003 - Regras condicionais por origem sao aplicadas na camada de servico
 
 - Contexto de negocio:
   Quando origem = Coleta Propria, espera-se idBufaloOrigem; quando origem = Compra, espera-se fornecedor.
 
 - Regra principal:
-  Service deveria impor validacao cruzada obrigatoria entre origem e campos condicionais.
+  MaterialGeneticoService aplica validacao cruzada obrigatoria por origem em create e update.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, payload pode passar sem idBufaloOrigem ou sem fornecedor, dependendo da origem informada.
+  BadRequestException para combinacoes invalidas:
+  - Coleta Propria sem idBufaloOrigem.
+  - Coleta Propria com fornecedor informado.
+  - Compra sem fornecedor.
+  - Compra com idBufaloOrigem informado.
 
 - Criterio de aceite:
-  CreateMaterialGeneticoDto marca idBufaloOrigem e fornecedor como opcionais, e MaterialGeneticoService nao impoe regra cruzada obrigatoria.
+  - DTO mantem campos opcionais para contrato flexivel.
+  - Service chama validarCruzadaOrigem antes de persistir create/update.
+  - update valida combinacao considerando estado atual + patch parcial.
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/material-genetico/dto/create-material-genetico.dto.ts
   src/modules/reproducao/material-genetico/material-genetico.service.ts
+  src/modules/reproducao/material-genetico/material-genetico.service.spec.ts
 
 - Status:
-  parcial
+  implementada
 
-## REPRO-MAT-004 - Ownership por propriedade nao e validado explicitamente no subdominio material-genetico
+## REPRO-MAT-004 - Ownership por propriedade e validado explicitamente no subdominio material-genetico
 
 - Contexto de negocio:
   Repositorio multi-tenant exige confirmar vinculo usuario x propriedade antes de operar.
 
 - Regra principal:
-  Endpoints de material genetico deveriam validar ownership com base no usuario autenticado.
+  Endpoints de material genetico validam ownership com base no usuario autenticado.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, fluxo nao injeta usuario no service para validar vinculo da propriedade.
+  - NotFoundException para registro sem propriedade vinculada.
+  - Erro de acesso quando usuario nao possui vinculo com a propriedade.
 
 - Criterio de aceite:
-  Controller/service nao recebem @User nem usam helper central de autorizacao por propriedade.
+  - Controller injeta @User nos endpoints protegidos.
+  - Service aplica validarOwnership (getUserId + validatePropriedadeAccess) em create/findByPropriedade/findOne/update/remove/restore.
+  - Listagens globais usam getUserPropriedades para escopo por propriedades do usuario.
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/material-genetico/material-genetico.controller.ts
   src/modules/reproducao/material-genetico/material-genetico.service.ts
+  src/modules/reproducao/material-genetico/repositories/material-genetico.repository.drizzle.ts
+  src/modules/reproducao/material-genetico/material-genetico.service.spec.ts
 
 - Status:
-  parcial
+  implementada
 
 ## REPRO-SIM-001 - Simulacao exige IA_API_URL na inicializacao do modulo
 
@@ -133,7 +145,7 @@
   Sem excecoes.
 
 - Erros esperados:
-  NotFoundException/erro de acesso herdado do BufaloService ou InternalServerErrorException em falha da IA.
+  NotFoundException/erro de acesso herdado do BufaloService, alem de mapeamento semantico de erro da IA (400/404/422/status propagado, indisponibilidade e timeout).
 
 - Criterio de aceite:
   Metodo valida ambos os IDs antes de chamar IA e retorna resposta da predicao.
@@ -157,7 +169,7 @@
   Sem excecoes.
 
 - Erros esperados:
-  InternalServerErrorException para falha de IA, timeout ou indisponibilidade.
+  NotFoundException/erro de acesso para femea invalida e mapeamento semantico de erros de IA (400/404/422/status propagado, indisponibilidade e timeout).
 
 - Criterio de aceite:
   Resposta final contem femeaId, lista enriquecida, totalEncontrados e limiteConsanguinidade.
@@ -169,49 +181,55 @@
 - Status:
   implementada
 
-## REPRO-SIM-004 - Mapeamento de erro em simulacao ainda retorna 500 para cenarios de negocio externos
+## REPRO-SIM-004 - Mapeamento de erro em simulacao preserva semantica para cenarios de negocio externos
 
 - Contexto de negocio:
-  Erros 400/404/422 vindos da IA podem representar validacao de entrada e deveriam ser refletidos de forma mais semantica ao cliente.
+  Erros 400/404/422 vindos da IA representam cenarios de negocio e devem ser refletidos de forma semantica ao cliente.
 
 - Regra principal:
-  Camada de simulacao deveria diferenciar erros de validacao/nao-encontrado de falhas internas.
+  Camada de simulacao diferencia erros de validacao/nao-encontrado/timeout/indisponibilidade de falhas genericas.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, handleIAError converte cenarios 400/404/422 em InternalServerErrorException, reduzindo granularidade de contrato.
+  - 404 da IA -> NotFoundException.
+  - 400 da IA -> BadRequestException.
+  - 422 da IA -> UnprocessableEntityException.
+  - Outros status HTTP da IA -> HttpException com status original.
+  - ECONNREFUSED -> ServiceUnavailableException.
+  - ETIMEDOUT/ECONNABORTED/TimeoutError -> RequestTimeoutException.
 
 - Criterio de aceite:
-  Metodo handleIAError sempre lanca InternalServerErrorException.
+  Metodo handleIAError aplica mapeamento por tipo/status sem colapsar tudo em 500.
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/simulacao/simulacao.service.ts
 
 - Status:
-  parcial
+  implementada
 
-## REPRO-SIM-005 - Validacao de parametros no controller de simulacao e heterogenea
+## REPRO-SIM-005 - Validacao de parametros no controller de simulacao e padronizada
 
 - Contexto de negocio:
   Endpoints reprodutivos devem rejeitar parametros invalidos o quanto antes.
 
 - Regra principal:
-  IDs de rota e querys numericas deveriam ser normalizados com pipes tipados de forma consistente.
+  IDs de rota e querys numericas sao normalizados com pipes/DTO tipados de forma consistente.
 
 - Excecoes:
-  DTO de POST ja valida UUID para idMacho/idFemea.
+  DTO de POST continua validando UUID para idMacho/idFemea.
 
 - Erros esperados:
-  No estado atual, GET machos-compativeis usa @Param sem ParseUUIDPipe e parseFloat manual na query, deixando validacao menos padronizada.
+  400 para UUID invalido em id_femea e para maxConsanguinidade fora do contrato numerico esperado.
 
 - Criterio de aceite:
-  SimulacaoController nao aplica ParseUUIDPipe em id_femea no endpoint GET.
+  - SimulacaoController aplica ParseUUIDPipe em id_femea no endpoint GET.
+  - maxConsanguinidade e validado por EncontrarMachosCompativeisQueryDto (transformacao numerica + Min/Max).
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/simulacao/simulacao.controller.ts
-  src/modules/reproducao/simulacao/dto/encontrar-machos-compativeis.dto.ts
+  src/modules/reproducao/simulacao/dto/encontrar-machos-compativeis-query.dto.ts
 
 - Status:
-  parcial
+  implementada

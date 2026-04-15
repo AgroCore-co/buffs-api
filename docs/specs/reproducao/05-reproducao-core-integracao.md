@@ -134,55 +134,64 @@
 - Status:
   parcial
 
-## REPRO-CORE-006 - Validacao de ownership usa recursos compartilhados apenas em parte do modulo
+## REPRO-CORE-006 - Validacao de ownership reutiliza recursos compartilhados no modulo
 
 - Contexto de negocio:
   Seguranca multi-tenant depende de validacao consistente de vinculo usuario x propriedade.
 
 - Regra principal:
-  Todos os subdominios deveriam reaproveitar helpers/repositorios centrais para ownership.
+  Subdominios de reproducao reutilizam recursos compartilhados para ownership conforme contexto do fluxo.
 
 - Excecoes:
-  Genealogia ja usa UserMappingService, UsuarioPropriedadeRepository e helper de propriedade.
+  Genealogia mantem estrategia baseada em UserMappingService + vinculo usuario/propriedade.
 
 - Erros esperados:
-  No estado atual, cobertura e material-genetico nao aplicam validacao de ownership com helper compartilhado na camada de negocio.
+  Erro de acesso quando usuario nao possui vinculo com a propriedade, alem de NotFoundException para registros sem propriedade vinculada.
 
 - Criterio de aceite:
-  Diferenca clara entre abordagem robusta em genealogia e ausencia de validacao equivalente em cobertura/material.
+  - Cobertura e material-genetico usam AuthHelperService (getUserId, validatePropriedadeAccess, getUserPropriedades).
+  - Controllers de cobertura/material propagam @User para a camada de servico.
+  - Genealogia preserva fluxo de ownership com servicos/repositorios compartilhados de usuario/propriedade.
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/genealogia/genealogia.service.ts
+  src/modules/reproducao/cobertura/cobertura.controller.ts
   src/modules/reproducao/cobertura/cobertura.service.ts
+  src/modules/reproducao/material-genetico/material-genetico.controller.ts
   src/modules/reproducao/material-genetico/material-genetico.service.ts
+  src/modules/reproducao/cobertura/cobertura.service.spec.ts
+  src/modules/reproducao/material-genetico/material-genetico.service.spec.ts
   src/core/services/user-mapping.service.ts
 
 - Status:
-  parcial
+  implementada
 
-## REPRO-CORE-007 - Estrategia de logging nao e padronizada no modulo
+## REPRO-CORE-007 - Estrategia de logging e padronizada no modulo
 
 - Contexto de negocio:
   Observabilidade uniforme facilita auditoria de reproducoes, rastreio de falhas e operacao em producao.
 
 - Regra principal:
-  Modulo deveria convergir para LoggerService do Core para log estruturado.
+  Subdominios principais de reproducao convergiram para LoggerService do Core e removeram uso direto de console para logs operacionais.
 
 - Excecoes:
-  MaterialGeneticoService ja utiliza LoggerService.
+  Sem excecoes.
 
 - Erros esperados:
-  No estado atual, cobertura usa console.log/warn/error e simulacao/genealogia-ia usam Logger nativo do Nest, gerando heterogeneidade.
+  Nao aplicavel.
 
 - Criterio de aceite:
-  Coexistem tres abordagens de logging no modulo (Core LoggerService, Nest Logger e console).
+  - CoberturaService, MaterialGeneticoService, SimulacaoService e GenealogiaIAService usam LoggerService.
+  - Utilitarios de query de cobertura aceitam LoggerService opcional para registrar falhas sem fallback silencioso.
+  - Nao ha logging operacional com console.* nesses fluxos.
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/material-genetico/material-genetico.service.ts
   src/modules/reproducao/cobertura/cobertura.service.ts
+  src/modules/reproducao/cobertura/utils/reproducao-queries-drizzle.util.ts
   src/modules/reproducao/simulacao/simulacao.service.ts
   src/modules/reproducao/genealogia/genealogia-ia.service.ts
   src/core/logger/logger.service.ts
 
 - Status:
-  parcial
+  implementada

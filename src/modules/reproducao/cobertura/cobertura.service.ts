@@ -1,5 +1,7 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../../../core/database/database.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateCoberturaDto } from './dto/create-cobertura.dto';
 import { UpdateCoberturaDto } from './dto/update-cobertura.dto';
 import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
@@ -37,13 +39,26 @@ import { mapCoberturaResponse, mapCoberturasResponse } from './mappers/cobertura
 export class CoberturaService implements ISoftDelete {
   constructor(
     private readonly databaseService: DatabaseService,
+    private readonly authHelper: AuthHelperService,
+    private readonly logger: LoggerService,
     private readonly alertasService: AlertasService,
     private readonly validator: CoberturaValidatorDrizzle,
     private readonly coberturaRepo: CoberturaRepositoryDrizzle,
     private readonly cacheService: CacheService,
   ) {}
 
-  async create(dto: CreateCoberturaDto, auth_uuid: string) {
+  private async validarOwnership(user: any, idPropriedade: string | null | undefined): Promise<void> {
+    if (!idPropriedade) {
+      throw new NotFoundException('Registro sem propriedade vinculada.');
+    }
+
+    const userId = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(userId, idPropriedade);
+  }
+
+  async create(dto: CreateCoberturaDto, user: any) {
+    await this.validarOwnership(user, dto.idPropriedade);
+
     // ============================================================
     // 1. VALIDAR CONSISTÊNCIA DOS CAMPOS POR TIPO DE INSEMINAÇÃO
     // ============================================================
@@ -151,7 +166,7 @@ export class CoberturaService implements ISoftDelete {
         columns: {
           idMaterial: true,
           tipo: true,
-          ativo: true,
+          deletedAt: true,
         },
       });
 
@@ -159,7 +174,7 @@ export class CoberturaService implements ISoftDelete {
         throw new BadRequestException(`Material genético não encontrado: ${dto.idSemen}`);
       }
 
-      if (!semen.ativo) {
+      if (semen.deletedAt) {
         throw new BadRequestException(`Material genético está inativo e não pode ser utilizado`);
       }
 
@@ -196,18 +211,23 @@ export class CoberturaService implements ISoftDelete {
     return mapCoberturaResponse(coberturaCompleta);
   }
 
-  async findAll(paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+  async findAll(paginationDto: PaginationDto = {}, user?: any): Promise<PaginatedResponse<any>> {
+    const userId = await this.authHelper.getUserId(user);
+    const propriedades = await this.authHelper.getUserPropriedades(userId);
+
     const { page = 1, limit = 10 } = paginationDto;
     const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
-    const result = await this.coberturaRepo.findAll(offset, limitValue);
+    const result = await this.coberturaRepo.findByPropriedades(propriedades, offset, limitValue);
 
     // Mapear dados para incluir informações dos animais
     const mappedData = mapCoberturasResponse(result.data);
     return createPaginatedResponse(mappedData, result.total, page, limitValue);
   }
 
-  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}, user?: any): Promise<PaginatedResponse<any>> {
+    await this.validarOwnership(user, id_propriedade);
+
     const { page = 1, limit = 10 } = paginationDto;
     const { limit: limitValue, offset } = calculatePaginationParams(page, limit);
 
@@ -218,19 +238,25 @@ export class CoberturaService implements ISoftDelete {
     return createPaginatedResponse(mappedData, result.total, page, limitValue);
   }
 
-  async findOne(id_repro: string) {
+  async findOne(id_repro: string, user?: any) {
     const data = await this.coberturaRepo.findById(id_repro);
 
     if (!data) {
       throw new NotFoundException(`Dado de reprodução com ID ${id_repro} não encontrado.`);
     }
 
+    await this.validarOwnership(user, data.idPropriedade);
+
     // Mapear dados para incluir informações dos animais
     return mapCoberturaResponse(data);
   }
 
-  async update(id_repro: string, dto: UpdateCoberturaDto) {
-    const cobertura = await this.findOne(id_repro);
+  async update(id_repro: string, dto: UpdateCoberturaDto, user?: any) {
+    const cobertura = await this.findOne(id_repro, user);
+
+    if (dto.idPropriedade && dto.idPropriedade !== cobertura.idPropriedade) {
+      await this.validarOwnership(user, dto.idPropriedade);
+    }
 
     // Validar se pode atualizar tipo_parto
     if (dto.tipo_parto) {
@@ -247,9 +273,11 @@ export class CoberturaService implements ISoftDelete {
       }
 
       // Alertar sobre uso incorreto - deve usar registrarParto
-      console.warn(
-        `⚠️ AVISO: tipo_parto sendo atualizado diretamente via PATCH. Recomenda-se usar POST /cobertura/${id_repro}/registrar-parto para fluxo completo (parto + ciclo de lactação + alertas).`,
-      );
+      this.logger.warn('tipo_parto sendo atualizado diretamente via PATCH. Recomenda-se usar endpoint registrar-parto.', {
+        module: 'CoberturaService',
+        method: 'update',
+        id_repro,
+      });
     }
 
     const data = await this.coberturaRepo.update(id_repro, dto);
@@ -263,12 +291,12 @@ export class CoberturaService implements ISoftDelete {
     return coberturaCompleta ? mapCoberturaResponse(coberturaCompleta) : data;
   }
 
-  async remove(id_repro: string) {
-    return this.softDelete(id_repro);
+  async remove(id_repro: string, user?: any) {
+    return this.softDelete(id_repro, user);
   }
 
-  async softDelete(id: string) {
-    await this.findOne(id);
+  async softDelete(id: string, user?: any) {
+    await this.findOne(id, user);
 
     const data = await this.coberturaRepo.softDelete(id);
 
@@ -278,7 +306,7 @@ export class CoberturaService implements ISoftDelete {
     };
   }
 
-  async restore(id: string) {
+  async restore(id: string, user?: any) {
     const cobertura = await this.coberturaRepo.findByIdSimple(id);
 
     if (!cobertura) {
@@ -289,6 +317,8 @@ export class CoberturaService implements ISoftDelete {
       throw new BadRequestException('Este registro não está removido');
     }
 
+    await this.validarOwnership(user, cobertura.idPropriedade);
+
     const data = await this.coberturaRepo.restore(id);
 
     return {
@@ -297,8 +327,10 @@ export class CoberturaService implements ISoftDelete {
     };
   }
 
-  async findAllWithDeleted(): Promise<any[]> {
-    const data = await this.coberturaRepo.findAllWithDeleted();
+  async findAllWithDeleted(user?: any): Promise<any[]> {
+    const userId = await this.authHelper.getUserId(user);
+    const propriedades = await this.authHelper.getUserPropriedades(userId);
+    const data = await this.coberturaRepo.findAllWithDeletedByPropriedades(propriedades);
 
     // Mapear dados para incluir informações dos animais
     return mapCoberturasResponse(data || []);
@@ -310,7 +342,10 @@ export class CoberturaService implements ISoftDelete {
   async findFemeasDisponiveisReproducao(
     id_propriedade: string,
     filtro: 'todas' | 'solteiras' | 'vazias' | 'aptas' = 'aptas',
+    user?: any,
   ): Promise<FemeaDisponivelReproducaoDto[]> {
+    await this.validarOwnership(user, id_propriedade);
+
     // 1. Buscar todas as fêmeas ativas da propriedade com idade reprodutiva (18+ meses)
     const idadeMinimaReproducao = new Date();
     idadeMinimaReproducao.setMonth(idadeMinimaReproducao.getMonth() - 18);
@@ -370,7 +405,7 @@ export class CoberturaService implements ISoftDelete {
       let numeroCiclo = 0;
       if (cicloAtivo) {
         diasEmLactacao = Math.floor((new Date().getTime() - new Date(cicloAtivo.dtParto).getTime()) / (1000 * 60 * 60 * 24));
-        numeroCiclo = await contarCiclosTotais(this.databaseService, femea.idBufalo);
+        numeroCiclo = await contarCiclosTotais(this.databaseService, femea.idBufalo, this.logger);
       }
 
       // 4. Determinar status reprodutivo
@@ -449,9 +484,9 @@ export class CoberturaService implements ISoftDelete {
   /**
    * Registra parto e cria ciclo de lactação automaticamente
    */
-  async registrarParto(id_repro: string, dto: RegistrarPartoDto) {
+  async registrarParto(id_repro: string, dto: RegistrarPartoDto, user?: any) {
     // 1. Buscar cobertura
-    const cobertura = await this.findOne(id_repro);
+    const cobertura = await this.findOne(id_repro, user);
 
     if (cobertura.status !== 'Confirmada') {
       throw new BadRequestException('Apenas coberturas confirmadas (prenhez confirmada) podem ter parto registrado.');
@@ -472,8 +507,8 @@ export class CoberturaService implements ISoftDelete {
     // 3. Criar ciclo de lactação automaticamente (apenas para partos normais e cesárea)
     if (dto.criar_ciclo_lactacao !== false && (dto.tipo_parto === 'Normal' || dto.tipo_parto === 'Cesárea')) {
       const cicloData = {
-        idBufala: cobertura.id_bufala,
-        idPropriedade: cobertura.id_propriedade,
+        idBufala: cobertura.idBufala,
+        idPropriedade: cobertura.idPropriedade,
         dtParto: dto.dt_parto,
         padraoDias: dto.padrao_dias_lactacao || 305,
         observacao: dto.observacao || `Ciclo criado automaticamente a partir do parto registrado em ${new Date().toLocaleDateString()}`,
@@ -484,7 +519,11 @@ export class CoberturaService implements ISoftDelete {
       const ciclo = ciclos[0];
 
       if (!ciclo) {
-        console.warn('Erro ao criar ciclo de lactação');
+        this.logger.warn('Falha ao criar ciclo de lactação após registrar parto', {
+          module: 'CoberturaService',
+          method: 'registrarParto',
+          id_repro,
+        });
       } else {
         cicloLactacao = ciclo;
 
@@ -501,7 +540,7 @@ export class CoberturaService implements ISoftDelete {
 
           // Buscar informações da búfala para o alerta
           const bufalaData = await this.databaseService.db.query.bufalo.findFirst({
-            where: (bufalo, { eq }) => eq(bufalo.idBufalo, cobertura.id_bufala),
+            where: (bufalo, { eq }) => eq(bufalo.idBufalo, cobertura.idBufala),
             columns: {
               idBufalo: true,
               nome: true,
@@ -525,7 +564,7 @@ export class CoberturaService implements ISoftDelete {
 
             // Buscar nome da propriedade
             let propriedadeNome = 'Não informada';
-            const propriedadeId = cobertura.id_propriedade || bufalaData.idPropriedade;
+            const propriedadeId = cobertura.idPropriedade || bufalaData.idPropriedade;
             if (propriedadeId) {
               const propData = await this.databaseService.db.query.propriedade.findFirst({
                 where: (propriedade, { eq }) => eq(propriedade.idPropriedade, propriedadeId),
@@ -551,11 +590,21 @@ export class CoberturaService implements ISoftDelete {
               tipo_evento_origem: 'CICLO_LACTACAO',
             });
 
-            console.log(`✅ Alerta de secagem criado automaticamente para ${bufalaData.nome}`);
+            this.logger.log('Alerta de secagem criado automaticamente', {
+              module: 'CoberturaService',
+              method: 'registrarParto',
+              id_repro,
+              idBufalo: bufalaData.idBufalo,
+            });
           }
         } catch (alertaError) {
           // Não bloqueia o fluxo se o alerta falhar
-          console.error('⚠️ Erro ao criar alerta de secagem:', alertaError);
+          const err = alertaError instanceof Error ? alertaError : new Error(String(alertaError));
+          this.logger.error('Erro ao criar alerta de secagem automaticamente', err.stack, {
+            module: 'CoberturaService',
+            method: 'registrarParto',
+            id_repro,
+          });
         }
       }
     }
@@ -579,7 +628,9 @@ export class CoberturaService implements ISoftDelete {
    * - FP_Historico (20%): Eficiência reprodutiva histórica (IEP médio)
    * - FP_Lactacao (15%): Modulador de lactação (penaliza pico)
    */
-  async findRecomendacoesFemeas(id_propriedade: string, limit?: number): Promise<RecomendacaoFemeaDto[]> {
+  async findRecomendacoesFemeas(id_propriedade: string, limit?: number, user?: any): Promise<RecomendacaoFemeaDto[]> {
+    await this.validarOwnership(user, id_propriedade);
+
     // 1. Buscar todas as fêmeas ativas da propriedade com idade mínima reprodutiva (18 meses)
     const idadeMinimaReproducao = new Date();
     idadeMinimaReproducao.setMonth(idadeMinimaReproducao.getMonth() - 18);
@@ -620,10 +671,10 @@ export class CoberturaService implements ISoftDelete {
       const idadeMeses = calcularIdadeEmMeses(femea.dtNascimento);
 
       // 3. Buscar ciclo de lactação ativo (mais recente)
-      const cicloAtivo = await buscarCicloAtivo(this.databaseService, femea.idBufalo);
+      const cicloAtivo = await buscarCicloAtivo(this.databaseService, femea.idBufalo, this.logger);
 
       // 4. Contar total de ciclos (número de partos)
-      const totalCiclos = await contarCiclosTotais(this.databaseService, femea.idBufalo);
+      const totalCiclos = await contarCiclosTotais(this.databaseService, femea.idBufalo, this.logger);
 
       // 5. Calcular dias pós-parto (DPP)
       let diasPosParto: number | null = null;
@@ -640,7 +691,7 @@ export class CoberturaService implements ISoftDelete {
       }
 
       // 6. Calcular IEP médio (se >= 2 partos)
-      const iepMedio = await calcularIEPMedio(this.databaseService, femea.idBufalo, totalCiclos);
+      const iepMedio = await calcularIEPMedio(this.databaseService, femea.idBufalo, totalCiclos, this.logger);
 
       // 7. Calcular fatores do IAR
       const fp_prontidao = calcularFPProntidao(totalCiclos, idadeMeses, diasPosParto);
@@ -708,9 +759,11 @@ export class CoberturaService implements ISoftDelete {
    *
    * Usa tipo_parto como indicador de sucesso (Normal/Cesárea = prenhez confirmada)
    */
-  async findRecomendacoesMachos(id_propriedade: string, limit?: number): Promise<RecomendacaoMachoDto[]> {
+  async findRecomendacoesMachos(id_propriedade: string, limit?: number, user?: any): Promise<RecomendacaoMachoDto[]> {
+    await this.validarOwnership(user, id_propriedade);
+
     // 1. Calcular média do rebanho (MR_TC) - estatística global da propriedade
-    const { totalPrenhezes, totalCoberturas } = await estatisticasRebanho(this.databaseService, id_propriedade);
+    const { totalPrenhezes, totalCoberturas } = await estatisticasRebanho(this.databaseService, id_propriedade, this.logger);
     const mr_tc = calcularMediaRebanho(totalPrenhezes, totalCoberturas);
 
     // 2. Buscar todos os machos ativos da propriedade com idade mínima reprodutiva (24 meses)
@@ -754,7 +807,7 @@ export class CoberturaService implements ISoftDelete {
       const idadeMeses = calcularIdadeEmMeses(macho.dtNascimento);
 
       // 4. Buscar histórico de coberturas do touro
-      const historico = await buscarHistoricoCoberturasTouro(this.databaseService, macho.idBufalo);
+      const historico = await buscarHistoricoCoberturasTouro(this.databaseService, macho.idBufalo, this.logger);
 
       const n_touro = historico.total_coberturas;
       const totalPrenhezes = historico.total_prenhezes;

@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { eq, and, desc, count, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, count, isNull, sql, inArray } from 'drizzle-orm';
 import { dadosreproducao } from '../../../../database/schema';
 
 /**
@@ -160,6 +160,67 @@ export class CoberturaRepositoryDrizzle {
   }
 
   /**
+   * Busca coberturas por múltiplas propriedades (ownership do usuário)
+   */
+  async findByPropriedades(idPropriedades: string[], offset: number, limit: number) {
+    try {
+      if (!idPropriedades.length) {
+        return { data: [], total: 0 };
+      }
+
+      const db = this.databaseService.db;
+
+      const statusPriority = sql`
+        CASE ${dadosreproducao.status}
+          WHEN 'Em andamento' THEN 1
+          WHEN 'Confirmada' THEN 2
+          WHEN 'Falha' THEN 3
+          WHEN 'Concluída' THEN 4
+          ELSE 5
+        END
+      `;
+
+      const [data, totalResult] = await Promise.all([
+        db.query.dadosreproducao.findMany({
+          where: and(inArray(dadosreproducao.idPropriedade, idPropriedades), isNull(dadosreproducao.deletedAt)),
+          orderBy: [statusPriority, desc(dadosreproducao.dtEvento)],
+          limit,
+          offset,
+          with: {
+            bufalo_idBufala: {
+              columns: {
+                idBufalo: true,
+                nome: true,
+                brinco: true,
+                microchip: true,
+              },
+            },
+            bufalo_idBufalo: {
+              columns: {
+                idBufalo: true,
+                nome: true,
+                brinco: true,
+                microchip: true,
+              },
+            },
+          },
+        }),
+        db
+          .select({ count: count() })
+          .from(dadosreproducao)
+          .where(and(inArray(dadosreproducao.idPropriedade, idPropriedades), isNull(dadosreproducao.deletedAt))),
+      ]);
+
+      return {
+        data,
+        total: totalResult[0]?.count || 0,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao buscar coberturas por propriedades: ${error.message}`);
+    }
+  }
+
+  /**
    * Busca cobertura por ID com relacionamentos
    */
   async findById(idReproducao: string) {
@@ -224,6 +285,7 @@ export class CoberturaRepositoryDrizzle {
       if (data.idBufalo !== undefined) mappedData.idBufalo = data.idBufalo;
       if (data.tipoInseminacao !== undefined) mappedData.tipoInseminacao = data.tipoInseminacao;
       if (data.status !== undefined) mappedData.status = data.status;
+      if (data.tipo_parto !== undefined) mappedData.tipoParto = data.tipo_parto;
       if (data.tipoParto !== undefined) mappedData.tipoParto = data.tipoParto;
       if (data.dtEvento !== undefined) mappedData.dtEvento = data.dtEvento;
       if (data.ocorrencia !== undefined) mappedData.ocorrencia = data.ocorrencia;
@@ -303,6 +365,44 @@ export class CoberturaRepositoryDrizzle {
       return result;
     } catch (error) {
       throw new InternalServerErrorException(`Erro ao buscar coberturas: ${error.message}`);
+    }
+  }
+
+  /**
+   * Busca coberturas incluindo removidas, restritas por ownership
+   */
+  async findAllWithDeletedByPropriedades(idPropriedades: string[]) {
+    try {
+      if (!idPropriedades.length) {
+        return [];
+      }
+
+      const result = await this.databaseService.db.query.dadosreproducao.findMany({
+        where: inArray(dadosreproducao.idPropriedade, idPropriedades),
+        orderBy: [desc(dadosreproducao.dtEvento)],
+        with: {
+          bufalo_idBufala: {
+            columns: {
+              idBufalo: true,
+              nome: true,
+              brinco: true,
+              microchip: true,
+            },
+          },
+          bufalo_idBufalo: {
+            columns: {
+              idBufalo: true,
+              nome: true,
+              brinco: true,
+              microchip: true,
+            },
+          },
+        },
+      });
+
+      return result;
+    } catch (error) {
+      throw new InternalServerErrorException(`Erro ao buscar coberturas (incluindo deletadas) por propriedades: ${error.message}`);
     }
   }
 }

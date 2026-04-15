@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, ParseUUIDPipe, UseGuards, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiParam, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
+import { User } from '../../auth/decorators/user.decorator';
 import { MaterialGeneticoService } from './material-genetico.service';
 import { CreateMaterialGeneticoDto, UpdateMaterialGeneticoDto } from './dto';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
@@ -17,8 +18,8 @@ export class MaterialGeneticoController {
   @ApiBody({ type: CreateMaterialGeneticoDto })
   @ApiResponse({ status: 201, description: 'Material genético criado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
-  create(@Body() dto: CreateMaterialGeneticoDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateMaterialGeneticoDto, @User() user: any) {
+    return this.service.create(dto, user);
   }
 
   @Get()
@@ -26,8 +27,8 @@ export class MaterialGeneticoController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista de materiais retornada com sucesso.' })
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.service.findAll(paginationDto);
+  findAll(@Query() paginationDto: PaginationDto, @User() user: any) {
+    return this.service.findAll(paginationDto, user);
   }
 
   @Get('propriedade/:id_propriedade')
@@ -36,8 +37,8 @@ export class MaterialGeneticoController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista retornada com sucesso.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
-    return this.service.findByPropriedade(id_propriedade, paginationDto);
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto, @User() user: any) {
+    return this.service.findByPropriedade(id_propriedade, paginationDto, user);
   }
 
   @Get(':id')
@@ -45,8 +46,8 @@ export class MaterialGeneticoController {
   @ApiParam({ name: 'id', description: 'ID do material genético' })
   @ApiResponse({ status: 200, description: 'Material genético encontrado.' })
   @ApiResponse({ status: 404, description: 'Material genético não encontrado.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.service.findOne(id, user);
   }
 
   @Patch(':id')
@@ -55,8 +56,8 @@ export class MaterialGeneticoController {
   @ApiBody({ type: UpdateMaterialGeneticoDto })
   @ApiResponse({ status: 200, description: 'Material genético atualizado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Material genético não encontrado.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMaterialGeneticoDto) {
-    return this.service.update(id, dto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMaterialGeneticoDto, @User() user: any) {
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
@@ -67,8 +68,8 @@ export class MaterialGeneticoController {
   @ApiParam({ name: 'id', description: 'ID do material genético' })
   @ApiResponse({ status: 200, description: 'Material genético removido com sucesso (soft delete).' })
   @ApiResponse({ status: 404, description: 'Material genético não encontrado.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.service.remove(id, user);
   }
 
   @Post(':id/restore')
@@ -80,8 +81,8 @@ export class MaterialGeneticoController {
   @ApiResponse({ status: 200, description: 'Material genético restaurado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Material genético não encontrado.' })
   @ApiResponse({ status: 400, description: 'Material genético não está removido.' })
-  restore(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.restore(id);
+  restore(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.service.restore(id, user);
   }
 
   @Get('deleted/all')
@@ -90,7 +91,7 @@ export class MaterialGeneticoController {
     description: 'Retorna todos os materiais genéticos, incluindo os removidos (soft delete).',
   })
   @ApiResponse({ status: 200, description: 'Lista completa retornada com sucesso.' })
-  findAllWithDeleted() {
-    return this.service.findAllWithDeleted();
+  findAllWithDeleted(@User() user: any) {
+    return this.service.findAllWithDeleted(user);
   }
 }

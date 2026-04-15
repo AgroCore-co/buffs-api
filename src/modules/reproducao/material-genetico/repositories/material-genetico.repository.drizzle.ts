@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
-import { eq, and, desc, count, isNull } from 'drizzle-orm';
+import { eq, and, desc, count, isNull, inArray } from 'drizzle-orm';
 import { materialgenetico } from '../../../../database/schema';
 
 /**
@@ -69,6 +69,11 @@ export class MaterialGeneticoRepositoryDrizzle {
     return result || null;
   }
 
+  async findByIdSimple(id: string) {
+    const [result] = await this.databaseService.db.select().from(materialgenetico).where(eq(materialgenetico.idMaterial, id)).limit(1);
+    return result || null;
+  }
+
   /**
    * Busca todos os materiais genéticos com paginação
    * Retorna formato {data, total} para compatibilidade com service
@@ -84,6 +89,35 @@ export class MaterialGeneticoRepositoryDrizzle {
         offset,
       }),
       db.select({ count: count() }).from(materialgenetico).where(isNull(materialgenetico.deletedAt)),
+    ]);
+
+    return {
+      data,
+      total: totalResult[0]?.count || 0,
+    };
+  }
+
+  /**
+   * Busca materiais genéticos por múltiplas propriedades (ownership do usuário)
+   */
+  async findAllByPropriedadesPaginated(idPropriedades: string[], offset: number, limit: number) {
+    if (!idPropriedades.length) {
+      return { data: [], total: 0 };
+    }
+
+    const db = this.databaseService.db;
+
+    const [data, totalResult] = await Promise.all([
+      db.query.materialgenetico.findMany({
+        where: and(inArray(materialgenetico.idPropriedade, idPropriedades), isNull(materialgenetico.deletedAt)),
+        orderBy: [desc(materialgenetico.createdAt)],
+        limit,
+        offset,
+      }),
+      db
+        .select({ count: count() })
+        .from(materialgenetico)
+        .where(and(inArray(materialgenetico.idPropriedade, idPropriedades), isNull(materialgenetico.deletedAt))),
     ]);
 
     return {
@@ -137,6 +171,17 @@ export class MaterialGeneticoRepositoryDrizzle {
 
   async findAllWithDeleted() {
     return await this.databaseService.db.query.materialgenetico.findMany({
+      orderBy: [desc(materialgenetico.createdAt)],
+    });
+  }
+
+  async findAllWithDeletedByPropriedades(idPropriedades: string[]) {
+    if (!idPropriedades.length) {
+      return [];
+    }
+
+    return await this.databaseService.db.query.materialgenetico.findMany({
+      where: inArray(materialgenetico.idPropriedade, idPropriedades),
       orderBy: [desc(materialgenetico.createdAt)],
     });
   }

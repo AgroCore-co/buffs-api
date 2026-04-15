@@ -63,10 +63,11 @@
 
 - Erros esperados:
   - Erro de inicializacao se IA_API_URL nao estiver configurada no SimulacaoService.
-  - InternalServerErrorException ou Error em caso de timeout/indisponibilidade da IA.
+  - Simulacao: NotFoundException (404), BadRequestException (400), UnprocessableEntityException (422), HttpException (demais status 4xx/5xx), ServiceUnavailableException (indisponibilidade) e RequestTimeoutException (timeout).
+  - Genealogia IA: HttpException para status retornado pela IA, ServiceUnavailableException para indisponibilidade e RequestTimeoutException para timeout.
 
 - Criterio de aceite:
-  Servicos fazem chamadas HTTP para endpoints de IA, com timeout e tratamento de erro.
+  Servicos fazem chamadas HTTP para endpoints de IA, com timeout e tratamento semantico de erro por status.
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/simulacao/simulacao.service.ts
@@ -75,31 +76,35 @@
 - Status:
   implementada
 
-## REPRO-ARCH-004 - Validacao de ownership nao e uniforme em todos os subdominios
+## REPRO-ARCH-004 - Validacao de ownership e aplicada de forma uniforme nos subdominios
 
 - Contexto de negocio:
   Em ambiente multi-tenant, operacoes por propriedade precisam validar vinculo entre usuario e propriedade alvo.
 
 - Regra principal:
-  Ownership deveria ser validado de forma consistente em todos os subdominios de reproducao.
+  Ownership e validado de forma explicita nos subdominios de cobertura, material genetico e genealogia.
 
 - Excecoes:
-  Genealogia implementa validacao explicita por dono/funcionario antes de retornar arvore e antes de chamar IA.
+  Sem excecoes.
 
 - Erros esperados:
-  No estado atual, fluxos de cobertura e material genetico podem operar com idPropriedade valido sem validacao explicita do vinculo do usuario autenticado.
+  NotFoundException para registro sem propriedade vinculada e erro de acesso quando usuario nao possui vinculo com a propriedade.
 
 - Criterio de aceite:
-  - GenealogiaService usa UserMappingService + repositorio de vinculo.
-  - CoberturaService recebe auth_uuid, mas nao usa esse valor para filtrar ou validar ownership.
-  - MaterialGeneticoService nao recebe contexto de usuario para validacao de ownership.
+  - CoberturaController e MaterialGeneticoController propagam @User para os fluxos protegidos.
+  - CoberturaService e MaterialGeneticoService usam AuthHelperService (getUserId, validatePropriedadeAccess, getUserPropriedades) para validar/filtrar operacoes.
+  - GenealogiaService mantem validacao de ownership antes de responder arvore/analise.
 
 - Rastreabilidade para codigo e testes:
   src/modules/reproducao/genealogia/genealogia.service.ts
+  src/modules/reproducao/cobertura/cobertura.controller.ts
   src/modules/reproducao/cobertura/cobertura.service.ts
+  src/modules/reproducao/material-genetico/material-genetico.controller.ts
   src/modules/reproducao/material-genetico/material-genetico.service.ts
+  src/modules/reproducao/cobertura/cobertura.service.spec.ts
+  src/modules/reproducao/material-genetico/material-genetico.service.spec.ts
   src/core/services/user-mapping.service.ts
   src/modules/usuario/repositories/usuario-propriedade.repository.drizzle.ts
 
 - Status:
-  parcial
+  implementada

@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class GenealogiaNodeDto {
-  @ApiProperty({ example: 1, description: 'ID do búfalo' })
-  id: number;
+  @ApiProperty({ example: 'b8c4a72d-1234-4567-8901-234567890123', description: 'ID do búfalo (UUID)' })
+  id: string;
 
   @ApiProperty({ example: 'Valente', description: 'Nome do búfalo' })
   nome: string;

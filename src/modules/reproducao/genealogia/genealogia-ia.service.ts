@@ -1,9 +1,10 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpException, Injectable, OnModuleInit, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, timeout } from 'rxjs';
 import { AnaliseGenealogicaDto, MachosCompativeisDto, MachoCompativelDto } from './dto';
 import { GenealogiaRepositoryDrizzle } from './repositories';
+import { LoggerService } from '../../../core/logger/logger.service';
 
 /**
  * Service responsável pela integração com a IA para análises genealógicas.
@@ -15,13 +16,14 @@ import { GenealogiaRepositoryDrizzle } from './repositories';
  */
 @Injectable()
 export class GenealogiaIAService implements OnModuleInit {
-  private readonly logger = new Logger(GenealogiaIAService.name);
+  private readonly module = 'GenealogiaIAService';
   private readonly iaApiUrl: string;
   private readonly requestTimeout: number = 30000; // 30 segundos
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly logger: LoggerService,
     private readonly genealogiaRepo: GenealogiaRepositoryDrizzle,
   ) {
     // Mantém valor vindo do ambiente, mas garante um padrão alinhado ao env.example
@@ -29,7 +31,10 @@ export class GenealogiaIAService implements OnModuleInit {
   }
 
   onModuleInit() {
-    this.logger.log(`GenealogiaIAService inicializado com URL: ${this.iaApiUrl}`);
+    this.logger.log(`GenealogiaIAService inicializado com URL: ${this.iaApiUrl}`, {
+      module: this.module,
+      method: 'onModuleInit',
+    });
   }
 
   /**
@@ -43,7 +48,11 @@ export class GenealogiaIAService implements OnModuleInit {
   async analisarGenealogiaCompleta(idBufalo: string, userId: string): Promise<AnaliseGenealogicaDto> {
     const url = `${this.iaApiUrl}/analise-genealogica`;
 
-    this.logger.log(`Solicitando análise genealógica para búfalo ${idBufalo}`);
+    this.logger.log(`Solicitando análise genealógica para búfalo ${idBufalo}`, {
+      module: this.module,
+      method: 'analisarGenealogiaCompleta',
+      idBufalo,
+    });
 
     try {
       const response = await firstValueFrom(
@@ -59,11 +68,13 @@ export class GenealogiaIAService implements OnModuleInit {
           .pipe(timeout(this.requestTimeout)),
       );
 
-      this.logger.log(
-        `Análise genealógica concluída - Búfalo: ${idBufalo}, ` +
-          `Consanguinidade: ${response.data.consanguinidade}%, ` +
-          `Risco: ${response.data.riscoGenetico}`,
-      );
+      this.logger.log('Análise genealógica concluída com sucesso', {
+        module: this.module,
+        method: 'analisarGenealogiaCompleta',
+        idBufalo,
+        consanguinidade: response.data.consanguinidade,
+        risco: response.data.riscoGenetico,
+      });
 
       return response.data;
     } catch (error) {
@@ -81,9 +92,13 @@ export class GenealogiaIAService implements OnModuleInit {
    * @returns Lista de machos compatíveis
    */
   async encontrarMachosCompativeis(femeaId: string, maxConsanguinidade = 6.25, userId: string): Promise<MachosCompativeisDto> {
-    const url = `${this.iaApiUrl}/machos-compatíveis/${femeaId}`;
+    const url = `${this.iaApiUrl}/machos-compativeis/${femeaId}`;
 
-    this.logger.log(`Buscando machos compatíveis para fêmea ${femeaId} ` + `(max consanguinidade: ${maxConsanguinidade}%)`);
+    this.logger.log(`Buscando machos compatíveis para fêmea ${femeaId} (max consanguinidade: ${maxConsanguinidade}%)`, {
+      module: this.module,
+      method: 'encontrarMachosCompativeis',
+      femeaId,
+    });
 
     try {
       const response = await firstValueFrom(
@@ -110,7 +125,11 @@ export class GenealogiaIAService implements OnModuleInit {
         scoreCompatibilidade: Math.max(0, Math.round((100 - m.consanguinidadeProle * 10) * 100) / 100),
       }));
 
-      this.logger.log(`Encontrados ${machosEnriquecidos.length} machos compatíveis para fêmea ${femeaId}`);
+      this.logger.log(`Encontrados ${machosEnriquecidos.length} machos compatíveis para fêmea ${femeaId}`, {
+        module: this.module,
+        method: 'encontrarMachosCompativeis',
+        femeaId,
+      });
 
       return {
         femeaId: iaData.femeaId,
@@ -127,26 +146,44 @@ export class GenealogiaIAService implements OnModuleInit {
    * Tratamento centralizado de erros da IA
    */
   private handleIAError(error: any, operacao: string): never {
+    const method = 'handleIAError';
+
     if (error.response) {
       const status = error.response.status;
       const message = error.response.data?.detail || error.response.data?.message || 'Erro desconhecido';
 
-      this.logger.error(`Erro na ${operacao} - Status ${status}: ${message}`, error.response.data);
+      this.logger.error(`Erro na ${operacao} - Status ${status}: ${message}`, undefined, {
+        module: this.module,
+        method,
+        status,
+        iaData: error.response.data,
+      });
 
-      throw new Error(`Erro na IA (${operacao}): ${message}`);
+      const safeStatus = status >= 400 && status <= 599 ? status : 502;
+      throw new HttpException(`Erro na IA (${operacao}): ${message}`, safeStatus);
     }
 
     if (error.code === 'ECONNREFUSED') {
-      this.logger.error(`IA indisponível para ${operacao} em ${this.iaApiUrl}`);
-      throw new Error('Serviço de IA temporariamente indisponível');
+      this.logger.error(`IA indisponível para ${operacao} em ${this.iaApiUrl}`, undefined, {
+        module: this.module,
+        method,
+      });
+      throw new ServiceUnavailableException('Serviço de IA temporariamente indisponível');
     }
 
-    if (error.name === 'TimeoutError') {
-      this.logger.error(`Timeout na ${operacao} após ${this.requestTimeout}ms`);
-      throw new Error(`Timeout na ${operacao}. Tente novamente.`);
+    if (error.name === 'TimeoutError' || error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      this.logger.error(`Timeout na ${operacao} após ${this.requestTimeout}ms`, undefined, {
+        module: this.module,
+        method,
+      });
+      throw new RequestTimeoutException(`Timeout na ${operacao}. Tente novamente.`);
     }
 
-    this.logger.error(`Erro inesperado na ${operacao}:`, error);
-    throw new Error(`Erro inesperado na ${operacao}`);
+    const err = error instanceof Error ? error : new Error(String(error));
+    this.logger.error(`Erro inesperado na ${operacao}: ${err.message}`, err.stack, {
+      module: this.module,
+      method,
+    });
+    throw new ServiceUnavailableException(`Erro inesperado na ${operacao}`);
   }
 }

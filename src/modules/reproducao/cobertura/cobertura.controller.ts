@@ -25,8 +25,8 @@ export class CoberturaController {
   @ApiBody({ type: CreateCoberturaDto })
   @ApiResponse({ status: 201, description: 'Registro de reprodução criado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
-  create(@Body() dto: CreateCoberturaDto, @User('sub') id_usuario: string) {
-    return this.service.create(dto, id_usuario);
+  create(@Body() dto: CreateCoberturaDto, @User() user: any) {
+    return this.service.create(dto, user);
   }
 
   @Get()
@@ -34,8 +34,8 @@ export class CoberturaController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista de registros retornada com sucesso.' })
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.service.findAll(paginationDto);
+  findAll(@Query() paginationDto: PaginationDto, @User() user: any) {
+    return this.service.findAll(paginationDto, user);
   }
 
   @Get('propriedade/:id_propriedade')
@@ -44,8 +44,8 @@ export class CoberturaController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista retornada com sucesso.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
-    return this.service.findByPropriedade(id_propriedade, paginationDto);
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto, @User() user: any) {
+    return this.service.findByPropriedade(id_propriedade, paginationDto, user);
   }
 
   @Get(':id')
@@ -53,8 +53,8 @@ export class CoberturaController {
   @ApiParam({ name: 'id', description: 'ID da cobertura' })
   @ApiResponse({ status: 200, description: 'Cobertura encontrada.' })
   @ApiResponse({ status: 404, description: 'Cobertura não encontrada.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.service.findOne(id, user);
   }
 
   @Patch(':id')
@@ -63,8 +63,8 @@ export class CoberturaController {
   @ApiBody({ type: UpdateCoberturaDto })
   @ApiResponse({ status: 200, description: 'Cobertura atualizada com sucesso.' })
   @ApiResponse({ status: 404, description: 'Cobertura não encontrada.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCoberturaDto) {
-    return this.service.update(id, dto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCoberturaDto, @User() user: any) {
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
@@ -75,8 +75,8 @@ export class CoberturaController {
   @ApiParam({ name: 'id', description: 'ID da cobertura' })
   @ApiResponse({ status: 200, description: 'Cobertura removida com sucesso.' })
   @ApiResponse({ status: 404, description: 'Cobertura não encontrada.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.service.remove(id, user);
   }
 
   @Post(':id/restore')
@@ -87,8 +87,8 @@ export class CoberturaController {
   @ApiParam({ name: 'id', description: 'ID da cobertura a ser restaurada' })
   @ApiResponse({ status: 200, description: 'Cobertura restaurada com sucesso.' })
   @ApiResponse({ status: 404, description: 'Cobertura não encontrada ou não estava removida.' })
-  restore(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.restore(id);
+  restore(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.service.restore(id, user);
   }
 
   @Get('deleted/all')
@@ -97,8 +97,8 @@ export class CoberturaController {
     description: 'Lista todos os registros de cobertura incluindo os removidos (soft delete).',
   })
   @ApiResponse({ status: 200, description: 'Lista de coberturas incluindo deletadas retornada com sucesso.' })
-  findAllWithDeleted() {
-    return this.service.findAllWithDeleted();
+  findAllWithDeleted(@User() user: any) {
+    return this.service.findAllWithDeleted(user);
   }
 
   @Get('femeas/disponiveis-reproducao/:id_propriedade')
@@ -118,8 +118,9 @@ export class CoberturaController {
   async getFemeasDisponiveisReproducao(
     @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
     @Query('filtro') filtro: 'todas' | 'solteiras' | 'vazias' | 'aptas' = 'aptas',
+    @User() user: any,
   ): Promise<FemeaDisponivelReproducaoDto[]> {
-    return this.service.findFemeasDisponiveisReproducao(id_propriedade, filtro);
+    return this.service.findFemeasDisponiveisReproducao(id_propriedade, filtro, user);
   }
 
   @Patch(':id/registrar-parto')
@@ -140,8 +141,8 @@ export class CoberturaController {
   })
   @ApiResponse({ status: 400, description: 'Cobertura não está confirmada ou dados inválidos' })
   @ApiResponse({ status: 404, description: 'Cobertura não encontrada' })
-  registrarParto(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RegistrarPartoDto) {
-    return this.service.registrarParto(id, dto);
+  registrarParto(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RegistrarPartoDto, @User() user: any) {
+    return this.service.registrarParto(id, dto, user);
   }
 
   @Get('recomendacoes/femeas/:id_propriedade')
@@ -171,8 +172,9 @@ export class CoberturaController {
   async getRecomendacoesFemeas(
     @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
     @Query('limit') limit?: number,
+    @User() user?: any,
   ): Promise<RecomendacaoFemeaDto[]> {
-    return this.service.findRecomendacoesFemeas(id_propriedade, limit);
+    return this.service.findRecomendacoesFemeas(id_propriedade, limit, user);
   }
 
   @Get('recomendacoes/machos/:id_propriedade')
@@ -204,7 +206,8 @@ export class CoberturaController {
   async getRecomendacoesMachos(
     @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
     @Query('limit') limit?: number,
+    @User() user?: any,
   ): Promise<RecomendacaoMachoDto[]> {
-    return this.service.findRecomendacoesMachos(id_propriedade, limit);
+    return this.service.findRecomendacoesMachos(id_propriedade, limit, user);
   }
 }

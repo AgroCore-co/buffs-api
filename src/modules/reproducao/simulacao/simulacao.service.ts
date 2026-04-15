@@ -1,5 +1,16 @@
-import { Injectable, InternalServerErrorException, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+  RequestTimeoutException,
+  ServiceUnavailableException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { LoggerService } from '../../../core/logger/logger.service';
 import { BufaloService } from '../../rebanho/bufalo/bufalo.service';
 import { SimularAcasalamentoDto } from './dto/simular-acasalamento.dto';
 import { EncontrarMachosCompativeisDto } from './dto/encontrar-machos-compativeis.dto';
@@ -16,7 +27,7 @@ import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
  * - Fornecer recomendações baseadas em dados genéticos
  *
  * **Integração Externa:**
- * - URL base da IA: process.env.IA_API_URL
+ * - URL base da IA: ConfigService (IA_API_URL)
  * - Timeout: 60 segundos (análise genealógica)
  * - Retry automático configurado no HttpService
  *
@@ -34,40 +45,36 @@ import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
  */
 @Injectable()
 export class SimulacaoService implements OnModuleInit {
-  private readonly logger = new Logger(SimulacaoService.name);
-  private readonly iaApiUrl = process.env.IA_API_URL;
+  private readonly module = 'SimulacaoService';
+  private readonly iaApiUrl: string;
 
   constructor(
     private readonly bufaloService: BufaloService,
     private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+    private readonly logger: LoggerService,
     private readonly genealogiaRepo: GenealogiaRepositoryDrizzle,
-  ) {}
+  ) {
+    this.iaApiUrl = this.configService.get<string>('IA_API_URL') || '';
+  }
 
   /**
    * Valida configuração ao inicializar o módulo
    */
   onModuleInit() {
-    if (!this.iaApiUrl) {
-      this.logger.error('❌ IA_API_URL não configurada no ambiente');
+    if (!this.iaApiUrl?.trim()) {
+      this.logger.error('IA_API_URL não configurada no ambiente', undefined, {
+        module: this.module,
+        method: 'onModuleInit',
+      });
       throw new Error('IA_API_URL é obrigatória para o módulo de simulação');
     }
-    this.logger.log(`✅ Módulo Simulação inicializado - IA URL: ${this.iaApiUrl}`);
+    this.logger.log(`Módulo de simulação inicializado. IA URL: ${this.iaApiUrl}`, {
+      module: this.module,
+      method: 'onModuleInit',
+    });
   }
 
-  /**
-   * Simula acasalamento entre macho e fêmea usando IA.
-   *
-   * Previne potencial genético da cria, incluindo:
-   * - Peso ao nascer estimado
-   * - Produção de leite esperada (fêmeas)
-   * - Qualidade genética geral
-   * - Alertas de consanguinidade
-   *
-   * **Fluxo:**
-   * 1. Valida existência dos animais
-   * 2. Monta payload com IDs para API de IA
-   * 3. Envia requisição incluindo predição de fêmea
-   * 4. Retorna dados processados pela IA
   /**
    * Simula acasalamento entre macho e fêmea usando IA.
    *
@@ -87,7 +94,7 @@ export class SimulacaoService implements OnModuleInit {
    * @param user - Usuário autenticado (valida acesso aos animais)
    * @returns Predição genética do acasalamento
    * @throws {NotFoundException} Se macho ou fêmea não existir
-   * @throws {InternalServerErrorException} Se API de IA estiver indisponível
+   * @throws {ServiceUnavailableException} Se API de IA estiver indisponível
    */
   async preverPotencial(dto: SimularAcasalamentoDto, user: any) {
     const { idMacho, idFemea } = dto;
@@ -96,7 +103,10 @@ export class SimulacaoService implements OnModuleInit {
     await Promise.all([this.bufaloService.findOne(idMacho, user), this.bufaloService.findOne(idFemea, user)]);
 
     try {
-      this.logger.debug(`Simulando acasalamento: Macho ${idMacho} x Fêmea ${idFemea}`);
+      this.logger.debug(`Simulando acasalamento: Macho ${idMacho} x Fêmea ${idFemea}`, {
+        module: this.module,
+        method: 'preverPotencial',
+      });
 
       const payloadParaIA = {
         idMacho,
@@ -111,7 +121,12 @@ export class SimulacaoService implements OnModuleInit {
         }),
       );
 
-      this.logger.log(`✅ Simulação concluída - Consanguinidade: ${response.data.consanguinidadeProle}%`);
+      this.logger.log(`Simulação concluída com consanguinidade estimada: ${response.data.consanguinidadeProle}%`, {
+        module: this.module,
+        method: 'preverPotencial',
+        idMacho,
+        idFemea,
+      });
       return response.data;
     } catch (error) {
       return this.handleIAError(error, 'simular acasalamento');
@@ -138,7 +153,7 @@ export class SimulacaoService implements OnModuleInit {
    * @param user - Usuário autenticado
    * @returns Lista de machos compatíveis ordenados por score
    * @throws {NotFoundException} Se fêmea não existir
-   * @throws {InternalServerErrorException} Se API de IA estiver indisponível
+   * @throws {ServiceUnavailableException} Se API de IA estiver indisponível
    */
   async encontrarMachosCompativeis(dto: EncontrarMachosCompativeisDto, user: any) {
     const { idFemea, maxConsanguinidade } = dto;
@@ -147,10 +162,13 @@ export class SimulacaoService implements OnModuleInit {
     await this.bufaloService.findOne(idFemea, user);
 
     try {
-      this.logger.debug(`Buscando machos compatíveis - Fêmea: ${idFemea}, Max: ${maxConsanguinidade}%`);
+      this.logger.debug(`Buscando machos compatíveis - Fêmea: ${idFemea}, Max: ${maxConsanguinidade}%`, {
+        module: this.module,
+        method: 'encontrarMachosCompativeis',
+      });
 
       const response = await firstValueFrom(
-        this.httpService.get(`${this.iaApiUrl}/machos-compatíveis/${idFemea}`, {
+        this.httpService.get(`${this.iaApiUrl}/machos-compativeis/${idFemea}`, {
           params: { max_consanguinidade: maxConsanguinidade },
           headers: { 'x-user-id': user?.sub || user?.id || '' },
           timeout: 20000,
@@ -171,7 +189,11 @@ export class SimulacaoService implements OnModuleInit {
         scoreCompatibilidade: Math.max(0, Math.round((100 - m.consanguinidadeProle * 10) * 100) / 100),
       }));
 
-      this.logger.log(`✅ ${machosEnriquecidos.length} machos compatíveis encontrados`);
+      this.logger.log(`${machosEnriquecidos.length} machos compatíveis encontrados`, {
+        module: this.module,
+        method: 'encontrarMachosCompativeis',
+        idFemea,
+      });
       return {
         femeaId: iaData.femeaId,
         machosCompativeis: machosEnriquecidos,
@@ -188,39 +210,53 @@ export class SimulacaoService implements OnModuleInit {
    * @private
    */
   private handleIAError(error: any, operation: string): never {
+    const method = 'handleIAError';
     const errorDetails = error.response?.data || {};
     const status = error.response?.status;
     const message = errorDetails.detail || error.message;
 
-    this.logger.error(`❌ Erro ao ${operation}:`, {
+    this.logger.error(`Erro ao ${operation}: ${message}`, undefined, {
+      module: this.module,
+      method,
       status,
-      message,
       url: error.config?.url,
     });
 
     // Mapeia erros para respostas amigáveis ao frontend
     if (status === 404) {
-      throw new InternalServerErrorException(`Recurso não encontrado na IA ao ${operation}`);
+      throw new NotFoundException(`Recurso não encontrado na IA ao ${operation}: ${message}`);
     }
 
-    if (status === 400 || status === 422) {
-      // Erros de negócio/validação da IA devem chegar ao front para exibição
-      throw new InternalServerErrorException({
+    if (status === 400) {
+      throw new BadRequestException({
         message: `Dados inválidos ao ${operation}: ${message}`,
-        statusCode: status,
+        statusCode: 400,
         operation,
         iaDetail: errorDetails,
       });
     }
 
+    if (status === 422) {
+      throw new UnprocessableEntityException({
+        message: `Não foi possível concluir ${operation}: ${message}`,
+        statusCode: 422,
+        operation,
+        iaDetail: errorDetails,
+      });
+    }
+
+    if (status && status >= 400 && status <= 599) {
+      throw new HttpException(`Erro na IA ao ${operation}: ${message}`, status);
+    }
+
     if (error.code === 'ECONNREFUSED') {
-      throw new InternalServerErrorException('Serviço de IA indisponível. Verifique se está rodando.');
+      throw new ServiceUnavailableException('Serviço de IA indisponível. Verifique se está rodando.');
     }
 
-    if (error.code === 'ETIMEDOUT') {
-      throw new InternalServerErrorException(`Timeout ao ${operation}. A operação demorou muito.`);
+    if (error.name === 'TimeoutError' || error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      throw new RequestTimeoutException(`Timeout ao ${operation}. A operação demorou muito.`);
     }
 
-    throw new InternalServerErrorException(`Erro ao ${operation}. Tente novamente mais tarde.`);
+    throw new ServiceUnavailableException(`Erro ao ${operation}. Tente novamente mais tarde.`);
   }
 }

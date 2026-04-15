@@ -1,6 +1,6 @@
-import { Controller, Post, Body, UseGuards, Get, Param, Query } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Param, Query, ParseUUIDPipe } from '@nestjs/common';
 import { SimulacaoService } from './simulacao.service';
-import { SimularAcasalamentoDto, EncontrarMachosCompativeisDto } from './dto';
+import { SimularAcasalamentoDto, EncontrarMachosCompativeisQueryDto } from './dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { User } from '../../auth/decorators/user.decorator';
@@ -60,12 +60,17 @@ export class SimulacaoController {
   })
   @ApiResponse({ status: 404, description: 'Fêmea não encontrada ou não pertence a este usuário.' })
   @ApiResponse({ status: 400, description: 'ID fornecido não é de uma fêmea.' })
-  @ApiResponse({ status: 500, description: 'Erro interno do servidor ou serviço de IA indisponível.' })
-  encontrarMachosCompativeis(@Param('id_femea') id_femea: string, @Query('maxConsanguinidade') maxConsanguinidade: string, @User() user: any) {
+  @ApiResponse({ status: 422, description: 'Consanguinidade ou parâmetros de negócio inválidos para a IA.' })
+  @ApiResponse({ status: 503, description: 'Serviço de IA indisponível.' })
+  encontrarMachosCompativeis(
+    @Param('id_femea', ParseUUIDPipe) id_femea: string,
+    @Query() query: EncontrarMachosCompativeisQueryDto,
+    @User() user: any,
+  ) {
     return this.simulacaoService.encontrarMachosCompativeis(
       {
         idFemea: id_femea,
-        maxConsanguinidade: maxConsanguinidade ? parseFloat(maxConsanguinidade) : 6.25,
+        maxConsanguinidade: query.maxConsanguinidade ?? 6.25,
       },
       user,
     );
