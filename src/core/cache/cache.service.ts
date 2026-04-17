@@ -4,8 +4,16 @@ import { Cache } from 'cache-manager';
 import { LoggerService } from '../logger/logger.service';
 import { getErrorMessage } from '../utils/error.utils';
 
+type RedisIncrementClient = {
+  incr: (key: string) => Promise<number>;
+  expire: (key: string, ttlSeconds: number) => Promise<number>;
+  ttl?: (key: string) => Promise<number>;
+};
+
 @Injectable()
 export class CacheService {
+  private readonly incrementLocks = new Map<string, Promise<void>>();
+
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly logger: LoggerService,
@@ -38,6 +46,47 @@ export class CacheService {
       this.logger.debug(`Cache SET: ${key} (TTL: ${ttl ?? 'default'})`, { module: 'CacheService', method: 'set' });
     } catch (error: unknown) {
       this.logger.warn(`Erro ao definir cache: ${key}`, { module: 'CacheService', method: 'set', error: getErrorMessage(error) });
+    }
+  }
+
+  /**
+   * Incrementa um contador com atomicidade quando há backend Redis.
+   * Define TTL na primeira escrita para preservar janela deslizante de rate limit.
+   */
+  async increment(key: string, ttlSeconds: number): Promise<number> {
+    try {
+      const redisClient = this.resolveRedisIncrementClient();
+
+      if (!redisClient) {
+        // Fallback com lock local por chave (atômico apenas neste processo).
+        return await this.withIncrementLock(key, async () => {
+          const current = (await this.get<number>(key)) ?? 0;
+          const next = current + 1;
+          await this.set(key, next, ttlSeconds * 1000);
+          this.logger.warn(`Store sem INCR nativo para chave ${key}; fallback local aplicado.`, {
+            module: 'CacheService',
+            method: 'increment',
+          });
+          return next;
+        });
+      }
+
+      const count = await redisClient.incr(key);
+
+      if (count === 1) {
+        await redisClient.expire(key, ttlSeconds);
+      } else if (redisClient.ttl) {
+        const ttl = await redisClient.ttl(key);
+        if (ttl < 0) {
+          await redisClient.expire(key, ttlSeconds);
+        }
+      }
+
+      this.logger.debug(`Cache INCR: ${key} -> ${count}`, { module: 'CacheService', method: 'increment' });
+      return count;
+    } catch (error: unknown) {
+      this.logger.warn(`Erro ao incrementar cache: ${key}`, { module: 'CacheService', method: 'increment', error: getErrorMessage(error) });
+      throw error;
     }
   }
 
@@ -109,5 +158,49 @@ export class CacheService {
   generateUserKey(userId: string, resource: string, params?: Record<string, unknown>): string {
     const paramStr = params ? `:${Buffer.from(JSON.stringify(params)).toString('base64').slice(0, 10)}` : '';
     return `user:${userId}:${resource}${paramStr}`;
+  }
+
+  private resolveRedisIncrementClient(): RedisIncrementClient | undefined {
+    const cacheAny = this.cacheManager as Cache & {
+      store?: { getClient?: () => unknown; client?: unknown };
+      stores?: Array<{ getClient?: () => unknown; client?: unknown }>;
+    };
+
+    const candidates: unknown[] = [
+      cacheAny.store?.getClient?.(),
+      cacheAny.store?.client,
+      cacheAny.stores?.[0]?.getClient?.(),
+      cacheAny.stores?.[0]?.client,
+    ];
+
+    for (const candidate of candidates) {
+      const maybeClient = candidate as Partial<RedisIncrementClient> | undefined;
+      if (maybeClient && typeof maybeClient.incr === 'function' && typeof maybeClient.expire === 'function') {
+        return maybeClient as RedisIncrementClient;
+      }
+    }
+
+    return undefined;
+  }
+
+  private async withIncrementLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.incrementLocks.get(key) ?? Promise.resolve();
+    let release: (() => void) | undefined;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const chain = previous.then(() => current);
+    this.incrementLocks.set(key, chain);
+
+    await previous;
+
+    try {
+      return await operation();
+    } finally {
+      release?.();
+      if (this.incrementLocks.get(key) === chain) {
+        this.incrementLocks.delete(key);
+      }
+    }
   }
 }

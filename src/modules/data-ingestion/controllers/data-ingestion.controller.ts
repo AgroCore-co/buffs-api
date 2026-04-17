@@ -9,6 +9,7 @@ import {
   UseInterceptors,
   Res,
   ParseUUIDPipe,
+  ValidationPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -20,10 +21,11 @@ import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { User } from '../../auth/decorators/user.decorator';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 
 import { DataIngestionService } from '../services/data-ingestion.service';
 import { DataIngestionMapper } from '../mappers/data-ingestion.mapper';
-import { ImportResponseDto, JobStatusResponseDto } from '../dto';
+import { ExportQueryDto, ImportResponseDto, JobStatusResponseDto } from '../dto';
 import { MulterFile } from '../interfaces';
 
 @ApiBearerAuth('JWT-auth')
@@ -102,10 +104,7 @@ Envia uma planilha Excel (.xlsx) com dados de produção de leite para processam
   @ApiResponse({ status: 503, description: 'Serviço ETL indisponível.' })
   async exportLeite(
     @Param('propriedadeId', ParseUUIDPipe) propriedadeId: string,
-    @Query('grupoId') grupoId: string,
-    @Query('maturidade') maturidade: string,
-    @Query('de') de: string,
-    @Query('ate') ate: string,
+    @Query(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) query: ExportQueryDto,
     @User() user: any,
     @Res() res: Response,
   ): Promise<void> {
@@ -115,7 +114,7 @@ Envia uma planilha Excel (.xlsx) com dados de produção de leite para processam
       propriedadeId,
     });
 
-    const filters = this.mapper.buildExportFilters(propriedadeId, { grupoId, maturidade, de, ate });
+    const filters = this.mapper.buildExportFilters(propriedadeId, query);
     const { buffer, filename } = await this.service.exportLeite(propriedadeId, user, filters);
 
     res.set({
@@ -186,11 +185,7 @@ Envia uma planilha Excel (.xlsx) com dados de pesagem dos animais para processam
   @ApiResponse({ status: 503, description: 'Serviço ETL indisponível.' })
   async exportPesagem(
     @Param('propriedadeId', ParseUUIDPipe) propriedadeId: string,
-    @Query('grupoId') grupoId: string,
-    @Query('maturidade') maturidade: string,
-    @Query('sexo') sexo: string,
-    @Query('de') de: string,
-    @Query('ate') ate: string,
+    @Query(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) query: ExportQueryDto,
     @User() user: any,
     @Res() res: Response,
   ): Promise<void> {
@@ -200,7 +195,7 @@ Envia uma planilha Excel (.xlsx) com dados de pesagem dos animais para processam
       propriedadeId,
     });
 
-    const filters = this.mapper.buildExportFilters(propriedadeId, { grupoId, maturidade, sexo, de, ate });
+    const filters = this.mapper.buildExportFilters(propriedadeId, query);
     const { buffer, filename } = await this.service.exportPesagem(propriedadeId, user, filters);
 
     res.set({
@@ -270,10 +265,7 @@ Envia uma planilha Excel (.xlsx) com dados de eventos reprodutivos para processa
   @ApiResponse({ status: 503, description: 'Serviço ETL indisponível.' })
   async exportReproducao(
     @Param('propriedadeId', ParseUUIDPipe) propriedadeId: string,
-    @Query('grupoId') grupoId: string,
-    @Query('tipo') tipo: string,
-    @Query('de') de: string,
-    @Query('ate') ate: string,
+    @Query(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) query: ExportQueryDto,
     @User() user: any,
     @Res() res: Response,
   ): Promise<void> {
@@ -283,7 +275,7 @@ Envia uma planilha Excel (.xlsx) com dados de eventos reprodutivos para processa
       propriedadeId,
     });
 
-    const filters = this.mapper.buildExportFilters(propriedadeId, { grupoId, tipo, de, ate });
+    const filters = this.mapper.buildExportFilters(propriedadeId, query);
     const { buffer, filename } = await this.service.exportReproducao(propriedadeId, user, filters);
 
     res.set({
@@ -306,6 +298,7 @@ export class DataIngestionJobController {
   constructor(
     private readonly service: DataIngestionService,
     private readonly logger: LoggerService,
+    private readonly authHelper: AuthHelperService,
   ) {}
 
   @Get('jobs/:jobId')
@@ -315,14 +308,19 @@ export class DataIngestionJobController {
   })
   @ApiParam({ name: 'jobId', description: 'ID do job retornado na importação', type: 'string' })
   @ApiResponse({ status: 200, description: 'Status do job retornado.', type: JobStatusResponseDto })
+  @ApiResponse({ status: 403, description: 'Usuário sem permissão para consultar este job.' })
+  @ApiResponse({ status: 404, description: 'Job não encontrado (pode ter expirado ou sido removido pela rotina de limpeza).' })
   @ApiResponse({ status: 503, description: 'Serviço ETL indisponível.' })
-  async getJobStatus(@Param('jobId') jobId: string): Promise<JobStatusResponseDto> {
+  async getJobStatus(@Param('jobId') jobId: string, @User() user: any): Promise<JobStatusResponseDto> {
+    const userId = await this.authHelper.getUserId(user);
+
     this.logger.logApiRequest('GET', `/data-ingestion/jobs/${jobId}`, undefined, {
       module: 'DataIngestionJobController',
       method: 'getJobStatus',
       jobId,
+      userId,
     });
 
-    return this.service.getJobStatus(jobId);
+    return this.service.getJobStatus(jobId, userId);
   }
 }

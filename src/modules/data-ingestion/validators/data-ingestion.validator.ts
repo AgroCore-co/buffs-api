@@ -85,14 +85,14 @@ export class DataIngestionValidator {
    */
   async checkRateLimit(propriedadeId: string): Promise<void> {
     const cacheKey = `data-ingestion:rate:${propriedadeId}`;
-    const current = await this.cacheService.get<number>(cacheKey);
+    const newCount = await this.cacheService.increment(cacheKey, RATE_LIMIT_WINDOW_SECONDS);
 
-    if (current !== undefined && current >= RATE_LIMIT_MAX) {
+    if (newCount > RATE_LIMIT_MAX) {
       this.logger.warn('Rate limit excedido para importação', {
         module: 'DataIngestionValidator',
         method: 'checkRateLimit',
         propriedadeId,
-        current,
+        current: newCount,
         max: RATE_LIMIT_MAX,
       });
       throw new HttpException(
@@ -103,8 +103,5 @@ export class DataIngestionValidator {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-
-    const newCount = (current ?? 0) + 1;
-    await this.cacheService.set(cacheKey, newCount, RATE_LIMIT_WINDOW_SECONDS * 1000);
   }
 }

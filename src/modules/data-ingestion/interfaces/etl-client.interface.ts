@@ -39,13 +39,28 @@ export interface EtlImportResult {
   warnings: EtlRowWarning[];
 }
 
+export interface EtlImportResultRaw {
+  jobId?: string;
+  job_id?: string;
+  totalRows?: number;
+  total_rows?: number;
+  imported?: number;
+  skipped?: number;
+  errors?: EtlRowError[];
+  warnings?: EtlRowWarning[];
+}
+
 export interface EtlJobStatus {
-  jobId: string;
-  status: 'pending' | 'processing' | 'done' | 'failed';
-  progress: number;
-  result?: EtlImportResult;
-  createdAt: Date;
-  updatedAt: Date;
+  jobId?: string;
+  job_id?: string;
+  status: string;
+  progress?: number;
+  result?: EtlImportResult | EtlImportResultRaw;
+  createdAt?: string | Date;
+  created_at?: string | Date;
+  updatedAt?: string | Date;
+  updated_at?: string | Date;
+  error?: string;
 }
 
 export interface IEtlClient {
@@ -57,7 +72,7 @@ export interface IEtlClient {
   exportPesagem(filters: ExportFiltersDto): Promise<Buffer>;
   exportReproducao(filters: ExportFiltersDto): Promise<Buffer>;
 
-  getJobStatus(jobId: string): Promise<EtlJobStatus>;
+  getJobStatus(jobId: string, userId: string): Promise<EtlJobStatus>;
 }
 
 export const ETL_CLIENT = 'ETL_CLIENT';

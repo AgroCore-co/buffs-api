@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { LoggerService } from '../../../core/logger/logger.service';
-import { ExportFiltersDto } from '../dto';
+import { ExportFiltersDto, ExportQueryDto } from '../dto';
 
 /**
  * Mapper responsável por transformar parâmetros de query
@@ -14,17 +14,7 @@ export class DataIngestionMapper {
   /**
    * Monta ExportFiltersDto a partir dos query params do controller.
    */
-  buildExportFilters(
-    propriedadeId: string,
-    query: {
-      grupoId?: string;
-      maturidade?: string;
-      sexo?: string;
-      tipo?: string;
-      de?: string;
-      ate?: string;
-    },
-  ): ExportFiltersDto {
+  buildExportFilters(propriedadeId: string, query: ExportQueryDto): ExportFiltersDto {
     const filters = new ExportFiltersDto();
     filters.propriedadeId = propriedadeId;
 
