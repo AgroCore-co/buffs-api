@@ -380,31 +380,55 @@ export class BufaloService implements ISoftDelete {
   async create(createDto: CreateBufaloDto, user: any) {
     const userId = await this.authHelper.getUserId(user);
 
+    const dadosCriacao = {
+      nome: createDto.nome,
+      brinco: createDto.brinco,
+      microchip: createDto.microchip,
+      dt_nascimento: createDto.dtNascimento,
+      nivel_maturidade: createDto.nivelMaturidade,
+      sexo: createDto.sexo,
+      data_baixa: undefined,
+      status: createDto.status,
+      motivo_inativo: undefined,
+      id_raca: createDto.idRaca,
+      id_propriedade: createDto.idPropriedade,
+      id_grupo: createDto.idGrupo,
+      origem: createDto.origem,
+      brinco_original: createDto.brinco_original,
+      registro_prov: createDto.registro_prov,
+      registro_def: createDto.registro_def,
+      categoria: createDto.categoria,
+      id_pai: createDto.idPai,
+      id_mae: createDto.idMae,
+      id_pai_semen: createDto.id_pai_semen,
+      id_mae_ovulo: createDto.id_mae_ovulo,
+    };
+
     // Valida acesso à propriedade
-    await this.validatePropriedadeAccess(createDto.idPropriedade, userId);
+    await this.validatePropriedadeAccess(dadosCriacao.id_propriedade, userId);
 
     // Valida genealogia (previne circularidade)
-    await this.validarGenealogiaCircular(undefined, createDto.idPai, createDto.idMae);
+    await this.validarGenealogiaCircular(undefined, dadosCriacao.id_pai, dadosCriacao.id_mae);
 
     try {
       // 1. Processa maturidade automaticamente
-      const dadosComMaturidade = this.maturidadeService.processarDadosMaturidade(createDto);
+      const dadosComMaturidade = this.maturidadeService.processarDadosMaturidade(dadosCriacao);
 
       // 2. Calcula categoria ABCB se tiver genealogia
       let dadosFinais = { ...dadosComMaturidade };
 
-      if (createDto.idPai || createDto.idMae) {
+      if (dadosCriacao.id_pai || dadosCriacao.id_mae) {
         // Constrói árvore genealógica a partir dos dados fornecidos (sem buscar búfalo inexistente)
         const arvoreGenealogica = await this.genealogiaService.construirArvoreParaCategoriaFromData(
-          createDto.idRaca ?? null,
-          createDto.idPai,
-          createDto.idMae,
+          dadosCriacao.id_raca ?? null,
+          dadosCriacao.id_pai,
+          dadosCriacao.id_mae,
           1,
         );
 
         if (arvoreGenealogica) {
           // Verifica se propriedade participa ABCB
-          const propriedade = await this.usuarioPropriedadeRepo.buscarPropriedadePorId(createDto.idPropriedade);
+          const propriedade = await this.usuarioPropriedadeRepo.buscarPropriedadePorId(dadosCriacao.id_propriedade);
 
           const categoria = this.categoriaService.processarCategoriaABCB(arvoreGenealogica, propriedade?.pAbcb || false);
           dadosFinais = { ...dadosFinais, categoria };

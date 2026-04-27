@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
 import { eq, and, desc, count, isNull, sql, inArray } from 'drizzle-orm';
 import { dadosreproducao } from '../../../../database/schema';
@@ -39,7 +39,11 @@ export class CoberturaRepositoryDrizzle {
 
       const result = await db.insert(dadosreproducao).values(mappedData).returning();
       return result[0];
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === '23505' && error?.constraint === 'uq_dadosreproducao_bufala_em_andamento') {
+        throw new BadRequestException('Fêmea já possui gestação em andamento.');
+      }
+
       throw new InternalServerErrorException(`Erro ao criar cobertura: ${error.message}`);
     }
   }

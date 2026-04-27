@@ -29,6 +29,7 @@ describe('PredicaoProducaoService', () => {
 
     configService = {
       get: jest.fn().mockReturnValue('http://ia.local'),
+      getOrThrow: jest.fn().mockReturnValue('test-internal-key'),
     } as unknown as jest.Mocked<ConfigService>;
 
     cacheService = {
@@ -64,7 +65,7 @@ describe('PredicaoProducaoService', () => {
       'http://ia.local/predicao-individual',
       { idFemea },
       {
-        headers: { 'x-user-id': 'user-10' },
+        headers: { 'x-user-id': 'user-10', 'x-internal-key': 'test-internal-key' },
         timeout: 30000,
       },
     );

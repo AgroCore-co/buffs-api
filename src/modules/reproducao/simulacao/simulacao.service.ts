@@ -11,11 +11,11 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { LoggerService } from '../../../core/logger/logger.service';
-import { BufaloService } from '../../rebanho/bufalo/bufalo.service';
 import { SimularAcasalamentoDto } from './dto/simular-acasalamento.dto';
 import { EncontrarMachosCompativeisDto } from './dto/encontrar-machos-compativeis.dto';
 import { firstValueFrom } from 'rxjs';
 import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
+import { GenealogiaService } from '../genealogia/genealogia.service';
 
 /**
  * Serviço de simulação e análise de acasalamentos usando IA.
@@ -47,15 +47,17 @@ import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
 export class SimulacaoService implements OnModuleInit {
   private readonly module = 'SimulacaoService';
   private readonly iaApiUrl: string;
+  private readonly iaInternalKey: string;
 
   constructor(
-    private readonly bufaloService: BufaloService,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly logger: LoggerService,
     private readonly genealogiaRepo: GenealogiaRepositoryDrizzle,
+    private readonly genealogiaService: GenealogiaService,
   ) {
     this.iaApiUrl = this.configService.get<string>('IA_API_URL') || '';
+    this.iaInternalKey = this.configService.getOrThrow<string>('IA_INTERNAL_KEY');
   }
 
   /**
@@ -99,8 +101,8 @@ export class SimulacaoService implements OnModuleInit {
   async preverPotencial(dto: SimularAcasalamentoDto, user: any) {
     const { idMacho, idFemea } = dto;
 
-    // Valida existência dos animais (lança exceção se não encontrar)
-    await Promise.all([this.bufaloService.findOne(idMacho, user), this.bufaloService.findOne(idFemea, user)]);
+    await this.genealogiaService.buildTree(idMacho, 1, user);
+    await this.genealogiaService.buildTree(idFemea, 1, user);
 
     try {
       this.logger.debug(`Simulando acasalamento: Macho ${idMacho} x Fêmea ${idFemea}`, {
@@ -116,7 +118,7 @@ export class SimulacaoService implements OnModuleInit {
       const response = await firstValueFrom(
         this.httpService.post(`${this.iaApiUrl}/simular-acasalamento`, payloadParaIA, {
           params: { incluir_predicao_femea: true },
-          headers: { 'x-user-id': user?.sub || user?.id || '' },
+          headers: this.buildIAHeaders(user?.sub || user?.id || ''),
           timeout: 30000,
         }),
       );
@@ -158,8 +160,7 @@ export class SimulacaoService implements OnModuleInit {
   async encontrarMachosCompativeis(dto: EncontrarMachosCompativeisDto, user: any) {
     const { idFemea, maxConsanguinidade } = dto;
 
-    // Valida existência da fêmea
-    await this.bufaloService.findOne(idFemea, user);
+    await this.genealogiaService.buildTree(idFemea, 1, user);
 
     try {
       this.logger.debug(`Buscando machos compatíveis - Fêmea: ${idFemea}, Max: ${maxConsanguinidade}%`, {
@@ -170,7 +171,7 @@ export class SimulacaoService implements OnModuleInit {
       const response = await firstValueFrom(
         this.httpService.get(`${this.iaApiUrl}/machos-compativeis/${idFemea}`, {
           params: { max_consanguinidade: maxConsanguinidade },
-          headers: { 'x-user-id': user?.sub || user?.id || '' },
+          headers: this.buildIAHeaders(user?.sub || user?.id || ''),
           timeout: 20000,
         }),
       );
@@ -203,6 +204,13 @@ export class SimulacaoService implements OnModuleInit {
     } catch (error) {
       return this.handleIAError(error, 'buscar machos compatíveis');
     }
+  }
+
+  private buildIAHeaders(userId: string): Record<string, string> {
+    return {
+      'x-user-id': userId,
+      'x-internal-key': this.iaInternalKey,
+    };
   }
 
   /**

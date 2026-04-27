@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, timeout } from 'rxjs';
 import { PredicaoProducaoResponseDto } from './dto';
 import { CacheService } from '../../../core/cache/cache.service';
+import { GenealogiaService } from '../../reproducao/genealogia/genealogia.service';
 
 /**
  * Service responsável pela integração com a IA para predição de produção de leite.
@@ -17,6 +18,7 @@ import { CacheService } from '../../../core/cache/cache.service';
 export class PredicaoProducaoService implements OnModuleInit {
   private readonly logger = new Logger(PredicaoProducaoService.name);
   private readonly iaApiUrl: string;
+  private readonly iaInternalKey: string;
   private readonly requestTimeout: number = 30000; // 30 segundos
   private readonly cacheTtlMs: number = 10 * 60 * 1000; // 10 minutos
 
@@ -24,8 +26,10 @@ export class PredicaoProducaoService implements OnModuleInit {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly cacheService: CacheService,
+    private readonly genealogiaService: GenealogiaService,
   ) {
     this.iaApiUrl = this.configService.get<string>('IA_API_URL') || 'http://localhost:8000';
+    this.iaInternalKey = this.configService.getOrThrow<string>('IA_INTERNAL_KEY');
   }
 
   onModuleInit() {
@@ -43,6 +47,8 @@ export class PredicaoProducaoService implements OnModuleInit {
     const url = `${this.iaApiUrl}/predicao-individual`;
     const cacheKey = `predicao:producao:${userId}:${idFemea}`;
 
+    await this.genealogiaService.buildTree(idFemea, 1, { sub: userId });
+
     this.logger.log(`Solicitando predição de produção para fêmea ${idFemea}`);
 
     const cached = await this.cacheService.get<PredicaoProducaoResponseDto>(cacheKey);
@@ -58,7 +64,7 @@ export class PredicaoProducaoService implements OnModuleInit {
             url,
             { idFemea },
             {
-              headers: { 'x-user-id': userId },
+              headers: this.buildIAHeaders(userId),
               timeout: this.requestTimeout,
             },
           )
@@ -77,6 +83,13 @@ export class PredicaoProducaoService implements OnModuleInit {
     } catch (error) {
       return this.handleIAError(error, 'predição de produção');
     }
+  }
+
+  private buildIAHeaders(userId: string): Record<string, string> {
+    return {
+      'x-user-id': userId,
+      'x-internal-key': this.iaInternalKey,
+    };
   }
 
   /**

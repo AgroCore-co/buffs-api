@@ -18,6 +18,7 @@ import { LoggerService } from '../../../core/logger/logger.service';
 export class GenealogiaIAService implements OnModuleInit {
   private readonly module = 'GenealogiaIAService';
   private readonly iaApiUrl: string;
+  private readonly iaInternalKey: string;
   private readonly requestTimeout: number = 30000; // 30 segundos
 
   constructor(
@@ -28,6 +29,7 @@ export class GenealogiaIAService implements OnModuleInit {
   ) {
     // Mantém valor vindo do ambiente, mas garante um padrão alinhado ao env.example
     this.iaApiUrl = this.configService.get<string>('IA_API_URL') || 'http://localhost:5001';
+    this.iaInternalKey = this.configService.getOrThrow<string>('IA_INTERNAL_KEY');
   }
 
   onModuleInit() {
@@ -61,7 +63,7 @@ export class GenealogiaIAService implements OnModuleInit {
             url,
             { idBufalo },
             {
-              headers: { 'x-user-id': userId },
+              headers: this.buildIAHeaders(userId),
               timeout: this.requestTimeout,
             },
           )
@@ -105,7 +107,7 @@ export class GenealogiaIAService implements OnModuleInit {
         this.httpService
           .get<MachosCompativeisDto>(url, {
             params: { max_consanguinidade: maxConsanguinidade },
-            headers: { 'x-user-id': userId },
+            headers: this.buildIAHeaders(userId),
             timeout: this.requestTimeout,
           })
           .pipe(timeout(this.requestTimeout)),
@@ -140,6 +142,13 @@ export class GenealogiaIAService implements OnModuleInit {
     } catch (error) {
       return this.handleIAError(error, 'busca de machos compatíveis');
     }
+  }
+
+  private buildIAHeaders(userId: string): Record<string, string> {
+    return {
+      'x-user-id': userId,
+      'x-internal-key': this.iaInternalKey,
+    };
   }
 
   /**

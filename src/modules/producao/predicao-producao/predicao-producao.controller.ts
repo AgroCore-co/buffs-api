@@ -34,7 +34,7 @@ export class PredicaoProducaoController {
   @ApiResponse({ status: 404, description: 'Fêmea não encontrada.' })
   @ApiResponse({ status: 503, description: 'Serviço de IA temporariamente indisponível.' })
   async predizerProducao(@Body() predicaoInput: PredicaoProducaoInputDto, @User() user: any): Promise<PredicaoProducaoResponseDto> {
-    const userId = user?.id_usuario || user?.sub;
+    const userId = user?.sub || user?.id_usuario;
     return this.predicaoProducaoService.predizerProducaoIndividual(predicaoInput.idFemea, userId);
   }
 }
