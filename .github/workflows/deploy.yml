@@ -56,13 +56,13 @@ jobs:
       # ── 3. Empacotar tudo ────────────────────────────────────────────────────
       - name: Empacotar imagens e código-fonte
         run: |
-          # Salvar as 3 imagens em um único tar
+          # Salvar as 3 imagens em /tmp (fora do workspace)
           docker save buffs-api:latest buffs-etl-worker:latest buffs-ia:latest \
-            | gzip > buffs-images.tar.gz
-          echo "📦 Imagens: $(du -sh buffs-images.tar.gz | cut -f1)"
+            | gzip > /tmp/buffs-images.tar.gz
+          echo "📦 Imagens: $(du -sh /tmp/buffs-images.tar.gz | cut -f1)"
 
-          # Empacotar código-fonte (compose, scripts, etc.)
-          tar -czf deploy.tar.gz \
+          # Empacotar código-fonte a partir do /tmp (evita "file changed as we read it")
+          tar -czf /tmp/deploy.tar.gz \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='.env' \
@@ -72,7 +72,11 @@ jobs:
             --exclude='buffs-etl-worker' \
             --exclude='buffs-ia' \
             .
-          echo "📦 Código: $(du -sh deploy.tar.gz | cut -f1)"
+          echo "📦 Código: $(du -sh /tmp/deploy.tar.gz | cut -f1)"
+
+          # Copiar para o workspace para o scp-action encontrar
+          cp /tmp/buffs-images.tar.gz buffs-images.tar.gz
+          cp /tmp/deploy.tar.gz deploy.tar.gz
 
       # ── 4. Copiar para o servidor ────────────────────────────────────────────
       - name: Copiar arquivos para PI-53
