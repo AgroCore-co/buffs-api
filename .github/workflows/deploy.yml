@@ -1,4 +1,4 @@
-name: Deploy BUFFS API to AWS EC2
+name: Deploy BUFFS Stack — PI-53
 
 on:
   push:
@@ -9,120 +9,155 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout código
+      # ── 1. Checkout repos ────────────────────────────────────────────────────
+      - name: Checkout buffs-api
         uses: actions/checkout@v4
 
-      - name: Checkout ETL Worker
+      - name: Checkout buffs-etl-worker
         uses: actions/checkout@v4
         with:
           repository: AgroCore-co/buffs-etl-worker
           path: buffs-etl-worker
           token: ${{ secrets.GH_PAT }}
 
+      - name: Checkout buffs-ia
+        uses: actions/checkout@v4
+        with:
+          repository: AgroCore-co/buffs-ia
+          path: buffs-ia
+          token: ${{ secrets.GH_PAT }}
+
+      # ── 2. Build das imagens ─────────────────────────────────────────────────
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build das imagens Docker
+      - name: Build buffs-api
         run: |
           docker build -t buffs-api:latest .
-          docker build -t buffs-etl-worker:latest ./buffs-etl-worker
-          docker save buffs-api:latest buffs-etl-worker:latest | gzip > /tmp/buffs-api-image.tar.gz
-          echo "Tamanho da imagem comprimida: $(du -sh /tmp/buffs-api-image.tar.gz | cut -f1)"
+          echo "✅ buffs-api built"
 
-      - name: Criar pacote do código-fonte
+      - name: Build buffs-etl-worker
         run: |
-          tar -czf /tmp/deploy.tar.gz \
+          docker build -t buffs-etl-worker:latest ./buffs-etl-worker
+          echo "✅ buffs-etl-worker built"
+
+      - name: Build buffs-ia
+        run: |
+          docker build \
+            --build-arg SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            --build-arg SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -t buffs-ia:latest \
+            ./buffs-ia
+          echo "✅ buffs-ia built"
+
+      # ── 3. Empacotar tudo ────────────────────────────────────────────────────
+      - name: Empacotar imagens e código-fonte
+        run: |
+          # Salvar as 3 imagens em um único tar
+          docker save buffs-api:latest buffs-etl-worker:latest buffs-ia:latest \
+            | gzip > buffs-images.tar.gz
+          echo "📦 Imagens: $(du -sh buffs-images.tar.gz | cut -f1)"
+
+          # Empacotar código-fonte (compose, scripts, etc.)
+          tar -czf deploy.tar.gz \
             --exclude='.git' \
             --exclude='node_modules' \
             --exclude='.env' \
             --exclude='dist' \
             --exclude='coverage' \
             --exclude='logs' \
+            --exclude='buffs-etl-worker' \
+            --exclude='buffs-ia' \
             .
-          cp /tmp/deploy.tar.gz deploy.tar.gz
-          cp /tmp/buffs-api-image.tar.gz buffs-api-image.tar.gz
+          echo "📦 Código: $(du -sh deploy.tar.gz | cut -f1)"
 
-      - name: Copiar arquivos para EC2
+      # ── 4. Copiar para o servidor ────────────────────────────────────────────
+      - name: Copiar arquivos para PI-53
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT }}
-          source: 'deploy.tar.gz,buffs-api-image.tar.gz'
-          target: '/home/ec2-user/'
+          source: 'deploy.tar.gz,buffs-images.tar.gz'
+          target: '/root/'
 
-      - name: Deploy via Docker Compose
+      # ── 5. Deploy via SSH ────────────────────────────────────────────────────
+      - name: Deploy no PI-53
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT }}
-          command_timeout: 10m
+          command_timeout: 15m
           script: |
             set -e
-            cd /home/ec2-user
+            cd /root
 
-            # Garantir que o Docker está rodando
-            sudo systemctl start docker 2>/dev/null || true
-
-            # Instalar docker-compose se não existir
-            if ! command -v docker-compose &> /dev/null; then
-              echo "Instalando docker-compose..."
-              sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-            fi
-
-            # Backup do .env
+            echo "─── Backup do .env ───"
             if [ -f buffs-api/.env ]; then
               cp buffs-api/.env /tmp/.env.backup
+              echo "✅ .env salvo em backup"
             fi
 
-            # Limpar e recriar diretório (preserva .env)
-            # sudo necessário: Docker cria arquivos em temp/uploads com UID do container
-            sudo rm -rf buffs-api
+            echo "─── Recriando diretório buffs-api ───"
+            rm -rf buffs-api
             mkdir -p buffs-api
 
-            # Extrair código-fonte
+            echo "─── Extraindo código-fonte ───"
             tar -xzf deploy.tar.gz -C buffs-api/
             rm deploy.tar.gz
 
-            # Restaurar .env
+            echo "─── Restaurando .env ───"
             if [ -f /tmp/.env.backup ]; then
               mv /tmp/.env.backup buffs-api/.env
+              echo "✅ .env restaurado"
             fi
 
             cd buffs-api
 
-            # Verificar .env obrigatório
-            [ ! -f .env ] && echo "ERRO: .env não encontrado na EC2" && exit 1
+            echo "─── Verificando .env ───"
+            [ ! -f .env ] && echo "❌ ERRO: .env não encontrado em /root/buffs-api/.env" && exit 1
+            echo "✅ .env presente"
 
-            # Parar containers antigos ANTES de limpar (libera as imagens em uso)
-            docker-compose -f infra/docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+            echo "─── Parando containers antigos ───"
+            docker compose -f infra/docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
 
-            # Liberar espaço em disco antes de carregar a imagem
-            echo "Limpando espaço em disco..."
+            echo "─── Liberando espaço em disco ───"
             docker image prune -af 2>/dev/null || true
             docker container prune -f 2>/dev/null || true
             docker volume prune -f 2>/dev/null || true
             echo "Espaço disponível: $(df -h / | tail -1 | awk '{print $4}')"
 
-            # Carregar imagem Docker pré-construída (evita buildx no servidor)
-            echo "Carregando imagem Docker..."
-            docker load < /home/ec2-user/buffs-api-image.tar.gz
-            rm /home/ec2-user/buffs-api-image.tar.gz
+            echo "─── Carregando imagens Docker ───"
+            docker load < /root/buffs-images.tar.gz
+            rm /root/buffs-images.tar.gz
+            echo "✅ Imagens carregadas:"
+            docker images | grep -E "buffs-api|buffs-etl|buffs-ia"
 
-            # Subir todos os serviços (sem --build, usa imagens já carregadas)
-            docker-compose -f infra/docker-compose.prod.yml up -d --no-build
+            echo "─── Subindo stack ───"
+            docker compose -f infra/docker-compose.prod.yml up -d --no-build
 
-            # Aguardar a API inicializar
-            echo "Aguardando API inicializar..."
-            sleep 15
+            echo "─── Aguardando serviços inicializarem ───"
+            sleep 20
 
-            # Health check
-            curl -f http://localhost:3001/health || (docker-compose -f infra/docker-compose.prod.yml logs --tail=50 buffs-api && exit 1)
+            echo "─── Health check da API ───"
+            curl -f http://localhost:3001/health || (
+              docker compose -f infra/docker-compose.prod.yml logs --tail=50 buffs-api
+              exit 1
+            )
 
-            echo "✅ Deploy concluído com sucesso!"
+            echo "─── Status dos containers ───"
+            docker compose -f infra/docker-compose.prod.yml ps
+
+            echo ""
+            echo "╔══════════════════════════════════════╗"
+            echo "║   ✅ DEPLOY CONCLUÍDO — PI-53         ║"
+            echo "╠══════════════════════════════════════╣"
+            echo "║  API  → http://187.95.52.86:9008     ║"
+            echo "║  LAN  → http://10.37.56.252:3001     ║"
+            echo "╚══════════════════════════════════════╝"
