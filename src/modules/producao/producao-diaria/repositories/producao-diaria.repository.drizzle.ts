@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, and, desc, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, isNull, sql } from 'drizzle-orm';
 import { estoqueleite } from '../../../../database/schema';
 import { CreateProducaoDiariaDto, UpdateProducaoDiariaDto } from '../dto';
 import { PaginationDto } from '../../../../core/dto';
@@ -9,10 +9,10 @@ import { PaginationDto } from '../../../../core/dto';
 export class ProducaoDiariaRepositoryDrizzle {
   constructor(private readonly db: DatabaseService) {}
 
-  async criar(createDto: CreateProducaoDiariaDto) {
+  async criar(createDto: CreateProducaoDiariaDto, idUsuario: string) {
     const data = {
       idPropriedade: createDto.idPropriedade,
-      idUsuario: createDto.idUsuario,
+      idUsuario,
       quantidade: String(createDto.quantidade),
       dtRegistro: createDto.dtRegistro || sql`now()`,
       observacao: createDto.observacao,
@@ -66,13 +66,18 @@ export class ProducaoDiariaRepositoryDrizzle {
     return resultado.length > 0 ? resultado[0] : null;
   }
 
+  async buscarPorIdComDeletados(idEstoque: string) {
+    const resultado = await this.db.db.select().from(estoqueleite).where(eq(estoqueleite.idEstoque, idEstoque)).limit(1);
+
+    return resultado.length > 0 ? resultado[0] : null;
+  }
+
   async atualizar(idEstoque: string, updateDto: UpdateProducaoDiariaDto) {
     const data: Record<string, any> = {
       updatedAt: sql`now()`,
     };
 
     if (updateDto.idPropriedade !== undefined) data.idPropriedade = updateDto.idPropriedade;
-    if (updateDto.idUsuario !== undefined) data.idUsuario = updateDto.idUsuario;
     if (updateDto.quantidade !== undefined) data.quantidade = String(updateDto.quantidade);
     if (updateDto.dtRegistro !== undefined) data.dtRegistro = updateDto.dtRegistro;
     if (updateDto.observacao !== undefined) data.observacao = updateDto.observacao;
@@ -104,5 +109,17 @@ export class ProducaoDiariaRepositoryDrizzle {
 
   async listarComDeletados() {
     return await this.db.db.select().from(estoqueleite).orderBy(desc(estoqueleite.dtRegistro));
+  }
+
+  async listarComDeletadosPorPropriedades(idsPropriedades: string[]) {
+    if (!idsPropriedades.length) {
+      return [];
+    }
+
+    return await this.db.db
+      .select()
+      .from(estoqueleite)
+      .where(inArray(estoqueleite.idPropriedade, idsPropriedades))
+      .orderBy(desc(estoqueleite.dtRegistro));
   }
 }

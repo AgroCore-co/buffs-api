@@ -1,4 +1,4 @@
-import { PartialType } from '@nestjs/swagger';
+import { OmitType, PartialType } from '@nestjs/swagger';
 import { CreateAlimentacaoDefDto } from './create-alimentacao-def.dto';
 
 /**
@@ -9,4 +9,4 @@ import { CreateAlimentacaoDefDto } from './create-alimentacao-def.dto';
  * Todos os campos são opcionais. Apenas os campos fornecidos serão atualizados.
  * Não é possível alterar o id_propriedade após a criação.
  */
-export class UpdateAlimentacaoDefDto extends PartialType(CreateAlimentacaoDefDto) {}
+export class UpdateAlimentacaoDefDto extends PartialType(OmitType(CreateAlimentacaoDefDto, ['id_propriedade'] as const)) {}

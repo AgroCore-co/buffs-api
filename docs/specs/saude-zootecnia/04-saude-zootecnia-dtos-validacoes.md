@@ -54,7 +54,7 @@
   Catalogo de medicacao precisa ser escopado por propriedade e tipo de tratamento.
 
 - Regra principal:
-  CreateMedicacaoDto deve exigir idPropriedade UUID, tipoTratamento e medicacao, com limites de tamanho.
+  CreateMedicacaoDto deve exigir idPropriedade UUID, tipoTratamento por enum canônico e medicacao, com normalizacao de aliases no contrato de entrada.
 
 - Excecoes:
   Descricao e opcional.
@@ -63,11 +63,12 @@
   400 para idPropriedade invalido ou campos obrigatorios ausentes.
 
 - Criterio de aceite:
-  DTO define validacoes de UUID, obrigatoriedade e maxLength para campos principais.
+  DTO define validacao de UUID, obrigatoriedade e IsEnum para tipoTratamento apos normalizacao.
 
 - Rastreabilidade para codigo e testes:
   src/modules/saude-zootecnia/medicamentos/dto/create-medicacao.dto.ts
   src/modules/saude-zootecnia/medicamentos/dto/update-medicacao.dto.ts
+  src/modules/saude-zootecnia/medicamentos/enums/tipo-tratamento.enum.ts
 
 - Status:
   implementada
@@ -87,11 +88,13 @@
   400 para valores invalidos de ID, data ou tipo.
 
 - Criterio de aceite:
-  DTO de vacinacao usa IsUUID, IsDateString, IsNumber, IsBoolean e campos opcionais.
+  DTO de vacinacao usa IsUUID, IsDateString, IsNumber, IsBoolean e integra ToBoolean/validators de data do Core (nao futuro e data de retorno apos aplicacao).
 
 - Rastreabilidade para codigo e testes:
   src/modules/saude-zootecnia/vacinacao/dto/create-vacinacao.dto.ts
   src/modules/saude-zootecnia/vacinacao/dto/update-vacinacao.dto.ts
+  src/core/decorators/to-boolean.decorator.ts
+  src/core/validators/date.validators.ts
 
 - Status:
   implementada
@@ -102,34 +105,36 @@
   Endpoints de historico precisam resposta paginada padronizada para consumo consistente no frontend.
 
 - Regra principal:
-  Dados sanitarios e zootecnicos devem reutilizar PaginationDto/PaginatedResponse e utilitarios de paginacao do Core.
+  Dados sanitarios, dados zootecnicos e vacinacao reutilizam PaginationDto/PaginatedResponse e utilitarios de paginacao do Core.
 
 - Excecoes:
-  Medicamentos e vacinacao retornam listas sem paginacao explicita no estado atual.
+  Medicamentos segue com listagens sem paginacao explicita no estado atual.
 
 - Erros esperados:
   Nao aplicavel.
 
 - Criterio de aceite:
-  Controllers/services desses subdominios aceitam PaginationDto e retornam PaginatedResponse.
+  Controllers/services de dados sanitarios, dados zootecnicos e vacinacao aceitam PaginationDto e retornam PaginatedResponse.
 
 - Rastreabilidade para codigo e testes:
   src/modules/saude-zootecnia/dados-sanitarios/dados-sanitarios.controller.ts
   src/modules/saude-zootecnia/dados-sanitarios/dados-sanitarios.service.ts
   src/modules/saude-zootecnia/dados-zootecnicos/dados-zootecnicos.controller.ts
   src/modules/saude-zootecnia/dados-zootecnicos/dados-zootecnicos.service.ts
+  src/modules/saude-zootecnia/vacinacao/vacinacao.controller.ts
+  src/modules/saude-zootecnia/vacinacao/vacinacao.service.ts
   src/core/dto/pagination.dto.ts
 
 - Status:
   implementada
 
-## SZO-TEST-001 - Cobertura de testes dedicada para saude-zootecnia nao foi encontrada
+## SZO-TEST-001 - Cobertura de testes dedicada para saude-zootecnia esta implementada
 
 - Contexto de negocio:
   Regras de saude e tratamento tem risco de regressao e demandam testes unitarios/e2e especificos.
 
 - Regra principal:
-  Modulo deveria possuir suites dedicadas para dados-sanitarios, dados-zootecnicos, medicamentos e vacinacao.
+  Modulo possui suites dedicadas para dados-sanitarios, dados-zootecnicos, medicamentos e vacinacao, incluindo cobertura de rotas por propriedade com guards.
 
 - Excecoes:
   Sem excecoes.
@@ -138,11 +143,15 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  No estado atual nao foram encontradas referencias do modulo saude-zootecnia em test/ nem arquivos .spec.ts no proprio modulo.
+  Existem suites .spec.ts no modulo cobrindo restore, ownership, cache, paginacao e controllers por propriedade com SupabaseAuthGuard/PropertyExistsGuard.
 
 - Rastreabilidade para codigo e testes:
   src/modules/saude-zootecnia/
-  test/
+  src/modules/saude-zootecnia/dados-sanitarios/dados-sanitarios.service.spec.ts
+  src/modules/saude-zootecnia/dados-zootecnicos/dados-zootecnicos.service.spec.ts
+  src/modules/saude-zootecnia/medicamentos/medicamentos.service.spec.ts
+  src/modules/saude-zootecnia/vacinacao/vacinacao.service.spec.ts
+  src/modules/saude-zootecnia/saude-zootecnia.controller.property-guards.spec.ts
 
 - Status:
-  parcial
+  implementada

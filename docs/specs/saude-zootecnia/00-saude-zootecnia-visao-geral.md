@@ -6,7 +6,7 @@
   Saude do rebanho exige separar historico clinico, metricas zootecnicas e catalogo de tratamento.
 
 - Regra principal:
-  SaudeZootecniaModule deve compor submodulos de dados sanitarios, dados zootecnicos e medicacoes.
+  SaudeZootecniaModule deve compor submodulos de dados sanitarios, dados zootecnicos, medicacoes e vacinacao.
 
 - Excecoes:
   Sem excecoes.
@@ -15,7 +15,7 @@
   Falha de DI se submodulos nao forem registrados.
 
 - Criterio de aceite:
-  SaudeZootecniaModule importa DadosSanitariosModule, DadosZootecnicosModule e MedicamentosModule.
+  SaudeZootecniaModule importa DadosSanitariosModule, DadosZootecnicosModule, MedicamentosModule e VacinacaoModule.
 
 - Rastreabilidade para codigo e testes:
   src/modules/saude-zootecnia/saude-zootecnia.module.ts
@@ -49,26 +49,26 @@
 - Status:
   implementada
 
-## SZO-ARCH-003 - Submodulo de vacinacao nao esta composto no modulo raiz
+## SZO-ARCH-003 - Submodulo de vacinacao composto no modulo raiz
 
 - Contexto de negocio:
   Vacinacao faz parte do dominio de saude, mas precisa estar exposta no agregado principal para composicao consistente.
 
 - Regra principal:
-  SaudeZootecniaModule deveria importar VacinacaoModule para incluir explicitamente este subdominio na composicao do modulo.
+  SaudeZootecniaModule importa VacinacaoModule para incluir explicitamente este subdominio na composicao do modulo.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, vacinacao nao participa da composicao do modulo raiz de saude-zootecnia.
+  Falha de roteamento/composicao se VacinacaoModule for removido da agregacao raiz.
 
 - Criterio de aceite:
-  Existe VacinacaoModule, mas SaudeZootecniaModule nao o importa.
+  SaudeZootecniaModule importa explicitamente VacinacaoModule.
 
 - Rastreabilidade para codigo e testes:
   src/modules/saude-zootecnia/saude-zootecnia.module.ts
   src/modules/saude-zootecnia/vacinacao/vacinacao.module.ts
 
 - Status:
-  parcial
+  implementada

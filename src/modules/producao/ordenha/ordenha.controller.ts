@@ -65,12 +65,7 @@ export class OrdenhaController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Quantidade de registros por página (default: 20)' })
-  findAllByBufala(
-    @Param('id_bufala', ParseUUIDPipe) id_bufala: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-    @User() user: any,
-  ) {
+  findAllByBufala(@Param('id_bufala', ParseUUIDPipe) id_bufala: string, @Query('page') page = 1, @Query('limit') limit = 20, @User() user: any) {
     this.logger.logApiRequest('GET', `/ordenhas/bufala/${id_bufala}`, undefined, {
       module: 'OrdenhaController',
       method: 'findAllByBufala',
@@ -187,13 +182,13 @@ export class OrdenhaController {
   })
   @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade', type: 'string' })
   @ApiResponse({ status: 200, description: 'Fêmeas em lactação com dados de produção e classificação', type: [FemeaEmLactacaoDto] })
-  async getFemeasEmLactacao(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string): Promise<FemeaEmLactacaoDto[]> {
+  async getFemeasEmLactacao(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @User() user: any): Promise<FemeaEmLactacaoDto[]> {
     this.logger.logApiRequest('GET', `/ordenhas/femeas/em-lactacao/${id_propriedade}`, undefined, {
       module: 'OrdenhaController',
       method: 'getFemeasEmLactacao',
       propriedadeId: id_propriedade,
     });
-    return this.service.findFemeasEmLactacao(id_propriedade);
+    return this.service.findFemeasEmLactacao(id_propriedade, user);
   }
 
   @Get('bufala/:id/resumo-producao')

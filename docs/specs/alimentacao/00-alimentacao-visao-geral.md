@@ -77,7 +77,7 @@
   Em modelo multi-tenant, usuario autenticado nao deve operar dados de propriedade sem vinculo.
 
 - Regra principal:
-  Endpoints deveriam validar associacao usuario-propriedade antes de listar/criar/atualizar/remover por id_propriedade.
+  Endpoints devem validar associacao usuario-propriedade antes de listar/criar/atualizar/remover por id_propriedade e em operacoes por id.
 
 - Excecoes:
   Sem excecoes de negocio.
@@ -86,12 +86,14 @@
   403/404 quando usuario nao tiver acesso a propriedade alvo.
 
 - Criterio de aceite:
-  No estado atual, nao ha validacao explicita de ownership por usuario no modulo (apenas autenticacao e checagens de consistencia de ids).
+  Controllers resolvem id do usuario autenticado via AuthHelperService e os services validam ownership por propriedade em create/list/findOne/update/remove.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/alimentacao-def/alimentacao-def.controller.ts
+  src/modules/alimentacao/alimentacao-def/alimentacao-def.service.ts
   src/modules/alimentacao/registros/registros.controller.ts
   src/modules/alimentacao/registros/registros.service.ts
+  src/core/services/auth-helper.service.ts
 
 - Status:
-  parcial
+  implementada

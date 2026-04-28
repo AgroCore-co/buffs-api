@@ -5,9 +5,10 @@ import { RegistrosRepositoryDrizzle } from './repositories/registros.repository.
 import { DatabaseModule } from '../../../core/database/database.module';
 import { AuthModule } from '../../auth/auth.module';
 import { LoggerModule } from '../../../core/logger/logger.module';
+import { CoreModule } from '../../../core/core.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, LoggerModule],
+  imports: [DatabaseModule, AuthModule, LoggerModule, CoreModule],
   controllers: [RegistrosController],
   providers: [RegistrosService, RegistrosRepositoryDrizzle],
   exports: [RegistrosService],

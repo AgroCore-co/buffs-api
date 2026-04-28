@@ -1,10 +1,10 @@
-import { Injectable, BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsuarioRepositoryDrizzle } from '../usuario/repositories/usuario.repository.drizzle';
 import { UsuarioPropriedadeRepositoryDrizzle } from '../usuario/repositories/usuario-propriedade.repository.drizzle';
-import { PropriedadeRepositoryHelper } from '../usuario/repositories/helper/propriedade.repository.helper';
 import { LoggerService } from '../../core/logger/logger.service';
 import { SupabaseService } from '../../core/supabase/supabase.service';
+import { AuthHelperService } from '../../core/services/auth-helper.service';
 import { SignUpProprietarioDto } from './dto/signup-proprietario.dto';
 import { SignUpFuncionarioDto } from './dto/signup-funcionario.dto';
 import { Cargo } from '../usuario/enums/cargo.enum';
@@ -20,8 +20,8 @@ export class AuthFacadeService {
     private readonly authService: AuthService,
     private readonly usuarioRepository: UsuarioRepositoryDrizzle,
     private readonly usuarioPropriedadeRepository: UsuarioPropriedadeRepositoryDrizzle,
-    private readonly propriedadeRepository: PropriedadeRepositoryHelper,
     private readonly supabaseService: SupabaseService,
+    private readonly authHelper: AuthHelperService,
     private readonly logger: LoggerService,
   ) {}
 
@@ -113,19 +113,32 @@ export class AuthFacadeService {
       proprietarioAuthId: authIdProprietario,
     });
 
-    // 1. Buscar proprietário e suas propriedades
+    // 1. Buscar solicitante autenticado e suas propriedades
     const proprietario = await this.usuarioRepository.buscarPorAuthId(authIdProprietario);
     if (!proprietario) {
-      throw new BadRequestException('Proprietário não encontrado');
+      throw new ForbiddenException('Perfil local do solicitante não encontrado.');
     }
 
-    const propriedadesDoProprietario = await this.propriedadeRepository.listarPorDono(proprietario.idUsuario);
-    if (propriedadesDoProprietario.length === 0) {
+    let propriedadesDoSolicitante: string[] = [];
+    try {
+      // Usa AuthHelper para cobrir propriedades como dono e como funcionário (ex.: GERENTE).
+      propriedadesDoSolicitante = await this.authHelper.getUserPropriedades(proprietario.idUsuario);
+    } catch (error) {
+      this.logger.logError(error, {
+        module: 'AuthFacade',
+        method: 'registerFuncionario',
+        context: 'resolver_propriedades_solicitante',
+        solicitanteId: proprietario.idUsuario,
+      });
+      throw new BadRequestException('Você precisa ter ao menos uma propriedade cadastrada para criar funcionários');
+    }
+
+    if (propriedadesDoSolicitante.length === 0) {
       throw new BadRequestException('Você precisa ter ao menos uma propriedade cadastrada para criar funcionários');
     }
 
     // 2. Validar propriedade específica se fornecida
-    if (dto.idPropriedade && !propriedadesDoProprietario.includes(dto.idPropriedade)) {
+    if (dto.idPropriedade && !propriedadesDoSolicitante.includes(dto.idPropriedade)) {
       throw new BadRequestException('Propriedade não pertence a você');
     }
 
@@ -164,9 +177,10 @@ export class AuthFacadeService {
       });
 
       // Vincular à propriedade específica ou a todas do proprietário
-      const propriedadesVinculadas = dto.idPropriedade ? [dto.idPropriedade] : propriedadesDoProprietario;
+      const propriedadesVinculadas = dto.idPropriedade ? [dto.idPropriedade] : propriedadesDoSolicitante;
 
       await this.usuarioPropriedadeRepository.vincular(perfil.idUsuario, propriedadesVinculadas);
+      await this.authHelper.invalidarCachePropriedades(perfil.idUsuario);
 
       this.logger.log('[AuthFacade] Funcionário registrado com sucesso', {
         userId: perfil.idUsuario,

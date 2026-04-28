@@ -7,6 +7,7 @@ import { AuthModule } from '../../auth/auth.module';
 import { LoggerModule } from '../../../core/logger/logger.module';
 import { DatabaseModule } from '../../../core/database/database.module';
 import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
+import { GenealogiaModule } from '../genealogia/genealogia.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { GenealogiaRepositoryDrizzle } from '../genealogia/repositories';
     AuthModule,
     LoggerModule,
     DatabaseModule,
+    GenealogiaModule,
   ],
   controllers: [SimulacaoController],
   providers: [SimulacaoService, GenealogiaRepositoryDrizzle],

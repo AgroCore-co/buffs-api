@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, ParseUUIDPipe, UseGu
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
+import { User } from '../../auth/decorators/user.decorator';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { LactacaoService } from './lactacao.service';
 import { CreateCicloLactacaoDto, UpdateCicloLactacaoDto } from './dto';
@@ -34,13 +35,13 @@ export class LactacaoController {
   @ApiBody({ type: CreateCicloLactacaoDto })
   @ApiResponse({ status: 201, description: 'Ciclo criado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
-  create(@Body() dto: CreateCicloLactacaoDto) {
+  create(@Body() dto: CreateCicloLactacaoDto, @User() user: any) {
     this.logger.logApiRequest('POST', '/lactacao', undefined, {
       module: 'LactacaoController',
       method: 'create',
       bufalaId: dto.idBufala,
     });
-    return this.service.create(dto);
+    return this.service.create(dto, user);
   }
 
   @Get()
@@ -69,13 +70,13 @@ export class LactacaoController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista retornada com sucesso.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto, @User() user: any) {
     this.logger.logApiRequest('GET', `/lactacao/propriedade/${id_propriedade}`, undefined, {
       module: 'LactacaoController',
       method: 'findByPropriedade',
       propriedadeId: id_propriedade,
     });
-    return this.service.findByPropriedade(id_propriedade, paginationDto);
+    return this.service.findByPropriedade(id_propriedade, paginationDto, user);
   }
 
   @Get('propriedade/:id_propriedade/estatisticas')
@@ -93,13 +94,13 @@ export class LactacaoController {
   })
   @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade', type: 'string' })
   @ApiResponse({ status: 200, description: 'Estatísticas retornadas com sucesso.' })
-  getEstatisticas(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string) {
+  getEstatisticas(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @User() user: any) {
     this.logger.logApiRequest('GET', `/lactacao/propriedade/${id_propriedade}/estatisticas`, undefined, {
       module: 'LactacaoController',
       method: 'getEstatisticas',
       propriedadeId: id_propriedade,
     });
-    return this.service.getEstatisticasPropriedade(id_propriedade);
+    return this.service.getEstatisticasPropriedade(id_propriedade, user);
   }
 
   @Get(':id')
@@ -112,9 +113,9 @@ export class LactacaoController {
   @ApiParam({ name: 'id', description: 'ID do ciclo', type: 'string' })
   @ApiResponse({ status: 200, description: 'Ciclo encontrado.' })
   @ApiResponse({ status: 404, description: 'Ciclo não encontrado.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('GET', `/lactacao/${id}`, undefined, { module: 'LactacaoController', method: 'findOne', cicloId: id });
-    return this.service.findOne(id);
+    return this.service.findOne(id, user);
   }
 
   @Patch(':id')
@@ -126,9 +127,9 @@ export class LactacaoController {
   @ApiBody({ type: UpdateCicloLactacaoDto })
   @ApiResponse({ status: 200, description: 'Ciclo atualizado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Ciclo não encontrado.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCicloLactacaoDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCicloLactacaoDto, @User() user: any) {
     this.logger.logApiRequest('PATCH', `/lactacao/${id}`, undefined, { module: 'LactacaoController', method: 'update', cicloId: id });
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
@@ -139,9 +140,9 @@ export class LactacaoController {
   @ApiParam({ name: 'id', description: 'ID do ciclo a ser removido', type: 'string' })
   @ApiResponse({ status: 200, description: 'Ciclo removido com sucesso.' })
   @ApiResponse({ status: 404, description: 'Ciclo não encontrado.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('DELETE', `/lactacao/${id}`, undefined, { module: 'LactacaoController', method: 'remove', cicloId: id });
-    return this.service.remove(id);
+    return this.service.remove(id, user);
   }
 
   @Post(':id/restore')
@@ -152,13 +153,13 @@ export class LactacaoController {
   @ApiParam({ name: 'id', description: 'ID do ciclo a ser restaurado', type: 'string' })
   @ApiResponse({ status: 200, description: 'Ciclo restaurado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Ciclo não encontrado ou não estava removido.' })
-  restore(@Param('id', ParseUUIDPipe) id: string) {
+  restore(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('POST', `/lactacao/${id}/restore`, undefined, {
       module: 'LactacaoController',
       method: 'restore',
       cicloId: id,
     });
-    return this.service.restore(id);
+    return this.service.restore(id, user);
   }
 
   @Get('deleted/all')
@@ -167,11 +168,11 @@ export class LactacaoController {
     description: 'Lista todos os ciclos de lactação incluindo os removidos (soft delete).',
   })
   @ApiResponse({ status: 200, description: 'Lista de ciclos incluindo deletados retornada com sucesso.' })
-  findAllWithDeleted() {
+  findAllWithDeleted(@User() user: any) {
     this.logger.logApiRequest('GET', '/lactacao/deleted/all', undefined, {
       module: 'LactacaoController',
       method: 'findAllWithDeleted',
     });
-    return this.service.findAllWithDeleted();
+    return this.service.findAllWithDeleted(user);
   }
 }

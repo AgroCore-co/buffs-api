@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { eq, and, gte, desc } from 'drizzle-orm';
+import { eq, and, gte, desc, inArray } from 'drizzle-orm';
 import { dadoslactacao } from 'src/database/schema';
 
 /**
@@ -14,6 +14,10 @@ export class ProducaoRepositoryDrizzle {
     private readonly databaseService: DatabaseService,
     private readonly logger: LoggerService,
   ) {}
+
+  private toError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+  }
 
   /**
    * Busca produções de leite dos últimos X dias (dadoslactacao).
@@ -40,13 +44,14 @@ export class ProducaoRepositoryDrizzle {
         orderBy: [desc(dadoslactacao.dtOrdenha)],
       });
     } catch (error) {
-      this.logger.logError(error, {
+      const normalizedError = this.toError(error);
+      this.logger.logError(normalizedError, {
         repository: 'ProducaoRepositoryDrizzle',
         method: 'buscarProducoesRecentes',
         diasAtras,
         id_propriedade,
       });
-      throw new InternalServerErrorException(`Erro ao buscar produções recentes: ${error.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar produções recentes: ${normalizedError.message}`);
     }
   }
 
@@ -69,13 +74,48 @@ export class ProducaoRepositoryDrizzle {
         limit: 10,
       });
     } catch (error) {
-      this.logger.logError(error, {
+      const normalizedError = this.toError(error);
+      this.logger.logError(normalizedError, {
         repository: 'ProducaoRepositoryDrizzle',
         method: 'buscarOrdenhasRecentes',
         id_bufala,
         diasAtras,
       });
-      throw new InternalServerErrorException(`Erro ao buscar ordenhas recentes: ${error.message}`);
+      throw new InternalServerErrorException(`Erro ao buscar ordenhas recentes: ${normalizedError.message}`);
+    }
+  }
+
+  /**
+   * Busca ordenhas recentes de múltiplas búfalas em uma única consulta.
+   */
+  async buscarOrdenhasRecentesBatch(ids_bufalas: string[], diasAtras: number) {
+    try {
+      if (!ids_bufalas.length) {
+        return [];
+      }
+
+      const dataLimite = new Date();
+      dataLimite.setDate(dataLimite.getDate() - diasAtras);
+      const dataLimiteStr = dataLimite.toISOString();
+
+      return await this.databaseService.db.query.dadoslactacao.findMany({
+        where: and(inArray(dadoslactacao.idBufala, ids_bufalas), gte(dadoslactacao.dtOrdenha, dataLimiteStr)),
+        columns: {
+          idBufala: true,
+          idLact: true,
+          dtOrdenha: true,
+          qtOrdenha: true,
+        },
+      });
+    } catch (error) {
+      const normalizedError = this.toError(error);
+      this.logger.logError(normalizedError, {
+        repository: 'ProducaoRepositoryDrizzle',
+        method: 'buscarOrdenhasRecentesBatch',
+        ids_bufalas,
+        diasAtras,
+      });
+      throw new InternalServerErrorException(`Erro ao buscar ordenhas recentes em lote: ${normalizedError.message}`);
     }
   }
 }

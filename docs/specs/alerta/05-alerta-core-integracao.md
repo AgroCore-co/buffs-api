@@ -1,24 +1,26 @@
 # ALERTA - Integracao com Core
 
-## ALERTA-CORE-001 - Modulo importa infraestrutura compartilhada de banco, mensageria e IA
+## ALERTA-CORE-001 - Modulo integra infraestrutura compartilhada via modulo de providers
 
 - Contexto de negocio:
   O dominio de alertas depende de acesso transacional ao banco, publicacao de eventos e classificacao por IA.
 
 - Regra principal:
-  AlertasModule deve importar DatabaseModule, RabbitMQModule e GeminiModule.
+  AlertasProvidersModule deve importar DatabaseModule, RabbitMQModule e GeminiModule, sendo reutilizado pelo modulo HTTP e pelo modulo de consumer.
 
 - Excecoes:
-  ConfigModule tambem e importado para parametros de ambiente.
+  ConfigModule tambem e importado no providers module para parametros de ambiente.
 
 - Erros esperados:
   Falha de DI quando modulo de infraestrutura nao estiver registrado.
 
 - Criterio de aceite:
-  Imports do modulo incluem GeminiModule, DatabaseModule, RabbitMQModule e ConfigModule.
+  AlertasProvidersModule importa CoreModule, GeminiModule, DatabaseModule, RabbitMQModule e ConfigModule; AlertasModule e AlertsConsumerModule importam AlertasProvidersModule.
 
 - Rastreabilidade para codigo e testes:
+  src/modules/alerta/alerta.providers.module.ts
   src/modules/alerta/alerta.module.ts
+  src/modules/alerta/consumers/alerts-consumer.module.ts
 
 - Status:
   implementada
@@ -226,28 +228,26 @@
 - Status:
   parcial
 
-## ALERTA-CORE-010 - Validacao de ownership por propriedade nao reaproveita AuthHelperService
+## ALERTA-CORE-010 - Validacao de ownership por propriedade reaproveita AuthHelperService
 
 - Contexto de negocio:
   Guard de autenticacao valida identidade, mas nao ownership explicito por tenant.
 
 - Regra principal:
-  Endpoints com id_propriedade deveriam chamar helper central para validar vinculo do usuario a propriedade.
+  Endpoints com id_propriedade devem chamar helper central para validar vinculo do usuario a propriedade.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, falta de validacao explicita pode ampliar superficie de consulta entre propriedades.
+  404 quando o usuario autenticado nao possui vinculo com a propriedade solicitada.
 
 - Criterio de aceite:
-  Modulo nao usa AuthHelperService nos fluxos findByPropriedade/verificarPorPropriedade.
+  AlertasController injeta AuthHelperService e valida ownership nos fluxos findByPropriedade/verificarAlertas antes de delegar aos servicos.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alerta/alerta.controller.ts
-  src/modules/alerta/alerta.service.ts
-  src/modules/alerta/services/alertas-verificacao.service.ts
   src/core/services/auth-helper.service.ts
 
 - Status:
-  parcial
+  implementada

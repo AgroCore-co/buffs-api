@@ -4,17 +4,24 @@ import { ISoftDelete } from '../../../core/interfaces';
 import { CreateRacaDto } from './dto/create-raca.dto';
 import { UpdateRacaDto } from './dto/update-raca.dto';
 import { RacaRepositoryDrizzle } from './repositories/raca.repository.drizzle';
+import { CacheService } from '../../../core/cache/cache.service';
 
 @Injectable()
 export class RacaService implements ISoftDelete {
   constructor(
     private readonly racaRepository: RacaRepositoryDrizzle,
     private readonly logger: LoggerService,
+    private readonly cacheService: CacheService,
   ) {}
+
+  private async invalidateCache(): Promise<void> {
+    await this.cacheService.reset();
+  }
 
   async create(createRacaDto: CreateRacaDto) {
     this.logger.log('Iniciando criação de raça', { module: 'RacaService', method: 'create' });
     const raca = await this.racaRepository.create(createRacaDto);
+    await this.invalidateCache();
     this.logger.log('Raça criada com sucesso', { module: 'RacaService', method: 'create', racaId: raca.idRaca });
     return raca;
   }
@@ -44,6 +51,7 @@ export class RacaService implements ISoftDelete {
 
     await this.findOne(id);
     const racaAtualizada = await this.racaRepository.update(id, updateRacaDto);
+    await this.invalidateCache();
 
     this.logger.log('Raça atualizada com sucesso', { module: 'RacaService', method: 'update', racaId: id });
     return racaAtualizada;
@@ -58,6 +66,7 @@ export class RacaService implements ISoftDelete {
 
     await this.findOne(id);
     const raca = await this.racaRepository.softDelete(id);
+    await this.invalidateCache();
 
     this.logger.log('Raça removida com sucesso', { module: 'RacaService', method: 'softDelete', racaId: id });
     return {
@@ -82,6 +91,7 @@ export class RacaService implements ISoftDelete {
     }
 
     const racaRestaurada = await this.racaRepository.restore(id);
+    await this.invalidateCache();
 
     this.logger.log('Raça restaurada com sucesso', { module: 'RacaService', method: 'restore', racaId: id });
     return {

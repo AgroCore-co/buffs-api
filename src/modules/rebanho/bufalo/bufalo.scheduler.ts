@@ -29,6 +29,19 @@ export class BufaloScheduler {
       return;
     }
 
+    let lockAcquired = false;
+    try {
+      lockAcquired = await this.bufaloRepo.tryAcquireMaturityJobLock();
+    } catch (error) {
+      this.logger.error(`Erro ao adquirir lock distribuído de maturidade: ${error.message}`, error.stack);
+      return;
+    }
+
+    if (!lockAcquired) {
+      this.logger.warn('Job de maturidade já está rodando em outra instância. Pulando execução.');
+      return;
+    }
+
     this.isRunning = true;
     const startTime = Date.now();
     this.logger.log('Iniciando atualização diária de maturidade...');
@@ -53,6 +66,11 @@ export class BufaloScheduler {
     } finally {
       // Sempre libera a flag, mesmo em caso de erro
       this.isRunning = false;
+      try {
+        await this.bufaloRepo.releaseMaturityJobLock();
+      } catch (error) {
+        this.logger.error(`Falha ao liberar lock distribuído de maturidade: ${error.message}`, error.stack);
+      }
     }
   }
 }

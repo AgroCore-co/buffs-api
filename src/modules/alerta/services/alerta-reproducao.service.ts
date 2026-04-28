@@ -5,6 +5,22 @@ import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizz
 import { CreateAlertaDto, NichoAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, formatarDataBR, calcularIdadeEmMeses } from '../utils/alerta.constants';
 
+interface NascimentoCandidato {
+  reproducao: any;
+  dataEvento: Date;
+  dataPrevistaParto: Date;
+}
+
+interface CoberturaCandidata {
+  cobertura: any;
+  diasDesdeCobertura: number;
+}
+
+interface UltimaCoberturaResumo {
+  dtEvento: string | null;
+  status: string | null;
+}
+
 /**
  * Serviço de domínio para alertas de REPRODUÇÃO.
  * Contém toda a lógica de negócio para verificação de:
@@ -40,28 +56,57 @@ export class AlertaReproducaoService {
         return 0;
       }
 
-      let alertasCriados = 0;
       const hoje = new Date();
+      const candidatas: NascimentoCandidato[] = [];
 
       for (const rep of reproducoes) {
+        if (!rep.dtEvento || !rep.idBufala) {
+          continue;
+        }
+
+        const dataEvento = new Date(rep.dtEvento);
+        const dataPrevistaParto = new Date(dataEvento);
+        dataPrevistaParto.setDate(dataEvento.getDate() + AlertaConstants.TEMPO_GESTACAO_DIAS);
+
+        const diffTime = dataPrevistaParto.getTime() - hoje.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 0 && diffDays <= AlertaConstants.ANTECEDENCIA_PARTO_DIAS) {
+          candidatas.push({
+            reproducao: rep,
+            dataEvento,
+            dataPrevistaParto,
+          });
+        }
+      }
+
+      if (!candidatas.length) {
+        this.logger.log('Nenhum nascimento dentro da janela de antecedência.');
+        return 0;
+      }
+
+      const idsBufalas = Array.from(new Set(candidatas.map((candidata) => candidata.reproducao.idBufala)));
+      const bufalasCompletas = await this.bufaloRepo.buscarBufalosCompletosBatch(idsBufalas);
+      const bufalaMap = new Map(bufalasCompletas.map((bufala) => [bufala.idBufalo, bufala]));
+
+      let alertasCriados = 0;
+
+      for (const candidata of candidatas) {
+        const idBufala = candidata.reproducao.idBufala;
+        const bufalaData = bufalaMap.get(idBufala);
+
+        if (!bufalaData) {
+          this.logger.warn(`Dados da búfala ${idBufala} não encontrados no lote de nascimentos.`);
+          continue;
+        }
+
         try {
-          if (!rep.dtEvento) continue;
-
-          // Calcula data prevista de parto
-          const dataEvento = new Date(rep.dtEvento);
-          const dataPrevistaParto = new Date(dataEvento);
-          dataPrevistaParto.setDate(dataEvento.getDate() + AlertaConstants.TEMPO_GESTACAO_DIAS);
-
-          const diffTime = dataPrevistaParto.getTime() - hoje.getTime();
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-          // Cria alerta se está dentro da janela de antecedência
-          if (diffDays > 0 && diffDays <= AlertaConstants.ANTECEDENCIA_PARTO_DIAS) {
-            const alertaCriado = await this.criarAlertaNascimento(rep, dataPrevistaParto, dataEvento);
-            if (alertaCriado) alertasCriados++;
+          const alertaCriado = await this.criarAlertaNascimento(candidata.reproducao, candidata.dataPrevistaParto, candidata.dataEvento, bufalaData);
+          if (alertaCriado) {
+            alertasCriados++;
           }
         } catch (error) {
-          this.logger.error(`Erro ao processar reprodução ${rep.idReproducao}:`, error);
+          this.logger.error(`Erro ao processar reprodução ${candidata.reproducao.idReproducao}:`, error);
         }
       }
 
@@ -76,11 +121,8 @@ export class AlertaReproducaoService {
   /**
    * Cria alerta de nascimento previsto.
    */
-  private async criarAlertaNascimento(reproducao: any, dataPrevistaParto: Date, dataEvento: Date): Promise<boolean> {
+  private async criarAlertaNascimento(reproducao: any, dataPrevistaParto: Date, dataEvento: Date, bufalaData: any): Promise<boolean> {
     try {
-      const bufalaData = await this.bufaloRepo.buscarBufaloCompleto(reproducao.idBufala);
-      if (!bufalaData) return false;
-
       const grupoNome = bufalaData.grupo?.nomeGrupo ?? 'Não informado';
       const propriedadeNome = bufalaData.propriedade?.nome ?? 'Não informada';
 
@@ -123,20 +165,52 @@ export class AlertaReproducaoService {
         return 0;
       }
 
-      let alertasCriados = 0;
       const hoje = new Date();
+      const candidatas: CoberturaCandidata[] = [];
 
       for (const cob of coberturas) {
-        try {
-          const dtCobertura = new Date(cob.dtEvento);
-          const diasDesdeCobertura = Math.floor((hoje.getTime() - dtCobertura.getTime()) / (1000 * 60 * 60 * 24));
+        if (!cob.idBufala || !cob.dtEvento) {
+          continue;
+        }
 
-          if (diasDesdeCobertura >= AlertaConstants.DIAS_SEM_DIAGNOSTICO_COBERTURA) {
-            const alertaCriado = await this.criarAlertaCoberturaSemDiagnostico(cob, diasDesdeCobertura, hoje);
-            if (alertaCriado) alertasCriados++;
+        const dtCobertura = new Date(cob.dtEvento);
+        const diasDesdeCobertura = Math.floor((hoje.getTime() - dtCobertura.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diasDesdeCobertura >= AlertaConstants.DIAS_SEM_DIAGNOSTICO_COBERTURA) {
+          candidatas.push({
+            cobertura: cob,
+            diasDesdeCobertura,
+          });
+        }
+      }
+
+      if (!candidatas.length) {
+        this.logger.log('Nenhuma cobertura sem diagnóstico dentro da janela mínima encontrada.');
+        return 0;
+      }
+
+      const idsBufalas = Array.from(new Set(candidatas.map((candidata) => candidata.cobertura.idBufala)));
+      const bufalasCompletas = await this.bufaloRepo.buscarBufalosCompletosBatch(idsBufalas);
+      const bufalaMap = new Map(bufalasCompletas.map((bufala) => [bufala.idBufalo, bufala]));
+
+      let alertasCriados = 0;
+
+      for (const candidata of candidatas) {
+        const idBufala = candidata.cobertura.idBufala;
+        const bufalaData = bufalaMap.get(idBufala);
+
+        if (!bufalaData) {
+          this.logger.warn(`Dados da búfala ${idBufala} não encontrados no lote de coberturas.`);
+          continue;
+        }
+
+        try {
+          const alertaCriado = await this.criarAlertaCoberturaSemDiagnostico(candidata.cobertura, candidata.diasDesdeCobertura, hoje, bufalaData);
+          if (alertaCriado) {
+            alertasCriados++;
           }
         } catch (error) {
-          this.logger.error(`Erro ao processar cobertura ${cob.idReproducao}:`, error);
+          this.logger.error(`Erro ao processar cobertura ${candidata.cobertura.idReproducao}:`, error);
         }
       }
 
@@ -151,11 +225,8 @@ export class AlertaReproducaoService {
   /**
    * Cria alerta de cobertura sem diagnóstico (recorrente).
    */
-  private async criarAlertaCoberturaSemDiagnostico(cobertura: any, diasDesdeCobertura: number, hoje: Date): Promise<boolean> {
+  private async criarAlertaCoberturaSemDiagnostico(cobertura: any, diasDesdeCobertura: number, hoje: Date, bufalaData: any): Promise<boolean> {
     try {
-      const bufalaData = await this.bufaloRepo.buscarBufaloCompleto(cobertura.idBufala);
-      if (!bufalaData) return false;
-
       const grupoNome = bufalaData.grupo?.nomeGrupo ?? 'Não informado';
       const propriedadeNome = bufalaData.propriedade?.nome ?? 'Não informada';
 
@@ -201,15 +272,25 @@ export class AlertaReproducaoService {
         return 0;
       }
 
-      let alertasCriados = 0;
       const hoje = new Date();
+      const idsBufalas = Array.from(new Set(femeas.map((femea) => femea.idBufalo).filter((id): id is string => Boolean(id))));
+      const [ultimasCoberturas, femeasCompletas] = await Promise.all([
+        this.reproducaoRepo.buscarUltimasCoberturasBatch(idsBufalas),
+        this.bufaloRepo.buscarBufalosCompletosBatch(idsBufalas),
+      ]);
+
+      const ultimaCoberturaPorBufala = this.mapearUltimaCoberturaPorBufala(ultimasCoberturas);
+      const femeaCompletaMap = new Map(femeasCompletas.map((femeaCompleta) => [femeaCompleta.idBufalo, femeaCompleta]));
+
+      let alertasCriados = 0;
 
       for (const femea of femeas) {
         try {
-          const diasSemCobertura = await this.calcularDiasSemCobertura(femea.idBufalo, hoje);
+          const ultimaCobertura = ultimaCoberturaPorBufala.get(femea.idBufalo) ?? null;
+          const diasSemCobertura = this.calcularDiasSemCobertura(ultimaCobertura, hoje);
 
           if (diasSemCobertura >= AlertaConstants.DIAS_SEM_COBERTURA_FEMEA_VAZIA || diasSemCobertura === Infinity) {
-            const alertaCriado = await this.criarAlertaFemeaVazia(femea, diasSemCobertura, hoje);
+            const alertaCriado = await this.criarAlertaFemeaVazia(femea, diasSemCobertura, hoje, femeaCompletaMap.get(femea.idBufalo));
             if (alertaCriado) alertasCriados++;
           }
         } catch (error) {
@@ -225,13 +306,28 @@ export class AlertaReproducaoService {
     }
   }
 
+  private mapearUltimaCoberturaPorBufala(ultimasCoberturas: any[]): Map<string, UltimaCoberturaResumo> {
+    const mapa = new Map<string, UltimaCoberturaResumo>();
+
+    for (const cobertura of ultimasCoberturas) {
+      if (!cobertura.idBufala || mapa.has(cobertura.idBufala)) {
+        continue;
+      }
+
+      mapa.set(cobertura.idBufala, {
+        dtEvento: cobertura.dtEvento ?? null,
+        status: cobertura.status ?? null,
+      });
+    }
+
+    return mapa;
+  }
+
   /**
    * Calcula quantos dias a fêmea está sem cobertura.
    */
-  private async calcularDiasSemCobertura(id_bufala: string, hoje: Date): Promise<number> {
-    const ultimaCobertura = await this.reproducaoRepo.buscarUltimaCobertura(id_bufala);
-
-    if (!ultimaCobertura) {
+  private calcularDiasSemCobertura(ultimaCobertura: UltimaCoberturaResumo | null, hoje: Date): number {
+    if (!ultimaCobertura || !ultimaCobertura.dtEvento) {
       // Nunca foi coberta
       return Infinity;
     }
@@ -249,27 +345,33 @@ export class AlertaReproducaoService {
   /**
    * Cria alerta de fêmea vazia (recorrente).
    */
-  private async criarAlertaFemeaVazia(femea: any, diasSemCobertura: number, hoje: Date): Promise<boolean> {
+  private async criarAlertaFemeaVazia(femea: any, diasSemCobertura: number, hoje: Date, femeaCompleta?: any): Promise<boolean> {
     try {
-      const femeaCompleta = await this.bufaloRepo.buscarBufaloCompleto(femea.idBufalo);
       const grupoNome = femeaCompleta?.grupo?.nomeGrupo ?? 'Não informado';
       const propriedadeNome = femeaCompleta?.propriedade?.nome ?? 'Não informada';
+      const nomeFemea = femeaCompleta?.nome ?? femea.nome ?? 'Fêmea';
+      const idPropriedade = femea.idPropriedade ?? femeaCompleta?.idPropriedade;
+
+      if (!idPropriedade) {
+        this.logger.warn(`Fêmea ${femea.idBufalo} sem idPropriedade válido para criação de alerta.`);
+        return false;
+      }
 
       const mensagem =
         diasSemCobertura === Infinity
-          ? `Fêmea ${femea.nome} apta para reprodução mas nunca foi coberta.`
-          : `Fêmea ${femea.nome} sem cobertura há ${diasSemCobertura} dias.`;
+          ? `Fêmea ${nomeFemea} apta para reprodução mas nunca foi coberta.`
+          : `Fêmea ${nomeFemea} sem cobertura há ${diasSemCobertura} dias.`;
 
       const descricaoClinica =
         diasSemCobertura === Infinity
-          ? `Fêmea ${femea.nome} com ${calcularIdadeEmMeses(femea.dtNascimento)} meses de idade, apta para reprodução, porém nunca foi submetida a cobertura ou inseminação. Animal em idade reprodutiva ideal necessitando avaliação de aptidão e planejamento reprodutivo.`
-          : `Fêmea ${femea.nome} com ${calcularIdadeEmMeses(femea.dtNascimento)} meses está sem cobertura há ${diasSemCobertura} dias. Animal em idade reprodutiva necessitando avaliação de aptidão e planejamento de nova cobertura/inseminação.`;
+          ? `Fêmea ${nomeFemea} com ${calcularIdadeEmMeses(femea.dtNascimento)} meses de idade, apta para reprodução, porém nunca foi submetida a cobertura ou inseminação. Animal em idade reprodutiva ideal necessitando avaliação de aptidão e planejamento reprodutivo.`
+          : `Fêmea ${nomeFemea} com ${calcularIdadeEmMeses(femea.dtNascimento)} meses está sem cobertura há ${diasSemCobertura} dias. Animal em idade reprodutiva necessitando avaliação de aptidão e planejamento de nova cobertura/inseminação.`;
 
       const alertaDto: CreateAlertaDto = {
         animal_id: femea.idBufalo,
         grupo: grupoNome,
         localizacao: propriedadeNome,
-        id_propriedade: femea.idPropriedade,
+        id_propriedade: idPropriedade,
         motivo: mensagem,
         nicho: NichoAlerta.REPRODUCAO,
         data_alerta: hoje.toISOString().split('T')[0],

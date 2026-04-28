@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateDadoZootecnicoDto } from './dto/create-dado-zootecnico.dto';
 import { UpdateDadoZootecnicoDto } from './dto/update-dado-zootecnico.dto';
@@ -10,6 +10,7 @@ import { ISoftDelete } from '../../../core/interfaces';
 import { DadosZootecnicosRepositoryDrizzle } from './repositories';
 import { DatabaseService } from '../../../core/database/database.service';
 import { UserHelper } from '../../../core/utils';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 
 @Injectable()
 export class DadosZootecnicosService implements ISoftDelete {
@@ -17,6 +18,7 @@ export class DadosZootecnicosService implements ISoftDelete {
     private readonly repository: DadosZootecnicosRepositoryDrizzle,
     private readonly logger: LoggerService,
     private readonly databaseService: DatabaseService,
+    private readonly authHelper: AuthHelperService,
   ) {}
 
   /**
@@ -41,7 +43,9 @@ export class DadosZootecnicosService implements ISoftDelete {
     return createPaginatedResponse(formatDateFieldsArray(data), total, page, limit);
   }
 
-  async findAllByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+  async findAllByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}, userId: string): Promise<PaginatedResponse<any>> {
+    await this.authHelper.validatePropriedadeAccess(userId, id_propriedade);
+
     const { page = 1, limit = 10 } = paginationDto;
     const { offset } = calculatePaginationParams(page, limit);
 
@@ -84,7 +88,7 @@ export class DadosZootecnicosService implements ISoftDelete {
   }
 
   async restore(id: string) {
-    const registro = await this.repository.findById(id);
+    const registro = await this.repository.findByIdIncludingDeleted(id);
 
     if (!registro) {
       throw new NotFoundException(`Dado zootécnico com ID ${id} não encontrado`);

@@ -147,13 +147,13 @@
 - Status:
   implementada
 
-## REB-TEST-002 - Grupos, racas e mov-lote nao possuem suites dedicadas
+## REB-TEST-002 - Grupos, racas e mov-lote possuem suites dedicadas de service
 
 - Contexto de negocio:
   Regras de agrupamento, catalogo e historico de movimentacao tambem sofrem regressao e precisam cobertura especifica.
 
 - Regra principal:
-  Modulo deveria ter testes dedicados para controllers/services de grupo, raca e mov-lote.
+  Modulo deve manter testes dedicados para services de grupo, raca e mov-lote para reduzir regressao de ownership, cache e integridade de regras.
 
 - Excecoes:
   Sem excecoes.
@@ -162,13 +162,16 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  No estado atual, nao foram encontrados arquivos .spec.ts para grupo/raca/mov-lote no modulo rebanho.
+  Existem arquivos .spec.ts dedicados para os tres subdominios.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/grupo/
   src/modules/rebanho/raca/
   src/modules/rebanho/mov-lote/
   src/modules/rebanho/**/*.spec.ts
+  src/modules/rebanho/grupo/grupo.service.spec.ts
+  src/modules/rebanho/raca/raca.service.spec.ts
+  src/modules/rebanho/mov-lote/mov-lote.service.spec.ts
 
 - Status:
-  parcial
+  implementada

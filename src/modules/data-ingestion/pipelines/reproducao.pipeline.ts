@@ -65,12 +65,15 @@ export class ReproducaoPipeline {
     }
   }
 
-  async export(filters: ExportFiltersDto): Promise<{ buffer: Buffer; filename: string }> {
+  async export(userId: string, filters: ExportFiltersDto): Promise<{ buffer: Buffer; filename: string }> {
     this.logger.log('Iniciando pipeline de exportação de reprodução', {
       module: 'ReproducaoPipeline',
       method: 'export',
+      userId,
       propriedadeId: filters.propriedadeId,
     });
+
+    await this.validator.validatePropriedadeAccess(userId, filters.propriedadeId);
 
     try {
       const buffer = await this.etlClient.exportReproducao(filters);

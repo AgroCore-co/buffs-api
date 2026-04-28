@@ -126,6 +126,22 @@ export class DadosZootecnicosRepositoryDrizzle {
     return result || null;
   }
 
+  async findByIdIncludingDeleted(idZootec: string) {
+    const result = await this.databaseService.db.query.dadoszootecnicos.findFirst({
+      where: eq(dadoszootecnicos.idZootec, idZootec),
+      with: {
+        bufalo: {
+          columns: {
+            brinco: true,
+            nome: true,
+          },
+        },
+      },
+    });
+
+    return result || null;
+  }
+
   async softDelete(id: string) {
     const [result] = await this.databaseService.db
       .update(dadoszootecnicos)

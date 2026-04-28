@@ -31,6 +31,11 @@ export class MedicamentosRepositoryDrizzle {
     return result || null;
   }
 
+  async findByIdIncludingDeleted(id: string) {
+    const [result] = await this.databaseService.db.select().from(medicacoes).where(eq(medicacoes.idMedicacao, id)).limit(1);
+    return result || null;
+  }
+
   /**
    * Busca medicações de uma propriedade específica
    */
@@ -96,13 +101,5 @@ export class MedicamentosRepositoryDrizzle {
     return await this.databaseService.db.query.medicacoes.findMany({
       orderBy: [desc(medicacoes.createdAt)],
     });
-  }
-
-  async create(data: any) {
-    return this.createFromDto(data);
-  }
-
-  async update(id: string, data: any) {
-    return this.updateFromDto(id, data);
   }
 }

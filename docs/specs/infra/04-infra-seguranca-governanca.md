@@ -63,7 +63,7 @@
   Exposicao de portas administrativas facilita tentativa de acesso nao autorizado.
 
 - Criterio de aceite:
-  Em producao, rabbitmq publica somente 5672 e nao publica 15672.
+  Em producao, rabbitmq nao publica 15672 e a porta 5672 fica apenas na rede interna do compose.
 
 - Rastreabilidade para codigo e testes:
   infra/docker-compose.prod.yml
@@ -71,22 +71,22 @@
 - Status:
   implementada
 
-## INFRA-SEC-004 - Integracao com servico de IA no host exige controle de fronteira de rede
+## INFRA-SEC-004 - Servico de IA interno evita exposicao ao host
 
 - Contexto de negocio:
-  API em container acessa IA hospedada no host por host-gateway, criando fronteira adicional de confianca.
+  A IA agora roda dentro do compose, reduzindo a superficie de rede exposta.
 
 - Regra principal:
-  Compose de producao deve mapear host.docker.internal para host-gateway para conexao com IA externa ao compose.
+  Compose de producao deve manter buffs-ia acessivel apenas via hostname interno.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  Sem mapeamento, API nao alcanca endpoint de IA no host.
+  Expor IA no host quebra o isolamento e amplia a superficie de ataque.
 
 - Criterio de aceite:
-  buffs-api define IA_API_URL com host.docker.internal e extra_hosts com host-gateway.
+  buffs-api define IA_API_URL com hostname interno e nao usa extra_hosts para host-gateway.
 
 - Rastreabilidade para codigo e testes:
   infra/docker-compose.prod.yml

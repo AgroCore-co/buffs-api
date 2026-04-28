@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 import { AlertasService } from '../../alerta/alerta.service';
 import { NichoAlerta, PrioridadeAlerta } from '../../alerta/dto/create-alerta.dto';
 import { CreateCicloLactacaoDto } from './dto/create-lactacao.dto';
@@ -20,6 +21,7 @@ export class LactacaoService implements ISoftDelete {
     private readonly bufaloRepository: BufaloRepositoryDrizzle,
     private readonly grupoRepository: GrupoRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryDrizzle,
+    private readonly authHelper: AuthHelperService,
     private readonly logger: LoggerService,
     private readonly alertasService: AlertasService,
   ) {}
@@ -205,7 +207,10 @@ export class LactacaoService implements ISoftDelete {
     }
   }
 
-  async create(dto: CreateCicloLactacaoDto) {
+  async create(dto: CreateCicloLactacaoDto, user: any) {
+    const idUsuario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(idUsuario, dto.idPropriedade);
+
     this.logger.log('Iniciando criação de ciclo de lactação', {
       module: 'LactacaoService',
       method: 'create',
@@ -282,7 +287,10 @@ export class LactacaoService implements ISoftDelete {
     }
   }
 
-  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}, user: any): Promise<PaginatedResponse<any>> {
+    const idUsuario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(idUsuario, id_propriedade);
+
     this.logger.log('Iniciando busca de ciclos por propriedade', {
       module: 'CicloLactacaoService',
       method: 'findByPropriedade',
@@ -353,7 +361,7 @@ export class LactacaoService implements ISoftDelete {
     }
   }
 
-  async findOne(id_ciclo_lactacao: string) {
+  async findOne(id_ciclo_lactacao: string, user: any) {
     this.logger.log('Iniciando busca de ciclo de lactação por ID', {
       module: 'CicloLactacaoService',
       method: 'findOne',
@@ -371,6 +379,11 @@ export class LactacaoService implements ISoftDelete {
       throw new NotFoundException(`Ciclo de lactação com ID ${id_ciclo_lactacao} não encontrado.`);
     }
 
+    const idUsuario = await this.authHelper.getUserId(user);
+    if (data.idPropriedade) {
+      await this.authHelper.validatePropriedadeAccess(idUsuario, data.idPropriedade);
+    }
+
     this.logger.log('Ciclo de lactação encontrado com sucesso', {
       module: 'CicloLactacaoService',
       method: 'findOne',
@@ -379,14 +392,14 @@ export class LactacaoService implements ISoftDelete {
     return formatDateFields(data);
   }
 
-  async update(id_ciclo_lactacao: string, dto: UpdateCicloLactacaoDto) {
+  async update(id_ciclo_lactacao: string, dto: UpdateCicloLactacaoDto, user: any) {
     this.logger.log('Iniciando atualização de ciclo de lactação', {
       module: 'CicloLactacaoService',
       method: 'update',
       cicloId: id_ciclo_lactacao,
     });
 
-    const current = await this.findOne(id_ciclo_lactacao);
+    const current = await this.findOne(id_ciclo_lactacao, user);
 
     const dt_parto = dto.dtParto ?? current.dtParto;
     const padrao_dias = dto.padraoDias ?? current.padraoDias;
@@ -433,18 +446,18 @@ export class LactacaoService implements ISoftDelete {
     }
   }
 
-  async remove(id_ciclo_lactacao: string) {
-    return this.softDelete(id_ciclo_lactacao);
+  async remove(id_ciclo_lactacao: string, user: any) {
+    return this.softDelete(id_ciclo_lactacao, user);
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, user?: any) {
     this.logger.log('Iniciando remoção de ciclo de lactação (soft delete)', {
       module: 'CicloLactacaoService',
       method: 'softDelete',
       cicloId: id,
     });
 
-    await this.findOne(id);
+    await this.findOne(id, user);
 
     try {
       const data = await this.cicloRepository.softDelete(id);
@@ -469,7 +482,7 @@ export class LactacaoService implements ISoftDelete {
     }
   }
 
-  async restore(id: string) {
+  async restore(id: string, user?: any) {
     this.logger.log('Iniciando restauração de ciclo de lactação', {
       module: 'CicloLactacaoService',
       method: 'restore',
@@ -477,6 +490,21 @@ export class LactacaoService implements ISoftDelete {
     });
 
     try {
+      const idUsuario = await this.authHelper.getUserId(user);
+      const cicloExistente = await this.cicloRepository.buscarPorIdComDeletados(id);
+
+      if (!cicloExistente) {
+        throw new NotFoundException(`Ciclo de lactação com ID ${id} não encontrado.`);
+      }
+
+      if (cicloExistente.idPropriedade) {
+        await this.authHelper.validatePropriedadeAccess(idUsuario, cicloExistente.idPropriedade);
+      }
+
+      if (!cicloExistente.deletedAt) {
+        throw new BadRequestException('Este ciclo não está removido');
+      }
+
       const data = await this.cicloRepository.restaurar(id);
 
       if (!data) {
@@ -494,6 +522,10 @@ export class LactacaoService implements ISoftDelete {
         data: formatDateFields(data),
       };
     } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
       this.logger.logError(error, {
         module: 'CicloLactacaoService',
         method: 'restore',
@@ -503,14 +535,16 @@ export class LactacaoService implements ISoftDelete {
     }
   }
 
-  async findAllWithDeleted(): Promise<any[]> {
+  async findAllWithDeleted(user?: any): Promise<any[]> {
     this.logger.log('Buscando todos os ciclos de lactação incluindo deletados', {
       module: 'CicloLactacaoService',
       method: 'findAllWithDeleted',
     });
 
     try {
-      const data = await this.cicloRepository.listarComDeletados();
+      const idUsuario = await this.authHelper.getUserId(user);
+      const propriedadesUsuario = await this.authHelper.getUserPropriedades(idUsuario);
+      const data = await this.cicloRepository.listarComDeletadosPorPropriedades(propriedadesUsuario);
       return formatDateFieldsArray(data || []);
     } catch (error) {
       this.logger.logError(error, {
@@ -524,7 +558,10 @@ export class LactacaoService implements ISoftDelete {
   /**
    * Retorna estatísticas gerais de ciclos de lactação por propriedade
    */
-  async getEstatisticasPropriedade(id_propriedade: string) {
+  async getEstatisticasPropriedade(id_propriedade: string, user: any) {
+    const idUsuario = await this.authHelper.getUserId(user);
+    await this.authHelper.validatePropriedadeAccess(idUsuario, id_propriedade);
+
     this.logger.log('Buscando estatísticas de ciclos por propriedade', {
       module: 'CicloLactacaoService',
       method: 'getEstatisticasPropriedade',

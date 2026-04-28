@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { NichoAlerta } from '../dto/create-alerta.dto';
 import { AlertaReproducaoService } from './alerta-reproducao.service';
 import { AlertaSanitarioService } from './alerta-sanitario.service';
@@ -69,8 +69,28 @@ export class AlertasVerificacaoService {
       return [NichoAlerta.CLINICO, NichoAlerta.SANITARIO, NichoAlerta.REPRODUCAO, NichoAlerta.MANEJO, NichoAlerta.PRODUCAO];
     }
 
-    const valores = Array.isArray(nichos) ? nichos : [nichos];
-    return valores as NichoAlerta[];
+    const valoresBrutos = Array.isArray(nichos) ? nichos : [nichos];
+    const valoresNormalizados = Array.from(
+      new Set(
+        valoresBrutos
+          .flatMap((valor) => String(valor).split(','))
+          .map((valor) => valor.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    );
+
+    if (!valoresNormalizados.length) {
+      return [NichoAlerta.CLINICO, NichoAlerta.SANITARIO, NichoAlerta.REPRODUCAO, NichoAlerta.MANEJO, NichoAlerta.PRODUCAO];
+    }
+
+    const nichosValidos = new Set(Object.values(NichoAlerta));
+    const invalidos = valoresNormalizados.filter((valor) => !nichosValidos.has(valor as NichoAlerta));
+
+    if (invalidos.length > 0) {
+      throw new BadRequestException(`Nicho(s) inválido(s): ${invalidos.join(', ')}`);
+    }
+
+    return valoresNormalizados as NichoAlerta[];
   }
 
   private async executarNicho(nicho: NichoAlerta, idPropriedade: string): Promise<VerificacaoResultado> {

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
-import { eq, and, desc, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, isNull, sql } from 'drizzle-orm';
 import { industria } from '../../../../database/schema';
 import { CreateLaticiniosDto, UpdateLaticiniosDto } from '../dto';
 
@@ -49,6 +49,28 @@ export class LaticiniosRepositoryDrizzle {
       .orderBy(desc(industria.createdAt));
   }
 
+  async listarTodasPorPropriedades(idsPropriedades: string[]) {
+    if (!idsPropriedades.length) {
+      return [];
+    }
+
+    return await this.databaseService.db
+      .select({
+        idIndustria: industria.idIndustria,
+        nome: industria.nome,
+        representante: industria.representante,
+        contato: industria.contato,
+        observacao: industria.observacao,
+        idPropriedade: industria.idPropriedade,
+        createdAt: industria.createdAt,
+        updatedAt: industria.updatedAt,
+        deletedAt: industria.deletedAt,
+      })
+      .from(industria)
+      .where(and(inArray(industria.idPropriedade, idsPropriedades), isNull(industria.deletedAt)))
+      .orderBy(desc(industria.createdAt));
+  }
+
   /**
    * Lista indústrias de uma propriedade específica
    */
@@ -93,6 +115,26 @@ export class LaticiniosRepositoryDrizzle {
     return resultado.length > 0 ? resultado[0] : null;
   }
 
+  async buscarPorIdComDeletados(idIndustria: string) {
+    const resultado = await this.databaseService.db
+      .select({
+        idIndustria: industria.idIndustria,
+        nome: industria.nome,
+        representante: industria.representante,
+        contato: industria.contato,
+        observacao: industria.observacao,
+        idPropriedade: industria.idPropriedade,
+        createdAt: industria.createdAt,
+        updatedAt: industria.updatedAt,
+        deletedAt: industria.deletedAt,
+      })
+      .from(industria)
+      .where(eq(industria.idIndustria, idIndustria))
+      .limit(1);
+
+    return resultado.length > 0 ? resultado[0] : null;
+  }
+
   /**
    * Atualiza indústria existente
    */
@@ -105,7 +147,6 @@ export class LaticiniosRepositoryDrizzle {
     if (updateDto.representante !== undefined) data.representante = updateDto.representante;
     if (updateDto.contato !== undefined) data.contato = updateDto.contato;
     if (updateDto.observacao !== undefined) data.observacao = updateDto.observacao;
-    if (updateDto.idPropriedade !== undefined) data.idPropriedade = updateDto.idPropriedade;
 
     const [industriaAtualizada] = await this.databaseService.db
       .update(industria)
@@ -159,6 +200,28 @@ export class LaticiniosRepositoryDrizzle {
         deletedAt: industria.deletedAt,
       })
       .from(industria)
+      .orderBy(desc(industria.createdAt));
+  }
+
+  async listarComDeletadosPorPropriedades(idsPropriedades: string[]) {
+    if (!idsPropriedades.length) {
+      return [];
+    }
+
+    return await this.databaseService.db
+      .select({
+        idIndustria: industria.idIndustria,
+        nome: industria.nome,
+        representante: industria.representante,
+        contato: industria.contato,
+        observacao: industria.observacao,
+        idPropriedade: industria.idPropriedade,
+        createdAt: industria.createdAt,
+        updatedAt: industria.updatedAt,
+        deletedAt: industria.deletedAt,
+      })
+      .from(industria)
+      .where(inArray(industria.idPropriedade, idsPropriedades))
       .orderBy(desc(industria.createdAt));
   }
 }

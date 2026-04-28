@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsNumber, IsOptional, IsString, Min, MaxLength, IsDateString } from 'class-validator';
+import { IsNotFutureDate } from '../../../../core/validators/date.validators';
 
 /**
  * DTO para atualização de registro de alimentação
@@ -45,5 +46,6 @@ export class UpdateRegistroAlimentacaoDto {
   })
   @IsDateString()
   @IsOptional()
+  @IsNotFutureDate()
   dt_registro?: string;
 }

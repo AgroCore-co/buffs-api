@@ -1,22 +1,34 @@
-import { Controller, Get, Post, Body, UseGuards, Param, Patch, Delete, ParseUUIDPipe, UseInterceptors, Query } from '@nestjs/common';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { Controller, Get, Post, Body, UseGuards, Param, Patch, Delete, ParseUUIDPipe, UseInterceptors, Query, HttpCode } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL as NestCacheTTL } from '@nestjs/cache-manager';
 import { AlimentacaoDefService } from './alimentacao-def.service';
 import { CreateAlimentacaoDefDto } from './dto/create-alimentacao-def.dto';
 import { UpdateAlimentacaoDefDto } from './dto/update-alimentacao-def.dto';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { SupabaseAuthGuard } from '../../auth/guards/auth.guard';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
+import { CacheTTL } from '../../../core/cache';
+import { User } from '../../auth/decorators/user.decorator';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { PropertyExistsGuard } from '../../../core/guards/property-exists.guard';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
 @ApiTags('Alimentação - Definições')
 @Controller('alimentacoes-def')
 export class AlimentacaoDefController {
-  constructor(private readonly alimentacaoDefService: AlimentacaoDefService) {}
+  constructor(
+    private readonly alimentacaoDefService: AlimentacaoDefService,
+    private readonly authHelperService: AuthHelperService,
+  ) {}
+
+  private async resolveUserId(user: { email?: string }): Promise<string> {
+    return this.authHelperService.getUserId(user);
+  }
 
   @Get('propriedade/:id_propriedade')
+  @UseGuards(PropertyExistsGuard)
   @UseInterceptors(CacheInterceptor)
-  @CacheTTL(1800) // 30 minutes
+  @NestCacheTTL(CacheTTL.LONG)
   @ApiOperation({
     summary: 'Lista todas as definições de alimentação de uma propriedade',
     description: 'Retorna uma lista de todas as definições de alimentação cadastradas para uma propriedade específica.',
@@ -26,13 +38,18 @@ export class AlimentacaoDefController {
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10, máx: 100)' })
   @ApiResponse({ status: 200, description: 'Lista de definições de alimentação da propriedade retornada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) idPropriedade: string, @Query() paginationDto: PaginationDto) {
-    return this.alimentacaoDefService.findByPropriedade(idPropriedade, paginationDto);
+  async findByPropriedade(
+    @Param('id_propriedade', ParseUUIDPipe) idPropriedade: string,
+    @Query() paginationDto: PaginationDto,
+    @User() user: { email?: string },
+  ) {
+    const userId = await this.resolveUserId(user);
+    return this.alimentacaoDefService.findByPropriedade(idPropriedade, paginationDto, userId);
   }
 
   @Get(':id')
   @UseInterceptors(CacheInterceptor)
-  @CacheTTL(3600) // 1 hour - feeding definitions are relatively static
+  @NestCacheTTL(CacheTTL.VERY_LONG)
   @ApiOperation({
     summary: 'Busca uma alimentação definida específica',
     description: 'Retorna os dados de uma alimentação definida específica pelo ID.',
@@ -41,8 +58,9 @@ export class AlimentacaoDefController {
   @ApiResponse({ status: 200, description: 'Alimentação definida encontrada com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Alimentação definida não encontrada.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.alimentacaoDefService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: { email?: string }) {
+    const userId = await this.resolveUserId(user);
+    return this.alimentacaoDefService.findOne(id, userId);
   }
 
   @Post()
@@ -64,8 +82,9 @@ export class AlimentacaoDefController {
   @ApiResponse({ status: 201, description: 'Alimentação definida criada com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos. Verifique os campos obrigatórios e formatos.' })
   @ApiResponse({ status: 401, description: 'Não autorizado. Token de autenticação inválido ou ausente.' })
-  create(@Body() createAlimentacaoDefDto: CreateAlimentacaoDefDto) {
-    return this.alimentacaoDefService.create(createAlimentacaoDefDto);
+  async create(@Body() createAlimentacaoDefDto: CreateAlimentacaoDefDto, @User() user: { email?: string }) {
+    const userId = await this.resolveUserId(user);
+    return this.alimentacaoDefService.create(createAlimentacaoDefDto, userId);
   }
 
   @Patch(':id')
@@ -78,20 +97,23 @@ export class AlimentacaoDefController {
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Alimentação definida não encontrada.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() updateAlimentacaoDefDto: UpdateAlimentacaoDefDto) {
-    return this.alimentacaoDefService.update(id, updateAlimentacaoDefDto);
+  async update(@Param('id', ParseUUIDPipe) id: string, @Body() updateAlimentacaoDefDto: UpdateAlimentacaoDefDto, @User() user: { email?: string }) {
+    const userId = await this.resolveUserId(user);
+    return this.alimentacaoDefService.update(id, updateAlimentacaoDefDto, userId);
   }
 
   @Delete(':id')
+  @HttpCode(204)
   @ApiOperation({
     summary: 'Remove uma alimentação definida',
     description: 'Remove uma alimentação definida específica do sistema pelo ID.',
   })
   @ApiParam({ name: 'id', description: 'ID da alimentação definida', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Alimentação definida removida com sucesso.' })
+  @ApiResponse({ status: 204, description: 'Alimentação definida removida com sucesso.' })
   @ApiResponse({ status: 401, description: 'Não autorizado.' })
   @ApiResponse({ status: 404, description: 'Alimentação definida não encontrada.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.alimentacaoDefService.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string, @User() user: { email?: string }) {
+    const userId = await this.resolveUserId(user);
+    await this.alimentacaoDefService.remove(id, userId);
   }
 }

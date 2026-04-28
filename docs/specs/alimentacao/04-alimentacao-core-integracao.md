@@ -6,7 +6,7 @@
   Definicoes e registros dependem de acesso a banco, autenticacao e logging padronizado.
 
 - Regra principal:
-  AlimentacaoDefModule e RegistrosModule devem importar DatabaseModule, AuthModule e LoggerModule.
+  AlimentacaoDefModule e RegistrosModule devem importar DatabaseModule, AuthModule, LoggerModule e CoreModule para acesso a providers compartilhados do Core.
 
 - Excecoes:
   Sem excecoes.
@@ -15,7 +15,7 @@
   Falha de DI em controllers/services/repositorios quando providers nao estiverem disponiveis.
 
 - Criterio de aceite:
-  Ambos os submodulos importam DatabaseModule, AuthModule e LoggerModule.
+  Ambos os submodulos importam DatabaseModule, AuthModule, LoggerModule e CoreModule.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/alimentacao-def/alimentacao-def.module.ts
@@ -30,7 +30,7 @@
   Persistencia e validacoes cruzadas por propriedade/grupo/definicao precisam fonte unica de acesso ao banco.
 
 - Regra principal:
-  Repositorios Drizzle devem usar DatabaseService, e o service de registros pode usar DatabaseService para validacoes adicionais de integridade.
+  Repositorios Drizzle devem usar DatabaseService; validacoes de consistencia de grupo/definicao no create de registros devem ocorrer no repositorio com transacao.
 
 - Excecoes:
   Sem excecoes.
@@ -39,7 +39,7 @@
   NotFoundException/BadRequestException quando grupo ou definicao nao forem encontrados ou nao pertencerem a propriedade informada.
 
 - Criterio de aceite:
-  AlimentacaoDefRepositoryDrizzle e RegistrosRepositoryDrizzle injetam DatabaseService; RegistrosService tambem usa DatabaseService para validar consistencia antes de criar.
+  AlimentacaoDefRepositoryDrizzle e RegistrosRepositoryDrizzle injetam DatabaseService; RegistrosRepositoryDrizzle valida consistencia e persiste create em transacao unica.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/alimentacao-def/repositories/alimentacao-def.repository.drizzle.ts
@@ -80,7 +80,7 @@
 - Status:
   implementada
 
-## ALIM-CORE-004 - Cache do Core esta aplicado apenas em leituras de definicoes e sem invalidacao explicita
+## ALIM-CORE-004 - Cache de leitura com invalidacao explicita apos mutacoes
 
 - Contexto de negocio:
   Catalogo de alimentacao e lido com frequencia, mas alteracoes de definicao devem refletir rapidamente.
@@ -95,16 +95,16 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  AlimentacaoDefController aplica cache em GET por propriedade e GET por id; no estado atual nao ha invalidacao explicita apos create/update/delete.
+  AlimentacaoDefController aplica cache em GET por propriedade e GET por id; create/update/delete invalidam cache explicitamente no service.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/alimentacao-def/alimentacao-def.controller.ts
   src/modules/alimentacao/alimentacao-def/alimentacao-def.service.ts
 
 - Status:
-  parcial
+  implementada
 
-## ALIM-CORE-005 - Validacao de ownership por propriedade nao reutiliza helper central do Core
+## ALIM-CORE-005 - Validacao de ownership por propriedade reutiliza helper central do Core
 
 - Contexto de negocio:
   Em ambiente multi-tenant, autenticacao isolada nao garante autorizacao por propriedade.
@@ -119,7 +119,7 @@
   403/404 para acesso a propriedade fora do escopo do usuario.
 
 - Criterio de aceite:
-  No estado atual, modulo usa SupabaseAuthGuard e validacoes de consistencia entre ids, mas nao usa AuthHelperService ou PropertyExistsGuard para ownership do usuario.
+  Controllers usam AuthHelperService para resolver id do usuario e services validam ownership por propriedade; endpoints por id_propriedade tambem aplicam PropertyExistsGuard.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/alimentacao-def/alimentacao-def.controller.ts
@@ -129,7 +129,7 @@
   src/core/guards/property-exists.guard.ts
 
 - Status:
-  parcial
+  implementada
 
 ## ALIM-CORE-006 - Reuso de decoradores e validators compartilhados do Core e parcial
 
@@ -137,7 +137,7 @@
   Artefatos compartilhados de validacao/decoracao ajudam a reduzir divergencia de contratos entre modulos.
 
 - Regra principal:
-  Modulo alimentacao ja reutiliza PaginationDto, mas nao ha evidencias de uso do decorator to-boolean nem dos validators customizados de data do Core.
+  Modulo alimentacao reutiliza PaginationDto e validators compartilhados de data quando aplicavel; uso de to-boolean permanece nao aplicavel aos contratos atuais.
 
 - Excecoes:
   Pode ser intencional se os contratos atuais nao exigirem esses artefatos.
@@ -146,7 +146,7 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Foram encontradas referencias a PaginationDto e nao foram encontradas referencias a core/decorators/to-boolean.decorator.ts e core/validators/date.validators.ts no modulo.
+  Foram encontradas referencias a PaginationDto e a core/validators/date.validators.ts (IsNotFutureDate em DTOs de registros); nao foram encontradas referencias a core/decorators/to-boolean.decorator.ts.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alimentacao/

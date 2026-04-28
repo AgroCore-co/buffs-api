@@ -16,6 +16,8 @@ describe('BufaloScheduler', () => {
           provide: BufaloRepositoryDrizzle,
           useValue: {
             findWithFilters: jest.fn(),
+            tryAcquireMaturityJobLock: jest.fn(),
+            releaseMaturityJobLock: jest.fn(),
           },
         },
         {
@@ -30,6 +32,9 @@ describe('BufaloScheduler', () => {
     scheduler = module.get<BufaloScheduler>(BufaloScheduler);
     bufaloRepo = module.get(BufaloRepositoryDrizzle);
     maturidadeService = module.get(BufaloMaturidadeService);
+
+    bufaloRepo.tryAcquireMaturityJobLock.mockResolvedValue(true);
+    bufaloRepo.releaseMaturityJobLock.mockResolvedValue();
   });
 
   it('should be defined', () => {
@@ -58,6 +63,8 @@ describe('BufaloScheduler', () => {
 
     it('deve prevenir execução concorrente', async () => {
       const mockBufalos = [{ id_bufalo: '1', nome: 'Bufalo 1', status: true }];
+
+      bufaloRepo.tryAcquireMaturityJobLock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
 
       bufaloRepo.findWithFilters.mockResolvedValue({
         data: mockBufalos,

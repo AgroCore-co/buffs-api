@@ -6,41 +6,95 @@ import { PaginationDto } from '../../../core/dto/pagination.dto';
 import { PaginatedResponse } from '../../../core/dto/pagination.dto';
 import { createPaginatedResponse } from '../../../core/utils/pagination.utils';
 import { MovLoteRepositoryDrizzle } from './repositories/mov-lote.repository.drizzle';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
 
 @Injectable()
 export class MovLoteService {
   constructor(
     private readonly movLoteRepository: MovLoteRepositoryDrizzle,
+    private readonly authHelper: AuthHelperService,
     private readonly logger: LoggerService,
   ) {}
 
   /**
    * Valida apenas se as referências (lotes, grupo) existem no banco.
    */
-  private async validateReferences(dto: CreateMovLoteDto | UpdateMovLoteDto): Promise<void> {
-    if (dto.idLoteAtual && dto.idLoteAnterior && dto.idLoteAtual === dto.idLoteAnterior) {
+  private async validatePropriedadeAccess(userId: string, idPropriedade?: string | null): Promise<void> {
+    if (!idPropriedade) {
+      throw new NotFoundException('Movimentação sem propriedade vinculada.');
+    }
+
+    await this.authHelper.validatePropriedadeAccess(userId, idPropriedade);
+  }
+
+  private async validateReferences(
+    dto: CreateMovLoteDto | UpdateMovLoteDto,
+    userId: string,
+    contexto?: { idPropriedade?: string | null; idLoteAnterior?: string | null },
+  ): Promise<void> {
+    const idPropriedade = dto.idPropriedade ?? contexto?.idPropriedade ?? null;
+    await this.validatePropriedadeAccess(userId, idPropriedade);
+
+    const idLoteAnteriorComparacao = dto.idLoteAnterior ?? contexto?.idLoteAnterior ?? undefined;
+    if (dto.idLoteAtual && idLoteAnteriorComparacao && dto.idLoteAtual === idLoteAnteriorComparacao) {
       throw new BadRequestException('Lote de origem e destino não podem ser iguais.');
     }
 
     if (dto.idGrupo) {
-      const grupoExists = await this.movLoteRepository.checkIfExists('grupo', 'id_grupo', dto.idGrupo);
-      if (!grupoExists) throw new NotFoundException(`Grupo com ID ${dto.idGrupo} não encontrado.`);
+      const grupo = await this.movLoteRepository.findGrupoById(dto.idGrupo);
+      if (!grupo) {
+        throw new NotFoundException(`Grupo com ID ${dto.idGrupo} não encontrado.`);
+      }
+
+      if (idPropriedade && grupo.idPropriedade !== idPropriedade) {
+        throw new BadRequestException('Grupo informado não pertence à propriedade da movimentação.');
+      }
+
+      await this.validatePropriedadeAccess(userId, grupo.idPropriedade);
     }
 
     if (dto.idLoteAtual) {
-      const loteAtualExists = await this.movLoteRepository.checkIfExists('lote', 'id_lote', dto.idLoteAtual);
-      if (!loteAtualExists) throw new NotFoundException(`Lote atual com ID ${dto.idLoteAtual} não encontrado.`);
+      const loteAtual = await this.movLoteRepository.findLoteById(dto.idLoteAtual);
+      if (!loteAtual) {
+        throw new NotFoundException(`Lote atual com ID ${dto.idLoteAtual} não encontrado.`);
+      }
+
+      if (idPropriedade && loteAtual.idPropriedade !== idPropriedade) {
+        throw new BadRequestException('Lote de destino não pertence à propriedade da movimentação.');
+      }
+
+      await this.validatePropriedadeAccess(userId, loteAtual.idPropriedade);
     }
 
     if (dto.idLoteAnterior) {
-      const loteAnteriorExists = await this.movLoteRepository.checkIfExists('lote', 'id_lote', dto.idLoteAnterior);
-      if (!loteAnteriorExists) throw new NotFoundException(`Lote anterior com ID ${dto.idLoteAnterior} não encontrado.`);
+      const loteAnterior = await this.movLoteRepository.findLoteById(dto.idLoteAnterior);
+      if (!loteAnterior) {
+        throw new NotFoundException(`Lote anterior com ID ${dto.idLoteAnterior} não encontrado.`);
+      }
+
+      if (idPropriedade && loteAnterior.idPropriedade !== idPropriedade) {
+        throw new BadRequestException('Lote de origem não pertence à propriedade da movimentação.');
+      }
+
+      await this.validatePropriedadeAccess(userId, loteAnterior.idPropriedade);
     }
+  }
+
+  private async findOneWithOwnership(id: string, userId: string) {
+    const movimentacao = await this.movLoteRepository.findById(id);
+
+    if (!movimentacao) {
+      throw new NotFoundException(`Movimentação com ID ${id} não encontrada.`);
+    }
+
+    await this.validatePropriedadeAccess(userId, movimentacao.idPropriedade);
+    return movimentacao;
   }
 
   async create(createDto: CreateMovLoteDto, user: any) {
     const { idGrupo, idLoteAtual, dtEntrada } = createDto;
     let { idLoteAnterior } = createDto;
+    const userId = await this.authHelper.getUserId(user);
 
     this.logger.log(`[INICIO] Movimentacao fisica iniciada - Grupo: ${idGrupo}, Lote destino: ${idLoteAtual}, Data entrada: ${dtEntrada}`);
 
@@ -51,7 +105,7 @@ export class MovLoteService {
       }
 
       this.logger.debug(`[VALIDACAO] Validando referencias - Grupo: ${idGrupo}, Lote destino: ${idLoteAtual}`);
-      await this.validateReferences(createDto);
+      await this.validateReferences(createDto, userId);
       this.logger.debug(`[VALIDACAO_OK] Referencias validadas com sucesso`);
 
       // **PASSO 1: BUSCAR E FINALIZAR REGISTRO ANTERIOR**
@@ -81,6 +135,10 @@ export class MovLoteService {
         if (!idLoteAnterior && registroAtual.idLoteAtual) {
           idLoteAnterior = registroAtual.idLoteAtual;
           this.logger.debug(`[AUTO_DETECCAO] Lote anterior detectado automaticamente: ${idLoteAnterior}`);
+        }
+
+        if (idLoteAnterior && idLoteAnterior === idLoteAtual) {
+          throw new BadRequestException('Grupo já se encontra no lote informado como destino.');
         }
       } else {
         this.logger.log(`[PRIMEIRA_MOVIMENTACAO] Esta e a primeira movimentacao registrada para o grupo ${idGrupo}`);
@@ -123,16 +181,23 @@ export class MovLoteService {
     }
   }
 
-  async findAll() {
-    return await this.movLoteRepository.findByPropriedade('', 1, 100);
+  async findAll(user: any, paginationDto: PaginationDto = {}) {
+    const userId = await this.authHelper.getUserId(user);
+    const propriedadesUsuario = await this.authHelper.getUserPropriedades(userId);
+    const { page = 1, limit = 100 } = paginationDto;
+
+    return await this.movLoteRepository.findByPropriedades(propriedadesUsuario, page, limit);
   }
 
-  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+  async findByPropriedade(id_propriedade: string, paginationDto: PaginationDto = {}, user: any): Promise<PaginatedResponse<any>> {
     this.logger.log('Iniciando busca de movimentações por propriedade', {
       module: 'MovLoteService',
       method: 'findByPropriedade',
       propriedadeId: id_propriedade,
     });
+
+    const userId = await this.authHelper.getUserId(user);
+    await this.validatePropriedadeAccess(userId, id_propriedade);
 
     const { page = 1, limit = 10 } = paginationDto;
 
@@ -146,28 +211,44 @@ export class MovLoteService {
     return createPaginatedResponse(registros, total, page, limit);
   }
 
-  async findOne(id: string) {
-    const movimentacao = await this.movLoteRepository.findById(id);
-
-    if (!movimentacao) {
-      throw new NotFoundException(`Movimentação com ID ${id} não encontrada.`);
-    }
-    return movimentacao;
+  async findOne(id: string, user: any) {
+    const userId = await this.authHelper.getUserId(user);
+    return this.findOneWithOwnership(id, userId);
   }
 
-  async update(id: string, updateDto: UpdateMovLoteDto) {
-    await this.findOne(id);
-    await this.validateReferences(updateDto);
+  async update(id: string, updateDto: UpdateMovLoteDto, user: any) {
+    const userId = await this.authHelper.getUserId(user);
+    const atual = await this.findOneWithOwnership(id, userId);
+
+    if (updateDto.idPropriedade && updateDto.idPropriedade !== atual.idPropriedade) {
+      throw new BadRequestException('Não é permitido alterar a propriedade de uma movimentação existente.');
+    }
+
+    await this.validateReferences(updateDto, userId, {
+      idPropriedade: atual.idPropriedade,
+      idLoteAnterior: atual.idLoteAnterior,
+    });
+
     return await this.movLoteRepository.update(id, updateDto);
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, user: any) {
+    const userId = await this.authHelper.getUserId(user);
+    await this.findOneWithOwnership(id, userId);
     await this.movLoteRepository.remove(id);
     return;
   }
 
-  async findHistoricoByGrupo(id_grupo: string) {
+  async findHistoricoByGrupo(id_grupo: string, user: any) {
+    const userId = await this.authHelper.getUserId(user);
+    const grupo = await this.movLoteRepository.findGrupoById(id_grupo);
+
+    if (!grupo) {
+      throw new NotFoundException(`Grupo com ID ${id_grupo} não encontrado.`);
+    }
+
+    await this.validatePropriedadeAccess(userId, grupo.idPropriedade);
+
     const movimentacoes = await this.movLoteRepository.findHistoricoByGrupo(id_grupo);
 
     return {
@@ -187,7 +268,16 @@ export class MovLoteService {
     };
   }
 
-  async findStatusAtual(id_grupo: string) {
+  async findStatusAtual(id_grupo: string, user: any) {
+    const userId = await this.authHelper.getUserId(user);
+    const grupo = await this.movLoteRepository.findGrupoById(id_grupo);
+
+    if (!grupo) {
+      throw new NotFoundException(`Grupo com ID ${id_grupo} não encontrado.`);
+    }
+
+    await this.validatePropriedadeAccess(userId, grupo.idPropriedade);
+
     const movimento = await this.movLoteRepository.findStatusAtual(id_grupo);
 
     if (!movimento) {

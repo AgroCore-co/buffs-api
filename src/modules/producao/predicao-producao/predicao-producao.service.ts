@@ -1,8 +1,10 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, HttpException, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, timeout } from 'rxjs';
 import { PredicaoProducaoResponseDto } from './dto';
+import { CacheService } from '../../../core/cache/cache.service';
+import { GenealogiaService } from '../../reproducao/genealogia/genealogia.service';
 
 /**
  * Service responsável pela integração com a IA para predição de produção de leite.
@@ -16,13 +18,18 @@ import { PredicaoProducaoResponseDto } from './dto';
 export class PredicaoProducaoService implements OnModuleInit {
   private readonly logger = new Logger(PredicaoProducaoService.name);
   private readonly iaApiUrl: string;
+  private readonly iaInternalKey: string;
   private readonly requestTimeout: number = 30000; // 30 segundos
+  private readonly cacheTtlMs: number = 10 * 60 * 1000; // 10 minutos
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly cacheService: CacheService,
+    private readonly genealogiaService: GenealogiaService,
   ) {
     this.iaApiUrl = this.configService.get<string>('IA_API_URL') || 'http://localhost:8000';
+    this.iaInternalKey = this.configService.getOrThrow<string>('IA_INTERNAL_KEY');
   }
 
   onModuleInit() {
@@ -38,8 +45,17 @@ export class PredicaoProducaoService implements OnModuleInit {
    */
   async predizerProducaoIndividual(idFemea: string, userId: string): Promise<PredicaoProducaoResponseDto> {
     const url = `${this.iaApiUrl}/predicao-individual`;
+    const cacheKey = `predicao:producao:${userId}:${idFemea}`;
+
+    await this.genealogiaService.buildTree(idFemea, 1, { sub: userId });
 
     this.logger.log(`Solicitando predição de produção para fêmea ${idFemea}`);
+
+    const cached = await this.cacheService.get<PredicaoProducaoResponseDto>(cacheKey);
+    if (cached) {
+      this.logger.log(`Predição retornada do cache para fêmea ${idFemea}`);
+      return cached;
+    }
 
     try {
       const response = await firstValueFrom(
@@ -48,7 +64,7 @@ export class PredicaoProducaoService implements OnModuleInit {
             url,
             { idFemea },
             {
-              headers: { 'x-user-id': userId },
+              headers: this.buildIAHeaders(userId),
               timeout: this.requestTimeout,
             },
           )
@@ -61,10 +77,19 @@ export class PredicaoProducaoService implements OnModuleInit {
           `Classificação: ${response.data.classificacaoPotencial}`,
       );
 
+      await this.cacheService.set(cacheKey, response.data, this.cacheTtlMs);
+
       return response.data;
     } catch (error) {
       return this.handleIAError(error, 'predição de produção');
     }
+  }
+
+  private buildIAHeaders(userId: string): Record<string, string> {
+    return {
+      'x-user-id': userId,
+      'x-internal-key': this.iaInternalKey,
+    };
   }
 
   /**
@@ -77,20 +102,21 @@ export class PredicaoProducaoService implements OnModuleInit {
 
       this.logger.error(`Erro na ${operacao} - Status ${status}: ${message}`, error.response.data);
 
-      throw new Error(`Erro na IA (${operacao}): ${message}`);
+      const safeStatus = status >= 400 && status <= 599 ? status : 502;
+      throw new HttpException(`Erro na IA (${operacao}): ${message}`, safeStatus);
     }
 
     if (error.code === 'ECONNREFUSED') {
       this.logger.error(`IA indisponível para ${operacao} em ${this.iaApiUrl}`);
-      throw new Error('Serviço de IA temporariamente indisponível');
+      throw new ServiceUnavailableException('Serviço de IA temporariamente indisponível');
     }
 
-    if (error.name === 'TimeoutError') {
+    if (error.name === 'TimeoutError' || error.code === 'ECONNABORTED') {
       this.logger.error(`Timeout na ${operacao} após ${this.requestTimeout}ms`);
-      throw new Error(`Timeout na ${operacao}. Tente novamente.`);
+      throw new RequestTimeoutException(`Timeout na ${operacao}. Tente novamente.`);
     }
 
     this.logger.error(`Erro inesperado na ${operacao}:`, error);
-    throw new Error(`Erro inesperado na ${operacao}`);
+    throw new ServiceUnavailableException(`Erro inesperado na ${operacao}`);
   }
 }

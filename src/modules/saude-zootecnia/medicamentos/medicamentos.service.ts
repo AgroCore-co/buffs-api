@@ -1,20 +1,34 @@
-import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggerService } from '../../../core/logger/logger.service';
 import { CreateMedicacaoDto } from './dto/create-medicacao.dto';
 import { UpdateMedicacaoDto } from './dto/update-medicacao.dto';
 import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { ISoftDelete } from '../../../core/interfaces';
 import { MedicamentosRepositoryDrizzle } from './repositories';
+import { AuthHelperService } from '../../../core/services/auth-helper.service';
+import { CacheService, CacheTTL } from '../../../core/cache';
 
 @Injectable()
 export class MedicamentosService implements ISoftDelete {
   constructor(
     private readonly repository: MedicamentosRepositoryDrizzle,
     private readonly logger: LoggerService,
+    private readonly authHelper: AuthHelperService,
+    private readonly cacheService: CacheService,
   ) {}
 
+  private getPropriedadeCacheKey(idPropriedade: string): string {
+    return `medicacoes:propriedade:${idPropriedade}`;
+  }
+
+  private async invalidatePropriedadeCache(idPropriedade?: string | null): Promise<void> {
+    if (!idPropriedade) return;
+    await this.cacheService.del(this.getPropriedadeCacheKey(idPropriedade));
+  }
+
   async create(dto: CreateMedicacaoDto) {
-    const data = await this.repository.create(dto);
+    const data = await this.repository.createFromDto(dto);
+    await this.invalidatePropriedadeCache(dto.idPropriedade);
     return formatDateFields(data);
   }
 
@@ -23,9 +37,18 @@ export class MedicamentosService implements ISoftDelete {
     return formatDateFieldsArray(data);
   }
 
-  async findByPropriedade(id_propriedade: string) {
-    const data = await this.repository.findByPropriedade(id_propriedade);
-    return formatDateFieldsArray(data);
+  async findByPropriedade(id_propriedade: string, userId: string) {
+    await this.authHelper.validatePropriedadeAccess(userId, id_propriedade);
+
+    const cacheKey = this.getPropriedadeCacheKey(id_propriedade);
+    return this.cacheService.getOrSet(
+      cacheKey,
+      async () => {
+        const data = await this.repository.findByPropriedade(id_propriedade);
+        return formatDateFieldsArray(data);
+      },
+      CacheTTL.LONG,
+    );
   }
 
   async findOne(id_medicacao: string) {
@@ -39,9 +62,19 @@ export class MedicamentosService implements ISoftDelete {
   }
 
   async update(id_medicacao: string, dto: UpdateMedicacaoDto) {
-    await this.findOne(id_medicacao); // Garante que existe
+    const existente = await this.repository.findById(id_medicacao);
 
-    const data = await this.repository.update(id_medicacao, dto);
+    if (!existente) {
+      throw new NotFoundException(`Medicação com ID ${id_medicacao} não encontrada.`);
+    }
+
+    const data = await this.repository.updateFromDto(id_medicacao, dto);
+
+    await this.invalidatePropriedadeCache(existente.idPropriedade);
+    if (dto.idPropriedade && dto.idPropriedade !== existente.idPropriedade) {
+      await this.invalidatePropriedadeCache(dto.idPropriedade);
+    }
+
     return formatDateFields(data);
   }
 
@@ -50,9 +83,15 @@ export class MedicamentosService implements ISoftDelete {
   }
 
   async softDelete(id: string) {
-    await this.findOne(id);
+    const existente = await this.repository.findById(id);
+
+    if (!existente) {
+      throw new NotFoundException(`Medicação com ID ${id} não encontrada.`);
+    }
 
     const data = await this.repository.softDelete(id);
+
+    await this.invalidatePropriedadeCache(existente.idPropriedade);
 
     return {
       message: 'Medicação removida com sucesso (soft delete)',
@@ -61,7 +100,7 @@ export class MedicamentosService implements ISoftDelete {
   }
 
   async restore(id: string) {
-    const registro = await this.repository.findById(id);
+    const registro = await this.repository.findByIdIncludingDeleted(id);
 
     if (!registro) {
       throw new NotFoundException(`Medicação com ID ${id} não encontrada`);
@@ -72,6 +111,8 @@ export class MedicamentosService implements ISoftDelete {
     }
 
     const data = await this.repository.restore(id);
+
+    await this.invalidatePropriedadeCache(registro.idPropriedade);
 
     return {
       message: 'Medicação restaurada com sucesso',

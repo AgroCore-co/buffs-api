@@ -11,12 +11,16 @@ export class UsuarioPropriedadeRepositoryDrizzle {
    * Vincula um usuário a uma ou mais propriedades
    */
   async vincular(idUsuario: string, idsPropriedades: string[]) {
+    if (idsPropriedades.length === 0) {
+      return;
+    }
+
     const vinculos = idsPropriedades.map((idPropriedade) => ({
       idUsuario,
       idPropriedade,
     }));
 
-    await this.db.db.insert(usuariopropriedade).values(vinculos);
+    await this.db.db.insert(usuariopropriedade).values(vinculos).onConflictDoNothing();
   }
 
   /**
@@ -80,6 +84,18 @@ export class UsuarioPropriedadeRepositoryDrizzle {
       .returning();
 
     return resultado.length > 0;
+  }
+
+  /**
+   * Remove todos os vínculos de propriedades de um usuário
+   */
+  async desvincularTodasDoUsuario(idUsuario: string) {
+    const resultado = await this.db.db
+      .delete(usuariopropriedade)
+      .where(eq(usuariopropriedade.idUsuario, idUsuario))
+      .returning({ idUsuario: usuariopropriedade.idUsuario });
+
+    return resultado.length;
   }
 
   /**

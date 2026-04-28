@@ -6,6 +6,7 @@ import { MovLoteService } from './mov-lote.service';
 import { CreateMovLoteDto, UpdateMovLoteDto } from './dto';
 import { PaginationDto } from '../../../core/dto/pagination.dto';
 import { LoggerService } from '../../../core/logger/logger.service';
+import { PropertyExistsGuard } from '../../../core/guards/property-exists.guard';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -37,27 +38,28 @@ export class MovLoteController {
   @Get()
   @ApiOperation({ summary: 'Lista todas as movimentações de lotes' })
   @ApiResponse({ status: 200, description: 'Lista de movimentações retornada com sucesso.' })
-  findAll() {
+  findAll(@User() user: any, @Query() paginationDto: PaginationDto) {
     this.logger.logApiRequest('GET', '/mov-lote', undefined, {
       module: 'MovLoteController',
       method: 'findAll',
     });
-    return this.service.findAll();
+    return this.service.findAll(user, paginationDto);
   }
 
   @Get('propriedade/:id_propriedade')
+  @UseGuards(PropertyExistsGuard)
   @ApiOperation({ summary: 'Lista movimentações de lotes por propriedade com paginação' })
   @ApiParam({ name: 'id_propriedade', description: 'ID da propriedade', type: 'string' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista retornada com sucesso.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto, @User() user: any) {
     this.logger.logApiRequest('GET', `/mov-lote/propriedade/${id_propriedade}`, undefined, {
       module: 'MovLoteController',
       method: 'findByPropriedade',
       propriedadeId: id_propriedade,
     });
-    return this.service.findByPropriedade(id_propriedade, paginationDto);
+    return this.service.findByPropriedade(id_propriedade, paginationDto, user);
   }
 
   @Get(':id')
@@ -65,8 +67,8 @@ export class MovLoteController {
   @ApiParam({ name: 'id', description: 'ID da movimentação' })
   @ApiResponse({ status: 200, description: 'Registro encontrado.' })
   @ApiResponse({ status: 404, description: 'Movimentação não encontrada.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.service.findOne(id, user);
   }
 
   @Patch(':id')
@@ -74,8 +76,8 @@ export class MovLoteController {
   @ApiParam({ name: 'id', description: 'ID da movimentação a ser atualizada' })
   @ApiResponse({ status: 200, description: 'Registro atualizado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Movimentação não encontrada.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMovLoteDto) {
-    return this.service.update(id, dto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMovLoteDto, @User() user: any) {
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
@@ -84,8 +86,8 @@ export class MovLoteController {
   @ApiParam({ name: 'id', description: 'ID da movimentação a ser removida' })
   @ApiResponse({ status: 204, description: 'Registro removido com sucesso.' })
   @ApiResponse({ status: 404, description: 'Movimentação não encontrada.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
+    return this.service.remove(id, user);
   }
 
   @Get('historico/grupo/:id_grupo')
@@ -95,8 +97,8 @@ export class MovLoteController {
   })
   @ApiParam({ name: 'id_grupo', description: 'ID do grupo para consultar o histórico' })
   @ApiResponse({ status: 200, description: 'Histórico de movimentações do grupo.' })
-  async findHistoricoGrupo(@Param('id_grupo', ParseUUIDPipe) id_grupo: string) {
-    return this.service.findHistoricoByGrupo(id_grupo);
+  async findHistoricoGrupo(@Param('id_grupo', ParseUUIDPipe) id_grupo: string, @User() user: any) {
+    return this.service.findHistoricoByGrupo(id_grupo, user);
   }
 
   @Get('status/grupo/:id_grupo')
@@ -106,7 +108,7 @@ export class MovLoteController {
   })
   @ApiParam({ name: 'id_grupo', description: 'ID do grupo para verificar status atual' })
   @ApiResponse({ status: 200, description: 'Status atual do grupo.' })
-  async findStatusAtual(@Param('id_grupo', ParseUUIDPipe) id_grupo: string) {
-    return this.service.findStatusAtual(id_grupo);
+  async findStatusAtual(@Param('id_grupo', ParseUUIDPipe) id_grupo: string, @User() user: any) {
+    return this.service.findStatusAtual(id_grupo, user);
   }
 }

@@ -46,6 +46,46 @@ export class BufaloRepositoryDrizzle {
   }
 
   /**
+   * Busca múltiplos búfalos com informações de grupo e propriedade em uma única consulta.
+   */
+  async buscarBufalosCompletosBatch(ids_bufalos: string[]) {
+    try {
+      if (!ids_bufalos.length) {
+        return [];
+      }
+
+      return await this.databaseService.db.query.bufalo.findMany({
+        where: inArray(bufalo.idBufalo, ids_bufalos),
+        columns: {
+          idBufalo: true,
+          nome: true,
+          idPropriedade: true,
+          dtNascimento: true,
+        },
+        with: {
+          grupo: {
+            columns: {
+              nomeGrupo: true,
+            },
+          },
+          propriedade: {
+            columns: {
+              nome: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      this.logger.logError(error, {
+        repository: 'BufaloRepositoryDrizzle',
+        method: 'buscarBufalosCompletosBatch',
+        ids_bufalos,
+      });
+      throw new InternalServerErrorException(`Erro ao buscar búfalos completos em lote: ${error.message}`);
+    }
+  }
+
+  /**
    * Busca búfalo simples (sem joins) para performance.
    */
   async buscarBufaloSimples(id_bufalo: string) {

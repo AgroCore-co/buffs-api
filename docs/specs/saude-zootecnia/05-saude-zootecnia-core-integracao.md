@@ -64,7 +64,7 @@
   Historicos clinicos e zootecnicos precisam padrao de resposta para consumo uniforme.
 
 - Regra principal:
-  Dados sanitarios e zootecnicos usam PaginationDto/createPaginatedResponse/calculatePaginationParams e formatDateFields, enquanto medicamentos e vacinacao retornam listas sem paginacao explicita.
+  Dados sanitarios, dados zootecnicos e vacinacao usam PaginationDto/createPaginatedResponse/calculatePaginationParams e formatDateFields; medicamentos permanece sem paginacao explicita.
 
 - Excecoes:
   Sem excecoes.
@@ -73,7 +73,7 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Integracao com utilitarios do Core existe em dois subdominios e e limitada nos demais.
+  Integracao com utilitarios do Core existe em tres subdominios e e limitada no catalogo de medicamentos.
 
 - Rastreabilidade para codigo e testes:
   src/modules/saude-zootecnia/dados-sanitarios/dados-sanitarios.service.ts
@@ -87,38 +87,44 @@
 - Status:
   parcial
 
-## SZO-CORE-004 - Helpers centrais de autorizacao por propriedade nao sao reutilizados
+## SZO-CORE-004 - Helpers centrais de autorizacao por propriedade sao reutilizados
 
 - Contexto de negocio:
   Em multi-tenant, autenticacao sozinha nao garante escopo de acesso por propriedade.
 
 - Regra principal:
-  Endpoints por propriedade deveriam reutilizar AuthHelperService e/ou PropertyExistsGuard para validar ownership antes de consultar dados.
+  Endpoints por propriedade reutilizam AuthHelperService e PropertyExistsGuard para validar ownership e existencia da propriedade antes de consultar dados.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, modulo usa SupabaseAuthGuard mas nao usa helper central para ownership em leituras por propriedade.
+  404 quando propriedade nao existe ou quando usuario nao possui vinculo de acesso.
 
 - Criterio de aceite:
-  Nao foram encontradas referencias a AuthHelperService/PropertyExistsGuard no modulo saude-zootecnia.
+  Controllers por propriedade usam PropertyExistsGuard e services validam ownership com AuthHelperService.validatePropriedadeAccess.
 
 - Rastreabilidade para codigo e testes:
-  src/modules/saude-zootecnia/
+  src/modules/saude-zootecnia/dados-sanitarios/dados-sanitarios.controller.ts
+  src/modules/saude-zootecnia/dados-zootecnicos/dados-zootecnicos.controller.ts
+  src/modules/saude-zootecnia/medicamentos/medicamentos.controller.ts
+  src/modules/saude-zootecnia/dados-sanitarios/dados-sanitarios.service.ts
+  src/modules/saude-zootecnia/dados-zootecnicos/dados-zootecnicos.service.ts
+  src/modules/saude-zootecnia/medicamentos/medicamentos.service.ts
   src/core/services/auth-helper.service.ts
   src/core/guards/property-exists.guard.ts
+  src/modules/saude-zootecnia/saude-zootecnia.controller.property-guards.spec.ts
 
 - Status:
-  parcial
+  implementada
 
-## SZO-CORE-005 - Cache, decorators e validators compartilhados do Core nao sao aplicados no modulo
+## SZO-CORE-005 - Cache, decorators e validators compartilhados do Core sao aplicados no modulo
 
 - Contexto de negocio:
   Reuso de artefatos compartilhados reduz divergencia de contrato e melhora desempenho em cenarios de leitura.
 
 - Regra principal:
-  No estado atual, nao ha uso de CacheInterceptor/CacheTTL, CacheService, decorator ToBoolean ou validators customizados de data do Core no modulo.
+  Modulo aplica CacheService/CacheTTL em medicamentos por propriedade e reutiliza ToBoolean/validators customizados de data nos DTOs sanitarios e vacinacao.
 
 - Excecoes:
   Sem excecoes.
@@ -127,16 +133,19 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Nao foram encontradas referencias a esses artefatos no codigo de saude-zootecnia.
+  Foram encontradas referencias de CacheService/CacheTTL no service de medicamentos e de ToBoolean/validators de data nos DTOs de saude-zootecnia.
 
 - Rastreabilidade para codigo e testes:
-  src/modules/saude-zootecnia/
+  src/modules/saude-zootecnia/medicamentos/medicamentos.service.ts
+  src/modules/saude-zootecnia/dados-sanitarios/dto/create-dados-sanitarios.dto.ts
+  src/modules/saude-zootecnia/vacinacao/dto/create-vacinacao.dto.ts
   src/core/cache/cache.service.ts
+  src/core/cache/cache.constants.ts
   src/core/decorators/to-boolean.decorator.ts
   src/core/validators/date.validators.ts
 
 - Status:
-  parcial
+  implementada
 
 ## SZO-CORE-006 - UserHelper e utilitarios de similaridade do Core apoiam regras de dominio
 
@@ -166,13 +175,13 @@
 - Status:
   implementada
 
-## SZO-TEST-001 - Nao ha cobertura automatizada dedicada para o modulo
+## SZO-TEST-001 - Cobertura automatizada dedicada para o modulo esta implementada
 
 - Contexto de negocio:
   Regras clinicas e de rastreabilidade merecem validacao automatizada para evitar regressao em producao.
 
 - Regra principal:
-  Modulo deveria ter testes dedicados para cada subdominio e para integracoes criticas (normalizacao de doenca, restore e ownership).
+  Modulo possui testes dedicados por subdominio e para integracoes criticas (normalizacao de doenca, restore, ownership, paginacao e guards).
 
 - Excecoes:
   Sem excecoes.
@@ -181,11 +190,15 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Nao foram encontradas suites .spec.ts/.e2e para saude-zootecnia no estado atual.
+  Foram encontradas suites .spec.ts no modulo cobrindo services, enums e controllers por propriedade com guards sobrescritos em ambiente HTTP de teste.
 
 - Rastreabilidade para codigo e testes:
-  src/modules/saude-zootecnia/
-  test/
+  src/modules/saude-zootecnia/dados-sanitarios/dados-sanitarios.service.spec.ts
+  src/modules/saude-zootecnia/dados-zootecnicos/dados-zootecnicos.service.spec.ts
+  src/modules/saude-zootecnia/medicamentos/medicamentos.service.spec.ts
+  src/modules/saude-zootecnia/vacinacao/vacinacao.service.spec.ts
+  src/modules/saude-zootecnia/medicamentos/enums/tipo-tratamento.enum.spec.ts
+  src/modules/saude-zootecnia/saude-zootecnia.controller.property-guards.spec.ts
 
 - Status:
-  parcial
+  implementada

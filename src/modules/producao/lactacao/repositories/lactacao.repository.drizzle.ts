@@ -101,6 +101,30 @@ export class LactacaoRepositoryDrizzle {
       .orderBy(desc(ciclolactacao.dtParto));
   }
 
+  async contarPorBufalas(idsBufalas: string[]) {
+    if (!idsBufalas.length) {
+      return new Map<string, number>();
+    }
+
+    const resultados = await this.databaseService.db
+      .select({
+        idBufala: ciclolactacao.idBufala,
+        total: sql<number>`count(*)::int`,
+      })
+      .from(ciclolactacao)
+      .where(and(inArray(ciclolactacao.idBufala, idsBufalas), isNull(ciclolactacao.deletedAt)))
+      .groupBy(ciclolactacao.idBufala);
+
+    const mapa = new Map<string, number>();
+
+    for (const item of resultados) {
+      if (!item.idBufala) continue;
+      mapa.set(item.idBufala, item.total || 0);
+    }
+
+    return mapa;
+  }
+
   /**
    * Busca ciclo por ID (apenas registros ativos)
    */
@@ -110,6 +134,12 @@ export class LactacaoRepositoryDrizzle {
       .from(ciclolactacao)
       .where(and(eq(ciclolactacao.idCicloLactacao, idCicloLactacao), isNull(ciclolactacao.deletedAt)))
       .limit(1);
+
+    return resultado.length > 0 ? resultado[0] : null;
+  }
+
+  async buscarPorIdComDeletados(idCicloLactacao: string) {
+    const resultado = await this.databaseService.db.select().from(ciclolactacao).where(eq(ciclolactacao.idCicloLactacao, idCicloLactacao)).limit(1);
 
     return resultado.length > 0 ? resultado[0] : null;
   }
@@ -211,6 +241,18 @@ export class LactacaoRepositoryDrizzle {
    */
   async listarComDeletados() {
     return await this.databaseService.db.select().from(ciclolactacao).orderBy(desc(ciclolactacao.dtParto));
+  }
+
+  async listarComDeletadosPorPropriedades(idsPropriedades: string[]) {
+    if (!idsPropriedades.length) {
+      return [];
+    }
+
+    return await this.databaseService.db
+      .select()
+      .from(ciclolactacao)
+      .where(inArray(ciclolactacao.idPropriedade, idsPropriedades))
+      .orderBy(desc(ciclolactacao.dtParto));
   }
 
   /**

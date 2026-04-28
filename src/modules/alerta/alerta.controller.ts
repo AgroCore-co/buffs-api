@@ -6,6 +6,7 @@
  */
 
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -28,6 +29,8 @@ import { SupabaseAuthGuard } from '../auth/guards/auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { PaginationDto } from '../../core/dto/pagination.dto';
 import { AlertasVerificacaoService } from './services/alertas-verificacao.service';
+import { AuthHelperService } from '../../core/services/auth-helper.service';
+import { User } from '../auth/decorators/user.decorator';
 
 @ApiBearerAuth('JWT-auth')
 @UseGuards(SupabaseAuthGuard)
@@ -37,6 +40,7 @@ export class AlertasController {
   constructor(
     private readonly alertasService: AlertasService,
     private readonly alertasVerificacaoService: AlertasVerificacaoService,
+    private readonly authHelperService: AuthHelperService,
   ) {}
 
   // Este endpoint seria mais para testes ou criação manual,
@@ -177,18 +181,21 @@ export class AlertasController {
     status: 200,
     description: 'Lista de alertas da propriedade retornada com sucesso.',
   })
-  findByPropriedade(
+  async findByPropriedade(
     @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
+    @User() user: any,
     @Query('incluirVistos', new ParseBoolPipe({ optional: true })) incluirVistos?: boolean,
     @Query('nichos') nichos?: string | string[],
     @Query('prioridade') prioridade?: PrioridadeAlerta,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
+    await this.validatePropertyAccess(id_propriedade, user);
+
     const paginationDto: PaginationDto = { page, limit };
 
     // Normaliza nichos para array
-    const nichosArray: NichoAlerta[] | undefined = nichos ? (Array.isArray(nichos) ? (nichos as NichoAlerta[]) : [nichos as NichoAlerta]) : undefined;
+    const nichosArray = this.normalizarNichos(nichos);
 
     return this.alertasService.findByPropriedade(id_propriedade, incluirVistos, paginationDto, nichosArray, prioridade);
   }
@@ -331,7 +338,41 @@ export class AlertasController {
       },
     },
   })
-  async verificarAlertas(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query('nichos') nichos?: string | string[]) {
+  async verificarAlertas(
+    @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
+    @User() user: any,
+    @Query('nichos') nichos?: string | string[],
+  ) {
+    await this.validatePropertyAccess(id_propriedade, user);
     return this.alertasVerificacaoService.verificarPorPropriedade(id_propriedade, nichos);
+  }
+
+  private async validatePropertyAccess(id_propriedade: string, user: any): Promise<void> {
+    const userId = await this.authHelperService.getUserId(user);
+    await this.authHelperService.validatePropriedadeAccess(userId, id_propriedade);
+  }
+
+  private normalizarNichos(nichos?: string | string[]): NichoAlerta[] | undefined {
+    if (!nichos) {
+      return undefined;
+    }
+
+    const valores = (Array.isArray(nichos) ? nichos : [nichos])
+      .flatMap((valor) => String(valor).split(','))
+      .map((valor) => valor.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (!valores.length) {
+      return undefined;
+    }
+
+    const nichosValidos = new Set(Object.values(NichoAlerta));
+    const invalidos = valores.filter((valor) => !nichosValidos.has(valor as NichoAlerta));
+
+    if (invalidos.length > 0) {
+      throw new BadRequestException(`Nicho(s) inválido(s): ${invalidos.join(', ')}`);
+    }
+
+    return Array.from(new Set(valores)) as NichoAlerta[];
   }
 }

@@ -6,7 +6,7 @@
   Alertas criados precisam de processamento assincrono para classificacao e observabilidade sem bloquear API.
 
 - Regra principal:
-  AlertasConsumer deve escutar RabbitMQPatterns.ALERTA_CRIADO via @EventPattern.
+  AlertasConsumer deve escutar RabbitMQPatterns.ALERTA_CRIADO via @EventPattern em modulo de consumer dedicado, inicializado em contexto isolado de microservico.
 
 - Excecoes:
   Sem excecoes.
@@ -15,11 +15,13 @@
   Sem subscriber ativo, eventos publicados nao sao processados.
 
 - Criterio de aceite:
-  O metodo handleAlertaCriado recebe payload + RmqContext e e registrado no consumer module.
+  O metodo handleAlertaCriado recebe payload + RmqContext, e o consumer e registrado no AlertsConsumerModule, importado por AppConsumerModule e inicializado via NestFactory.createMicroservice no bootstrap.
 
 - Rastreabilidade para codigo e testes:
   src/modules/alerta/consumers/alertas.consumer.ts
   src/modules/alerta/consumers/alerts-consumer.module.ts
+  src/app.consumer.module.ts
+  src/main.ts
   src/core/rabbitmq/rabbitmq.constants.ts
 
 - Status:

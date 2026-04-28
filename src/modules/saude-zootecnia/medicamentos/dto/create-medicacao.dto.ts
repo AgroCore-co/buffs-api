@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, MaxLength, IsUUID, IsNotEmpty } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsString, IsOptional, MaxLength, IsUUID, IsNotEmpty, IsEnum } from 'class-validator';
+import { TipoTratamentoMedicacao, normalizeTipoTratamento } from '../enums';
 
 export class CreateMedicacaoDto {
   @ApiProperty({ description: 'ID da propriedade onde a medicação está sendo utilizada (UUID)', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
@@ -7,11 +9,17 @@ export class CreateMedicacaoDto {
   @IsNotEmpty({ message: 'O idPropriedade é obrigatório' })
   idPropriedade: string;
 
-  @ApiProperty({ description: 'Tipo de tratamento', example: 'Vermifugação' })
-  @IsString({ message: 'O tipo de tratamento deve ser um texto' })
-  @MaxLength(30, { message: 'O tipo de tratamento deve ter no máximo 30 caracteres' })
+  @ApiProperty({
+    description: 'Tipo de tratamento em formato canônico',
+    example: TipoTratamentoMedicacao.VACINACAO,
+    enum: TipoTratamentoMedicacao,
+  })
+  @Transform(({ value }) => normalizeTipoTratamento(value) ?? value)
+  @IsEnum(TipoTratamentoMedicacao, {
+    message: `tipoTratamento deve ser um dos valores: ${Object.values(TipoTratamentoMedicacao).join(', ')}`,
+  })
   @IsNotEmpty({ message: 'O tipo de tratamento é obrigatório' })
-  tipoTratamento: string;
+  tipoTratamento: TipoTratamentoMedicacao;
 
   @ApiProperty({ description: 'Nome da medicação', example: 'Ivermectina' })
   @IsString({ message: 'O nome da medicação deve ser um texto' })

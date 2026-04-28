@@ -39,14 +39,13 @@ export class RetiradaController {
   @ApiBody({ type: CreateRetiradaDto })
   @ApiResponse({ status: 201, description: 'Coleta registrada com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos ou estoque insuficiente.' })
-  create(@Body() dto: CreateRetiradaDto, @User('id_usuario') id_funcionario: string) {
+  create(@Body() dto: CreateRetiradaDto, @User() user: any) {
     this.logger.logApiRequest('POST', '/retiradas', undefined, {
       module: 'RetiradaController',
       method: 'create',
-      funcionarioId: id_funcionario,
       industriaId: dto.idIndustria,
     });
-    return this.service.create(dto, id_funcionario);
+    return this.service.create(dto, user);
   }
 
   @Get()
@@ -88,13 +87,14 @@ export class RetiradaController {
   findByPropriedade(
     @Param('id_propriedade', ParseUUIDPipe) id_propriedade: string,
     @Query() paginationDto: PaginationDto,
+    @User() user: any,
   ): Promise<RetiradaPropriedadeResponseDto> {
     this.logger.logApiRequest('GET', `/retiradas/propriedade/${id_propriedade}`, undefined, {
       module: 'RetiradaController',
       method: 'findByPropriedade',
       propriedadeId: id_propriedade,
     });
-    return this.service.findByPropriedade(id_propriedade, paginationDto);
+    return this.service.findByPropriedade(id_propriedade, paginationDto, user);
   }
 
   @Get(':id')
@@ -107,9 +107,9 @@ export class RetiradaController {
   @ApiParam({ name: 'id', description: 'ID da coleta', type: 'string' })
   @ApiResponse({ status: 200, description: 'Coleta encontrada.' })
   @ApiResponse({ status: 404, description: 'Coleta não encontrada.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('GET', `/retiradas/${id}`, undefined, { module: 'RetiradaController', method: 'findOne', coletaId: id });
-    return this.service.findOne(id);
+    return this.service.findOne(id, user);
   }
 
   @Patch(':id')
@@ -121,9 +121,9 @@ export class RetiradaController {
   @ApiBody({ type: UpdateRetiradaDto })
   @ApiResponse({ status: 200, description: 'Coleta atualizada com sucesso.' })
   @ApiResponse({ status: 404, description: 'Coleta não encontrada.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRetiradaDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRetiradaDto, @User() user: any) {
     this.logger.logApiRequest('PATCH', `/retiradas/${id}`, undefined, { module: 'RetiradaController', method: 'update', coletaId: id });
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
@@ -134,9 +134,9 @@ export class RetiradaController {
   @ApiParam({ name: 'id', description: 'ID da coleta a ser removida', type: 'string' })
   @ApiResponse({ status: 200, description: 'Coleta removida com sucesso.' })
   @ApiResponse({ status: 404, description: 'Coleta não encontrada.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('DELETE', `/retiradas/${id}`, undefined, { module: 'RetiradaController', method: 'remove', coletaId: id });
-    return this.service.remove(id);
+    return this.service.remove(id, user);
   }
 
   @Post(':id/restore')
@@ -147,13 +147,13 @@ export class RetiradaController {
   @ApiParam({ name: 'id', description: 'ID da coleta a ser restaurada', type: 'string' })
   @ApiResponse({ status: 200, description: 'Coleta restaurada com sucesso.' })
   @ApiResponse({ status: 404, description: 'Coleta não encontrada ou não estava removida.' })
-  restore(@Param('id', ParseUUIDPipe) id: string) {
+  restore(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('POST', `/retiradas/${id}/restore`, undefined, {
       module: 'RetiradaController',
       method: 'restore',
       coletaId: id,
     });
-    return this.service.restore(id);
+    return this.service.restore(id, user);
   }
 
   @Get('deleted/all')
@@ -162,8 +162,8 @@ export class RetiradaController {
     description: 'Lista todas as coletas incluindo as removidas (soft delete).',
   })
   @ApiResponse({ status: 200, description: 'Lista de coletas incluindo deletadas retornada com sucesso.' })
-  findAllWithDeleted() {
+  findAllWithDeleted(@User() user: any) {
     this.logger.logApiRequest('GET', '/retiradas/deleted/all', undefined, { module: 'RetiradaController', method: 'findAllWithDeleted' });
-    return this.service.findAllWithDeleted();
+    return this.service.findAllWithDeleted(user);
   }
 }

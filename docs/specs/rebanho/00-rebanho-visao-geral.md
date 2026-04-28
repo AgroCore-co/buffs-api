@@ -82,7 +82,7 @@
   A classificacao etaria muda ao longo do tempo e deve ser atualizada sem depender de acao manual.
 
 - Regra principal:
-  BufaloScheduler deve executar job diario para atualizar maturidade de animais ativos, com protecao contra execucoes concorrentes.
+  BufaloScheduler deve executar job diario para atualizar maturidade de animais ativos, com protecao contra execucoes concorrentes locais e distribuidas.
 
 - Excecoes:
   Sem excecoes.
@@ -91,7 +91,7 @@
   Falhas no job devem ser logadas sem travar execucoes futuras.
 
 - Criterio de aceite:
-  Job usa cron diario, flag isRunning, busca animais ativos e executa atualizacao por lote.
+  Job usa cron diario, flag isRunning, lock distribuido via advisory lock no PostgreSQL, busca animais ativos e executa atualizacao por lote.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/bufalo/bufalo.scheduler.ts

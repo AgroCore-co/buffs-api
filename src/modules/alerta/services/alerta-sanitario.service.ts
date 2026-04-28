@@ -5,6 +5,26 @@ import { BufaloRepositoryDrizzle } from '../repositories/bufalo.repository.drizz
 import { CreateAlertaDto, NichoAlerta } from '../dto/create-alerta.dto';
 import { AlertaConstants, formatarDataBR } from '../utils/alerta.constants';
 
+interface TratamentoComRetorno {
+  idSanit: string | null;
+  idBufalo: string | null;
+  doenca?: string | null;
+  observacao?: string | null;
+  dtRetorno: string | null;
+  medicacoe?: {
+    tipoTratamento?: string | null;
+    medicacao?: string | null;
+  } | null;
+}
+
+interface VacinacaoProgramada {
+  idSanit: string | null;
+  idBufalo: string | null;
+  dtAplicacao: string | null;
+  doenca?: string | null;
+  tipoVacina?: string | null;
+}
+
 /**
  * Serviço de domínio para alertas SANITÁRIOS.
  * Contém toda a lógica de negócio para verificação de:
@@ -53,7 +73,7 @@ export class AlertaSanitarioService {
       for (const trat of tratamentos) {
         try {
           if (!trat.dtRetorno) continue;
-          const alertaCriado = await this.criarAlertaTratamento(trat, new Date(trat.dtRetorno));
+          const alertaCriado = await this.criarAlertaTratamento(trat as TratamentoComRetorno, new Date(trat.dtRetorno));
           if (alertaCriado) alertasCriados++;
         } catch (error) {
           this.logger.error(`Erro ao processar tratamento ${trat.idSanit}:`, error);
@@ -71,27 +91,33 @@ export class AlertaSanitarioService {
   /**
    * Cria alerta de tratamento com retorno.
    */
-  private async criarAlertaTratamento(tratamento: any, dtRetorno: Date): Promise<boolean> {
+  private async criarAlertaTratamento(tratamento: TratamentoComRetorno, dtRetorno: Date): Promise<boolean> {
     try {
+      if (!tratamento.idBufalo || !tratamento.idSanit) {
+        this.logger.warn('Tratamento ignorado por ausência de idBufalo/idSanit.');
+        return false;
+      }
+
       const bufaloData = await this.bufaloRepo.buscarBufaloCompleto(tratamento.idBufalo);
       if (!bufaloData) return false;
 
       const grupoNome = bufaloData.grupo?.nomeGrupo ?? 'Não informado';
       const propriedadeNome = bufaloData.propriedade?.nome ?? 'Não informada';
-
-      const propriedadeId = tratamento.idPropriedade || bufaloData.idPropriedade;
+      const propriedadeId = bufaloData.idPropriedade;
+      const tipoIntervencao = tratamento.medicacoe?.medicacao ?? tratamento.medicacoe?.tipoTratamento ?? 'Intervenção';
+      const descricaoTratamento = tratamento.doenca ?? tratamento.observacao ?? 'condição não especificada';
 
       const alertaDto: CreateAlertaDto = {
         animal_id: bufaloData.idBufalo,
         grupo: grupoNome,
         localizacao: propriedadeNome,
         id_propriedade: propriedadeId,
-        motivo: `Retorno agendado para ${formatarDataBR(dtRetorno)} - ${tratamento.tipo_intervencao || 'Intervenção'}.`,
+        motivo: `Retorno agendado para ${formatarDataBR(dtRetorno)} - ${tipoIntervencao}.`,
         nicho: NichoAlerta.SANITARIO,
         data_alerta: dtRetorno.toISOString().split('T')[0],
-        texto_ocorrencia_clinica: `Búfalo ${bufaloData.nome} possui retorno agendado para ${formatarDataBR(dtRetorno)} referente a tratamento de ${tratamento.diagnostico || 'condição não especificada'}. Tipo de intervenção: ${tratamento.tipo_intervencao || 'Não informado'}. Necessário separar animal para reavaliação veterinária e verificar evolução do quadro clínico.`,
-        observacao: `Tratamento: ${tratamento.diagnostico || 'Não informado'}. Separar animal para reavaliação veterinária.`,
-        id_evento_origem: tratamento.id_dados_sanitarios,
+        texto_ocorrencia_clinica: `Búfalo ${bufaloData.nome} possui retorno agendado para ${formatarDataBR(dtRetorno)} referente a tratamento de ${descricaoTratamento}. Tipo de intervenção: ${tipoIntervencao}. Necessário separar animal para reavaliação veterinária e verificar evolução do quadro clínico.`,
+        observacao: `Tratamento: ${descricaoTratamento}. Separar animal para reavaliação veterinária.`,
+        id_evento_origem: tratamento.idSanit,
         tipo_evento_origem: 'DADOS_SANITARIOS',
       };
 
@@ -132,7 +158,8 @@ export class AlertaSanitarioService {
 
       for (const vac of vacinacoes) {
         try {
-          const alertaCriado = await this.criarAlertaVacinacao(vac, new Date(vac.dtAplicacao));
+          if (!vac.dtAplicacao) continue;
+          const alertaCriado = await this.criarAlertaVacinacao(vac as VacinacaoProgramada, new Date(vac.dtAplicacao));
           if (alertaCriado) alertasCriados++;
         } catch (error) {
           this.logger.error(`Erro ao processar vacinação ${vac.idSanit}:`, error);
@@ -150,15 +177,20 @@ export class AlertaSanitarioService {
   /**
    * Cria alerta de vacinação programada.
    */
-  private async criarAlertaVacinacao(vacinacao: any, dtProxVac: Date): Promise<boolean> {
+  private async criarAlertaVacinacao(vacinacao: VacinacaoProgramada, dtProxVac: Date): Promise<boolean> {
     try {
+      if (!vacinacao.idBufalo || !vacinacao.idSanit) {
+        this.logger.warn('Vacinação ignorada por ausência de idBufalo/idSanit.');
+        return false;
+      }
+
       const bufaloData = await this.bufaloRepo.buscarBufaloCompleto(vacinacao.idBufalo);
       if (!bufaloData) return false;
 
       const grupoNome = bufaloData.grupo?.nomeGrupo ?? 'Não informado';
       const propriedadeNome = bufaloData.propriedade?.nome ?? 'Não informada';
-
-      const propriedadeId = vacinacao.idPropriedade || bufaloData.idPropriedade;
+      const propriedadeId = bufaloData.idPropriedade;
+      const tipoVacina = vacinacao.tipoVacina ?? vacinacao.doenca ?? 'Não informado';
 
       const alertaDto: CreateAlertaDto = {
         animal_id: bufaloData.idBufalo,
@@ -168,9 +200,9 @@ export class AlertaSanitarioService {
         motivo: `Vacinação de ${bufaloData.nome} programada para ${formatarDataBR(dtProxVac)}.`,
         nicho: NichoAlerta.SANITARIO,
         data_alerta: dtProxVac.toISOString().split('T')[0],
-        texto_ocorrencia_clinica: `Vacinação programada para búfalo ${bufaloData.nome} em ${formatarDataBR(dtProxVac)}. Vacina: ${vacinacao.tipo_vacina || 'Não informado'}. Necessário preparar seringas, verificar estoque do imunobiológico e condições de armazenamento. Protocolo de vacinação conforme calendário sanitário do rebanho.`,
-        observacao: `Vacina: ${vacinacao.tipo_vacina || 'Não informado'}. Preparar seringas e verificar estoque do imunobiológico.`,
-        id_evento_origem: vacinacao.id_vacinacao,
+        texto_ocorrencia_clinica: `Vacinação programada para búfalo ${bufaloData.nome} em ${formatarDataBR(dtProxVac)}. Vacina: ${tipoVacina}. Necessário preparar seringas, verificar estoque do imunobiológico e condições de armazenamento. Protocolo de vacinação conforme calendário sanitário do rebanho.`,
+        observacao: `Vacina: ${tipoVacina}. Preparar seringas e verificar estoque do imunobiológico.`,
+        id_evento_origem: vacinacao.idSanit,
         tipo_evento_origem: 'VACINACAO',
       };
 

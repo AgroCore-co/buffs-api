@@ -8,8 +8,8 @@ import * as relations from '../../database/relations';
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
-  private pool: Pool;
-  public db: NodePgDatabase<typeof schema & typeof relations>;
+  private pool!: Pool;
+  public db!: NodePgDatabase<typeof schema & typeof relations>;
 
   constructor(private readonly configService: ConfigService) {}
 

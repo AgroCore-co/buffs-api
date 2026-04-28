@@ -103,7 +103,7 @@
   Documentacao interna precisa refletir endpoint real para evitar integracao incorreta.
 
 - Regra principal:
-  Comentarios de DTO deveriam apontar para rotas ativas de cadastro em /auth/signup-*. 
+  Comentarios de DTO devem apontar para rotas ativas de cadastro em /auth/signup-*.
 
 - Excecoes:
   Sem excecoes.

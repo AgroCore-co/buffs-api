@@ -1,7 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { SupabaseStrategy } from './supabase.strategy';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -18,16 +16,7 @@ import { UsuarioModule } from '../usuario/usuario.module';
     forwardRef(() => UsuarioModule),
   ],
   controllers: [AuthController],
-  providers: [
-    SupabaseStrategy,
-    AuthService,
-    AuthFacadeService,
-    // Rate Limiting global
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
-  ],
+  providers: [SupabaseStrategy, AuthService, AuthFacadeService],
   exports: [SupabaseStrategy, AuthService, AuthFacadeService],
 })
 export class AuthModule {}

@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { AlertaReproducaoService } from './services/alerta-reproducao.service';
 import { AlertaSanitarioService } from './services/alerta-sanitario.service';
 import { AlertaProducaoService } from './services/alerta-producao.service';
@@ -80,7 +80,7 @@ export class AlertasScheduler implements OnModuleInit {
    * Verifica tratamentos com retorno programado.
    * @cron "0 0 * * *" (todo dia à meia-noite)
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron('0 0 * * *')
   async verificarTratamentos() {
     await this.executarJobPorPropriedade('00:00', '🩺 [SCHEDULER] Iniciando verificação de tratamentos sanitários...', (idPropriedade) =>
       this.sanitarioService.verificarTratamentos(idPropriedade),

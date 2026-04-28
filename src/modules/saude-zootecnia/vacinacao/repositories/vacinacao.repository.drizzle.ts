@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import { DatabaseService } from 'src/core/database/database.service';
+import { dadossanitarios, medicacoes } from 'src/database/schema';
 import { DadosSanitariosRepositoryDrizzle } from '../../dados-sanitarios/repositories';
+import { getTipoTratamentoAliases, TipoTratamentoMedicacao } from '../../medicamentos/enums';
 import { CreateVacinacaoDto } from '../dto/create-vacinacao.dto';
 import { UpdateVacinacaoDto } from '../dto/update-vacinacao.dto';
 
@@ -10,10 +14,35 @@ import { UpdateVacinacaoDto } from '../dto/update-vacinacao.dto';
  */
 @Injectable()
 export class VacinacaoRepositoryDrizzle {
-  // IDs de medicações que são vacinas específicas
-  private readonly VACCINE_IDS = [3, 4, 5, 6, 12, 14];
+  private readonly vacinacaoAliases = getTipoTratamentoAliases(TipoTratamentoMedicacao.VACINACAO);
 
-  constructor(private readonly dadosSanitariosRepository: DadosSanitariosRepositoryDrizzle) {}
+  constructor(
+    private readonly dadosSanitariosRepository: DadosSanitariosRepositoryDrizzle,
+    private readonly databaseService: DatabaseService,
+  ) {}
+
+  private vacinaTipoTratamentoPredicate() {
+    const normalizedTipoTratamento = sql`LOWER(REGEXP_REPLACE(COALESCE(${medicacoes.tipoTratamento}, ''), '[^a-zA-Z0-9]+', '', 'g'))`;
+
+    const aliasPredicates = this.vacinacaoAliases.map((alias) => sql`${normalizedTipoTratamento} = ${alias}`);
+    const legacyAliasPredicate = aliasPredicates.length > 0 ? sql`(${sql.join(aliasPredicates, sql` OR `)})` : sql`FALSE`;
+
+    return sql`(
+      UPPER(COALESCE(${medicacoes.tipoTratamento}, '')) = ${TipoTratamentoMedicacao.VACINACAO}
+      OR ${legacyAliasPredicate}
+      OR (
+        COALESCE(${medicacoes.tipoTratamento}, '') = ''
+        AND (
+          LOWER(COALESCE(${medicacoes.medicacao}, '')) LIKE 'vacina%'
+          OR LOWER(COALESCE(${medicacoes.medicacao}, '')) LIKE 'imuniza%'
+        )
+      )
+    )`;
+  }
+
+  private vacinaWhereByBufalo(idBufalo: string) {
+    return and(eq(dadossanitarios.idBufalo, idBufalo), isNull(dadossanitarios.deletedAt), this.vacinaTipoTratamentoPredicate());
+  }
 
   /**
    * Cria um registro de vacinação
@@ -38,21 +67,53 @@ export class VacinacaoRepositoryDrizzle {
    * Busca todas as vacinações de um búfalo
    */
   async findByBufalo(idBufalo: string, limit: number, offset: number) {
-    return this.dadosSanitariosRepository.findByBufalo(idBufalo, limit, offset);
+    return this.findVacinasByBufalo(idBufalo, limit, offset);
   }
 
   /**
-   * Busca apenas vacinas específicas de um búfalo (filtra por IDs de medicações)
+   * Busca registros de vacinação de um búfalo usando identificação semântica de vacina.
    */
   async findVacinasByBufalo(idBufalo: string, limit: number, offset: number) {
-    const result = await this.dadosSanitariosRepository.findByBufalo(idBufalo, limit, offset);
+    const whereClause = this.vacinaWhereByBufalo(idBufalo);
 
-    // Filtra apenas as vacinas específicas
-    const vacinasEspecificas = result.data.filter((registro) => this.VACCINE_IDS.includes(Number(registro.idMedicao)));
+    const [data, totalResult] = await Promise.all([
+      this.databaseService.db
+        .select({
+          idSanit: dadossanitarios.idSanit,
+          idBufalo: dadossanitarios.idBufalo,
+          idUsuario: dadossanitarios.idUsuario,
+          idMedicao: dadossanitarios.idMedicao,
+          dtAplicacao: dadossanitarios.dtAplicacao,
+          dosagem: dadossanitarios.dosagem,
+          unidadeMedida: dadossanitarios.unidadeMedida,
+          doenca: dadossanitarios.doenca,
+          necessitaRetorno: dadossanitarios.necessitaRetorno,
+          dtRetorno: dadossanitarios.dtRetorno,
+          observacao: dadossanitarios.observacao,
+          createdAt: dadossanitarios.createdAt,
+          updatedAt: dadossanitarios.updatedAt,
+          deletedAt: dadossanitarios.deletedAt,
+          medicacoe: {
+            medicacao: medicacoes.medicacao,
+            tipoTratamento: medicacoes.tipoTratamento,
+          },
+        })
+        .from(dadossanitarios)
+        .leftJoin(medicacoes, eq(dadossanitarios.idMedicao, medicacoes.idMedicacao))
+        .where(whereClause)
+        .orderBy(desc(dadossanitarios.dtAplicacao))
+        .limit(limit)
+        .offset(offset),
+      this.databaseService.db
+        .select({ count: count() })
+        .from(dadossanitarios)
+        .leftJoin(medicacoes, eq(dadossanitarios.idMedicao, medicacoes.idMedicacao))
+        .where(whereClause),
+    ]);
 
     return {
-      data: vacinasEspecificas,
-      total: vacinasEspecificas.length,
+      data,
+      total: totalResult[0]?.count ?? 0,
     };
   }
 
@@ -61,6 +122,10 @@ export class VacinacaoRepositoryDrizzle {
    */
   async findById(idSanit: string) {
     return this.dadosSanitariosRepository.findById(idSanit);
+  }
+
+  async findByIdIncludingDeleted(idSanit: string) {
+    return this.dadosSanitariosRepository.findByIdIncludingDeleted(idSanit);
   }
 
   /**

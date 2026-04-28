@@ -13,8 +13,8 @@ import { CreateUsuarioDto } from '../dto/create-usuario.dto';
 import { UpdateUsuarioDto } from '../dto/update-usuario.dto';
 import { Cargo } from '../enums/cargo.enum';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { formatDateFields, formatDateFieldsArray } from '../../../core/utils/date-formatter.utils';
 import { UsuarioRepositoryDrizzle, UsuarioPropriedadeRepositoryDrizzle, PropriedadeRepositoryHelper } from '../repositories';
+import { AuthFacadeService } from '../../auth/auth-facade.service';
 
 @Injectable()
 export class UsuarioService {
@@ -24,6 +24,7 @@ export class UsuarioService {
     private readonly supabaseService: SupabaseService,
     private readonly logger: LoggerService,
     private readonly authHelper: AuthHelperService,
+    private readonly authFacade: AuthFacadeService,
     private readonly usuarioRepository: UsuarioRepositoryDrizzle,
     private readonly usuarioPropriedadeRepository: UsuarioPropriedadeRepositoryDrizzle,
     private readonly propriedadeRepository: PropriedadeRepositoryHelper,
@@ -66,10 +67,29 @@ export class UsuarioService {
   /**
    * Retorna uma lista de todos os usuários.
    */
-  async findAll() {
-    this.logger.log(`[UsuarioService] findAll chamado`);
+  async findAll(solicitante: { id_usuario?: string; cargo?: Cargo }) {
+    this.logger.log(`[UsuarioService] findAll chamado`, {
+      solicitante: solicitante?.id_usuario,
+      cargo: solicitante?.cargo,
+    });
 
-    const usuarios = await this.usuarioRepository.listarTodos();
+    if (!solicitante?.id_usuario || !solicitante?.cargo) {
+      throw new ForbiddenException('Solicitante inválido.');
+    }
+
+    if (solicitante.cargo !== Cargo.PROPRIETARIO && solicitante.cargo !== Cargo.GERENTE) {
+      throw new ForbiddenException('Apenas PROPRIETARIO ou GERENTE podem listar usuários.');
+    }
+
+    const propriedadesSolicitante = await this.authHelper.getUserPropriedades(solicitante.id_usuario);
+    const usuariosVinculados = await this.usuarioPropriedadeRepository.listarUsuariosPorPropriedades(propriedadesSolicitante);
+    const donosDasPropriedades = await this.propriedadeRepository.listarDonosPorPropriedades(propriedadesSolicitante);
+
+    const idsUsuariosEscopo = Array.from(
+      new Set([solicitante.id_usuario, ...donosDasPropriedades, ...usuariosVinculados.map((usuarioVinculado) => usuarioVinculado.idUsuario)]),
+    );
+
+    const usuarios = await this.usuarioRepository.listarPorIds(idsUsuariosEscopo);
 
     return usuarios.map((usuario) => ({
       id_usuario: usuario.idUsuario,
@@ -206,10 +226,33 @@ export class UsuarioService {
   async remove(id: string) {
     this.logger.log(`[UsuarioService] remove chamado`, { id });
 
+    const usuario = await this.usuarioRepository.buscarPorId(id);
+    if (!usuario) {
+      throw new NotFoundException(`Usuário com ID ${id} não encontrado para remoção.`);
+    }
+
+    await this.usuarioPropriedadeRepository.desvincularTodasDoUsuario(id);
+    await this.authHelper.invalidarCachePropriedades(id);
+
     const removido = await this.usuarioRepository.remover(id);
 
     if (!removido) {
       throw new NotFoundException(`Usuário com ID ${id} não encontrado para remoção.`);
+    }
+
+    const authId = usuario.authId;
+    if (authId) {
+      const { error: authDeleteError } = await this.adminSupabase.auth.admin.deleteUser(authId);
+      if (authDeleteError) {
+        this.logger.logError(authDeleteError, {
+          module: 'UsuarioService',
+          method: 'remove',
+          context: 'delete_auth_user',
+          idUsuario: id,
+          authId,
+        });
+        throw new InternalServerErrorException('Usuário removido localmente, mas não foi possível remover a conta de autenticação.');
+      }
     }
 
     return { message: `Usuário com ID ${id} deletado com sucesso.` };
@@ -225,8 +268,8 @@ export class UsuarioService {
   }
 
   /**
-   * Cria um funcionário/gerente/veterinário usando o client admin (service role),
-   * e vincula à propriedade informada ou às propriedades do solicitante.
+   * Método legado de criação de funcionário.
+   * Mantido por compatibilidade, delega para o fluxo oficial da AuthFacade.
    */
   async createFuncionario(
     dto: {
@@ -257,53 +300,23 @@ export class UsuarioService {
       throw new ForbiddenException('Não é permitido criar usuário com cargo PROPRIETARIO por este endpoint.');
     }
 
-    // 1) Criar o usuário no Auth
-    const { data: created, error: authErr } = await this.adminSupabase.auth.admin.createUser({
-      email: dto.email,
-      password: dto.password,
-      email_confirm: true,
-      user_metadata: { nome: dto.nome, telefone: dto.telefone },
-    });
-
-    if (authErr) {
-      this.logger.logError(authErr, { method: 'createFuncionario.auth', email: dto.email });
-      throw new InternalServerErrorException(`Erro Auth: ${authErr.message}`);
+    const solicitanteUsuario = await this.usuarioRepository.buscarPorId(solicitante.id_usuario);
+    if (!solicitanteUsuario?.authId) {
+      throw new ForbiddenException('Não foi possível resolver o usuário autenticado para criação de funcionário.');
     }
 
-    const authId = created.user?.id;
-
-    // 2) Inserir o perfil na tabela Usuario
-    const perfil = await this.usuarioRepository.criarFuncionario({
-      authId,
-      nome: dto.nome,
-      email: dto.email,
-      telefone: dto.telefone,
-      cargo: dto.cargo,
-      id_endereco: dto.id_endereco,
-    });
-
-    // 3) Vincular à propriedade
-    const propriedadesParaVincular: string[] = [];
-    if (dto.id_propriedade) {
-      propriedadesParaVincular.push(dto.id_propriedade);
-    } else {
-      const doSolicitante = await this.getUserPropriedades(solicitante.id_usuario);
-      propriedadesParaVincular.push(...doSolicitante);
-    }
-
-    await this.usuarioPropriedadeRepository.vincular(perfil.idUsuario, propriedadesParaVincular);
-
-    return {
-      id_usuario: perfil.idUsuario,
-      auth_id: perfil.authId,
-      nome: perfil.nome,
-      email: perfil.email,
-      telefone: perfil.telefone,
-      cargo: perfil.cargo,
-      id_endereco: perfil.idEndereco,
-      created_at: perfil.createdAt,
-      updated_at: perfil.updatedAt,
-    };
+    return this.authFacade.registerFuncionario(
+      {
+        nome: dto.nome,
+        email: dto.email,
+        password: dto.password,
+        telefone: dto.telefone,
+        cargo: dto.cargo as Cargo.GERENTE | Cargo.FUNCIONARIO | Cargo.VETERINARIO,
+        idEndereco: dto.id_endereco,
+        idPropriedade: dto.id_propriedade,
+      },
+      solicitanteUsuario.authId,
+    );
   }
 
   /**
@@ -345,6 +358,14 @@ export class UsuarioService {
     // Não permite alterar cargo de PROPRIETARIO
     if (usuario.cargo === Cargo.PROPRIETARIO) {
       throw new ForbiddenException('Não é permitido alterar o cargo de um PROPRIETARIO.');
+    }
+
+    const propriedadesSolicitante = await this.authHelper.getUserPropriedades(solicitante.id_usuario);
+    const propriedadesUsuarioAlvo = await this.usuarioPropriedadeRepository.listarPropriedadesPorUsuario(userId);
+    const compartilhaPropriedade = propriedadesUsuarioAlvo.some((idPropriedade) => propriedadesSolicitante.includes(idPropriedade));
+
+    if (!compartilhaPropriedade) {
+      throw new ForbiddenException('Você só pode alterar cargos de usuários vinculados às mesmas propriedades.');
     }
 
     // Se já tem o mesmo cargo, não faz nada

@@ -46,15 +46,17 @@ export class EtlHttpClient implements IEtlClient {
     return this.sendExport(`/export/reproducao`, filters);
   }
 
-  async getJobStatus(jobId: string): Promise<EtlJobStatus> {
+  async getJobStatus(jobId: string, userId: string): Promise<EtlJobStatus> {
     this.logger.log(`Consultando status do job: ${jobId}`, {
       module: 'EtlHttpClient',
       method: 'getJobStatus',
+      userId,
     });
 
     const response = await firstValueFrom(
-      this.httpService.get<EtlJobStatus>(`${this.baseUrl}/jobs/${jobId}`, {
+      this.httpService.get<EtlJobStatus>(`${this.baseUrl}/jobs/${jobId}/status`, {
         headers: this.buildHeaders(),
+        params: { usuarioId: userId },
       }),
     );
 

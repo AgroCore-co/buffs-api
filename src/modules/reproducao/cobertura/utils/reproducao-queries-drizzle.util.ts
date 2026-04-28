@@ -1,4 +1,6 @@
+import { InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
+import { LoggerService } from '../../../../core/logger/logger.service';
 import { eq, desc, isNotNull, or, and, sql } from 'drizzle-orm';
 import { ciclolactacao, dadosreproducao } from '../../../../database/schema';
 
@@ -10,7 +12,7 @@ import { ciclolactacao, dadosreproducao } from '../../../../database/schema';
 /**
  * Busca o ciclo de lactação ativo (mais recente) de uma búfala
  */
-export async function buscarCicloAtivo(db: DatabaseService, idBufala: string) {
+export async function buscarCicloAtivo(db: DatabaseService, idBufala: string, logger?: LoggerService) {
   try {
     const result = await db.db.query.ciclolactacao.findFirst({
       where: eq(ciclolactacao.idBufala, idBufala),
@@ -22,16 +24,21 @@ export async function buscarCicloAtivo(db: DatabaseService, idBufala: string) {
     });
 
     return result || null;
-  } catch (error) {
-    console.error('Erro ao buscar ciclo ativo:', error);
-    return null;
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger?.error(`Erro ao buscar ciclo ativo da búfala ${idBufala}`, err.stack, {
+      module: 'ReproducaoQueriesUtil',
+      method: 'buscarCicloAtivo',
+      idBufala,
+    });
+    throw new InternalServerErrorException(`Falha ao buscar ciclo de lactação ativo da búfala ${idBufala}: ${err.message}`);
   }
 }
 
 /**
  * Conta o total de ciclos de lactação (partos) de uma búfala
  */
-export async function contarCiclosTotais(db: DatabaseService, idBufala: string): Promise<number> {
+export async function contarCiclosTotais(db: DatabaseService, idBufala: string, logger?: LoggerService): Promise<number> {
   try {
     const result = await db.db
       .select({ count: sql<number>`count(*)::int` })
@@ -39,9 +46,14 @@ export async function contarCiclosTotais(db: DatabaseService, idBufala: string):
       .where(eq(ciclolactacao.idBufala, idBufala));
 
     return result[0]?.count || 0;
-  } catch (error) {
-    console.error('Erro ao contar ciclos:', error);
-    return 0;
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger?.error(`Erro ao contar ciclos da búfala ${idBufala}`, err.stack, {
+      module: 'ReproducaoQueriesUtil',
+      method: 'contarCiclosTotais',
+      idBufala,
+    });
+    throw new InternalServerErrorException(`Falha ao contar ciclos de lactação da búfala ${idBufala}: ${err.message}`);
   }
 }
 
@@ -54,7 +66,7 @@ export async function contarCiclosTotais(db: DatabaseService, idBufala: string):
  * @param numeroCiclos - Número total de ciclos/partos
  * @returns IEP médio em dias (null se < 2 partos)
  */
-export async function calcularIEPMedio(db: DatabaseService, idBufala: string, numeroCiclos: number): Promise<number | null> {
+export async function calcularIEPMedio(db: DatabaseService, idBufala: string, numeroCiclos: number, logger?: LoggerService): Promise<number | null> {
   if (numeroCiclos < 2) {
     return null; // Precisa de pelo menos 2 partos para calcular intervalo
   }
@@ -84,9 +96,15 @@ export async function calcularIEPMedio(db: DatabaseService, idBufala: string, nu
     // Calcular média
     const soma = intervalos.reduce((acc, val) => acc + val, 0);
     return Math.round(soma / intervalos.length);
-  } catch (error) {
-    console.error('Erro ao calcular IEP médio:', error);
-    return null;
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger?.error(`Erro ao calcular IEP médio da búfala ${idBufala}`, err.stack, {
+      module: 'ReproducaoQueriesUtil',
+      method: 'calcularIEPMedio',
+      idBufala,
+      numeroCiclos,
+    });
+    throw new InternalServerErrorException(`Falha ao calcular IEP médio da búfala ${idBufala}: ${err.message}`);
   }
 }
 
@@ -102,7 +120,7 @@ export async function calcularIEPMedio(db: DatabaseService, idBufala: string, nu
  * @param idReprodutor - ID do búfalo reprodutor
  * @returns Estatísticas de cobertura do reprodutor
  */
-export async function buscarHistoricoCoberturasTouro(db: DatabaseService, idReprodutor: string) {
+export async function buscarHistoricoCoberturasTouro(db: DatabaseService, idReprodutor: string, logger?: LoggerService) {
   try {
     // Buscar coberturas onde o touro foi usado (monta natural OU sêmen)
     const coberturas = await db.db.query.dadosreproducao.findMany({
@@ -147,14 +165,14 @@ export async function buscarHistoricoCoberturasTouro(db: DatabaseService, idRepr
       ultima_cobertura,
       dias_desde_ultima,
     };
-  } catch (error) {
-    console.error('Erro ao buscar histórico de coberturas:', error);
-    return {
-      total_coberturas: 0,
-      total_prenhezes: 0,
-      ultima_cobertura: null,
-      dias_desde_ultima: null,
-    };
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger?.error(`Erro ao buscar histórico de coberturas do reprodutor ${idReprodutor}`, err.stack, {
+      module: 'ReproducaoQueriesUtil',
+      method: 'buscarHistoricoCoberturasTouro',
+      idReprodutor,
+    });
+    throw new InternalServerErrorException(`Falha ao buscar histórico de coberturas do reprodutor ${idReprodutor}: ${err.message}`);
   }
 }
 
@@ -166,7 +184,7 @@ export async function buscarHistoricoCoberturasTouro(db: DatabaseService, idRepr
  * @param idPropriedade - ID da propriedade
  * @returns Total de coberturas e prenhezes confirmadas
  */
-export async function estatisticasRebanho(db: DatabaseService, idPropriedade: string) {
+export async function estatisticasRebanho(db: DatabaseService, idPropriedade: string, logger?: LoggerService) {
   try {
     const coberturas = await db.db.query.dadosreproducao.findMany({
       where: and(eq(dadosreproducao.idPropriedade, idPropriedade), isNotNull(dadosreproducao.tipoParto)),
@@ -179,8 +197,13 @@ export async function estatisticasRebanho(db: DatabaseService, idPropriedade: st
     const totalPrenhezes = coberturas?.filter((c) => c.tipoParto === 'Normal' || c.tipoParto === 'Cesárea').length || 0;
 
     return { totalPrenhezes, totalCoberturas };
-  } catch (error) {
-    console.error('Erro ao buscar estatísticas do rebanho:', error);
-    return { totalPrenhezes: 0, totalCoberturas: 0 };
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger?.error(`Erro ao buscar estatísticas reprodutivas da propriedade ${idPropriedade}`, err.stack, {
+      module: 'ReproducaoQueriesUtil',
+      method: 'estatisticasRebanho',
+      idPropriedade,
+    });
+    throw new InternalServerErrorException(`Falha ao buscar estatísticas reprodutivas da propriedade ${idPropriedade}: ${err.message}`);
   }
 }

@@ -36,14 +36,13 @@ export class ProducaoDiariaController {
   @ApiBody({ type: CreateProducaoDiariaDto })
   @ApiResponse({ status: 201, description: 'Estoque consolidado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
-  create(@Body() dto: CreateProducaoDiariaDto) {
+  create(@Body() dto: CreateProducaoDiariaDto, @User() user: any) {
     this.logger.logApiRequest('POST', '/producao-diaria', undefined, {
       module: 'ProducaoDiariaController',
       method: 'create',
-      usuarioId: dto.idUsuario,
       propriedadeId: dto.idPropriedade,
     });
-    return this.service.create(dto);
+    return this.service.create(dto, user);
   }
 
   @Get()
@@ -73,13 +72,13 @@ export class ProducaoDiariaController {
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 10)' })
   @ApiResponse({ status: 200, description: 'Lista de registros retornada com sucesso.' })
-  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto) {
+  findByPropriedade(@Param('id_propriedade', ParseUUIDPipe) id_propriedade: string, @Query() paginationDto: PaginationDto, @User() user: any) {
     this.logger.logApiRequest('GET', `/producao-diaria/propriedade/${id_propriedade}`, undefined, {
       module: 'ProducaoDiariaController',
       method: 'findByPropriedade',
       propriedadeId: id_propriedade,
     });
-    return this.service.findByPropriedade(id_propriedade, paginationDto);
+    return this.service.findByPropriedade(id_propriedade, paginationDto, user);
   }
 
   @Get(':id')
@@ -90,9 +89,9 @@ export class ProducaoDiariaController {
   @ApiParam({ name: 'id', description: 'ID do registro de estoque', type: 'string' })
   @ApiResponse({ status: 200, description: 'Registro encontrado.' })
   @ApiResponse({ status: 404, description: 'Registro não encontrado.' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('GET', `/producao-diaria/${id}`, undefined, { module: 'ProducaoDiariaController', method: 'findOne', estoqueId: id });
-    return this.service.findOne(id);
+    return this.service.findOne(id, user);
   }
 
   @Patch(':id')
@@ -104,9 +103,9 @@ export class ProducaoDiariaController {
   @ApiBody({ type: UpdateProducaoDiariaDto })
   @ApiResponse({ status: 200, description: 'Registro atualizado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Registro não encontrado.' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProducaoDiariaDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProducaoDiariaDto, @User() user: any) {
     this.logger.logApiRequest('PATCH', `/producao-diaria/${id}`, undefined, { module: 'ProducaoDiariaController', method: 'update', estoqueId: id });
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
@@ -117,9 +116,9 @@ export class ProducaoDiariaController {
   @ApiParam({ name: 'id', description: 'ID do registro a ser removido', type: 'string' })
   @ApiResponse({ status: 200, description: 'Registro removido com sucesso (soft delete).' })
   @ApiResponse({ status: 404, description: 'Registro não encontrado.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('DELETE', `/producao-diaria/${id}`, undefined, { module: 'ProducaoDiariaController', method: 'remove', estoqueId: id });
-    return this.service.remove(id);
+    return this.service.remove(id, user);
   }
 
   @Post(':id/restore')
@@ -131,13 +130,13 @@ export class ProducaoDiariaController {
   @ApiResponse({ status: 200, description: 'Registro restaurado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Registro não encontrado.' })
   @ApiResponse({ status: 400, description: 'Registro não está removido.' })
-  restore(@Param('id', ParseUUIDPipe) id: string) {
+  restore(@Param('id', ParseUUIDPipe) id: string, @User() user: any) {
     this.logger.logApiRequest('POST', `/producao-diaria/${id}/restore`, undefined, {
       module: 'ProducaoDiariaController',
       method: 'restore',
       estoqueId: id,
     });
-    return this.service.restore(id);
+    return this.service.restore(id, user);
   }
 
   @Get('deleted/all')
@@ -146,8 +145,8 @@ export class ProducaoDiariaController {
     description: 'Retorna todos os registros de estoque, incluindo os removidos (soft delete).',
   })
   @ApiResponse({ status: 200, description: 'Lista completa retornada com sucesso.' })
-  findAllWithDeleted() {
+  findAllWithDeleted(@User() user: any) {
     this.logger.logApiRequest('GET', '/producao-diaria/deleted/all', undefined, { module: 'ProducaoDiariaController', method: 'findAllWithDeleted' });
-    return this.service.findAllWithDeleted();
+    return this.service.findAllWithDeleted(user);
   }
 }

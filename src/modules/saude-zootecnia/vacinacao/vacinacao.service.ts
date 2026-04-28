@@ -7,6 +7,8 @@ import { ISoftDelete } from '../../../core/interfaces';
 import { VacinacaoRepositoryDrizzle } from './repositories';
 import { DatabaseService } from '../../../core/database/database.service';
 import { UserHelper } from '../../../core/utils';
+import { PaginationDto, PaginatedResponse } from '../../../core/dto/pagination.dto';
+import { calculatePaginationParams, createPaginatedResponse } from '../../../core/utils/pagination.utils';
 
 /**
  * Serviço de gerenciamento de vacinações aplicadas em búfalos.
@@ -63,9 +65,13 @@ export class VacinacaoService implements ISoftDelete {
     return formatDateFields(data);
   }
 
-  async findAllByBufalo(id_bufalo: string) {
-    const { data } = await this.repository.findByBufalo(id_bufalo, 1000, 0);
-    return formatDateFieldsArray(data);
+  async findAllByBufalo(id_bufalo: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+    const { page = 1, limit = 10 } = paginationDto;
+    const { offset } = calculatePaginationParams(page, limit);
+
+    const { data, total } = await this.repository.findByBufalo(id_bufalo, limit, offset);
+
+    return createPaginatedResponse(formatDateFieldsArray(data), total, page, limit);
   }
 
   async findOne(id_sanit: string) {
@@ -102,7 +108,7 @@ export class VacinacaoService implements ISoftDelete {
   }
 
   async restore(id: string) {
-    const registro = await this.repository.findById(id);
+    const registro = await this.repository.findByIdIncludingDeleted(id);
 
     if (!registro) {
       throw new NotFoundException(`Registo de vacinação com ID ${id} não encontrado`);
@@ -130,8 +136,12 @@ export class VacinacaoService implements ISoftDelete {
   /**
    * Método específico para buscar apenas vacinas por IDs específicos da tabela Medicacoes
    */
-  async findVacinasByBufaloId(id_bufalo: string) {
-    const { data } = await this.repository.findVacinasByBufalo(id_bufalo, 1000, 0);
-    return formatDateFieldsArray(data);
+  async findVacinasByBufaloId(id_bufalo: string, paginationDto: PaginationDto = {}): Promise<PaginatedResponse<any>> {
+    const { page = 1, limit = 10 } = paginationDto;
+    const { offset } = calculatePaginationParams(page, limit);
+
+    const { data, total } = await this.repository.findVacinasByBufalo(id_bufalo, limit, offset);
+
+    return createPaginatedResponse(formatDateFieldsArray(data), total, page, limit);
   }
 }

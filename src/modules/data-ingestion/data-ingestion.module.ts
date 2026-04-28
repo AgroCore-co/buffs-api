@@ -18,7 +18,7 @@ import { ScheduledIngestionJob } from './jobs/scheduled-ingestion.job';
 import { ETL_CLIENT } from './interfaces';
 
 @Module({
-  imports: [ConfigModule, HttpModule.register({ timeout: 120_000 }), LoggerModule, AuthModule, CacheConfigModule],
+  imports: [ConfigModule, HttpModule.register({}), LoggerModule, AuthModule, CacheConfigModule],
   controllers: [DataIngestionController, DataIngestionJobController],
   providers: [
     DataIngestionService,

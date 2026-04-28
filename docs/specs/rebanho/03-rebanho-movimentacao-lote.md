@@ -39,7 +39,7 @@
   BadRequestException para lote de origem e destino identicos.
 
 - Criterio de aceite:
-  Validacao e executada em validateReferences e reforcada no fluxo create.
+  Validacao e executada em validateReferences e reforcada no fluxo create, incluindo updates parciais com contexto do registro atual.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/mov-lote/mov-lote.service.ts
@@ -95,13 +95,13 @@
 - Status:
   implementada
 
-## REB-MOV-005 - Remocao de movimentacao e hard delete
+## REB-MOV-005 - Remocao de movimentacao usa soft delete
 
 - Contexto de negocio:
-  Movimentacao representa historico operacional; remocao fisica pode afetar trilha de auditoria.
+  Movimentacao representa historico operacional e precisa preservar trilha de auditoria.
 
 - Regra principal:
-  No estado atual, remove executa exclusao fisica do registro (hard delete), diferente de outros subdominios que usam soft delete.
+  Remocao deve marcar deletedAt sem exclusao fisica, mantendo historico.
 
 - Excecoes:
   Sem excecoes.
@@ -110,31 +110,31 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Repository remove usa delete direto na tabela movlote.
+  Repository remove faz update de deletedAt/updatedAt e consultas desconsideram registros removidos.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/mov-lote/mov-lote.service.ts
   src/modules/rebanho/mov-lote/repositories/mov-lote.repository.drizzle.ts
 
 - Status:
-  parcial
+  implementada
 
-## REB-MOV-006 - Ownership por propriedade nao e validado com helper central
+## REB-MOV-006 - Ownership por propriedade e validado com helper central
 
 - Contexto de negocio:
   Movimentacao por idPropriedade precisa bloquear acesso fora do escopo do usuario autenticado.
 
 - Regra principal:
-  Operacoes de movimentacao deveriam validar vinculo usuario-propriedade usando helper central de autorizacao.
+  Operacoes de movimentacao devem validar vinculo usuario-propriedade usando helper central de autorizacao.
 
 - Excecoes:
   Sem excecoes.
 
 - Erros esperados:
-  No estado atual, create usa usuario apenas para log e validacoes focam existencia de referencias, nao ownership.
+  NotFoundException para propriedade/recursos fora do escopo do usuario; BadRequestException para referencias inconsistentes entre propriedade, grupo e lote.
 
 - Criterio de aceite:
-  MovLoteService nao usa AuthHelperService/PropertyExistsGuard para validar escopo de propriedade.
+  MovLoteService usa AuthHelperService (getUserId/validatePropriedadeAccess) em create/read/update/delete/historico/status, e rota por propriedade aplica PropertyExistsGuard.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/mov-lote/mov-lote.service.ts
@@ -142,15 +142,15 @@
   src/core/services/auth-helper.service.ts
 
 - Status:
-  parcial
+  implementada
 
-## REB-MOV-007 - Endpoint findAll nao representa listagem global real
+## REB-MOV-007 - Endpoint findAll respeita escopo do usuario
 
 - Contexto de negocio:
   Endpoint de listagem geral deveria refletir todos os registros permitidos ao usuario.
 
 - Regra principal:
-  No estado atual, findAll delega para findByPropriedade com id_propriedade vazio, o que tende a retornar escopo incompleto.
+  FindAll deve listar somente movimentacoes das propriedades vinculadas ao usuario autenticado.
 
 - Excecoes:
   Sem excecoes.
@@ -159,10 +159,10 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Implementacao atual de findAll chama findByPropriedade('', 1, 100) no service.
+  Implementacao de findAll usa getUserPropriedades e consulta por lista de propriedades no repositorio.
 
 - Rastreabilidade para codigo e testes:
   src/modules/rebanho/mov-lote/mov-lote.service.ts
 
 - Status:
-  parcial
+  implementada
