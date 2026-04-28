@@ -49,13 +49,13 @@
 - Status:
   implementada
 
-## INFRA-ARCH-003 - Producao usa topologia minima com API, broker e ETL Worker
+## INFRA-ARCH-003 - Producao usa topologia minima com API, broker, ETL Worker e IA
 
 - Contexto de negocio:
-  A operacao em producao precisa somente dos componentes criticos para processar API, fila e planilhas.
+  A operacao em producao precisa somente dos componentes criticos para processar API, fila, planilhas e IA.
 
 - Regra principal:
-  O compose de producao deve orquestrar rabbitmq, buffs-api e buffs-etl-worker em rede interna compartilhada.
+  O compose de producao deve orquestrar rabbitmq, buffs-api, buffs-etl-worker e buffs-ia em rede interna compartilhada.
 
 - Excecoes:
   Sem excecoes.
@@ -64,7 +64,7 @@
   Falha de dependencia entre servicos quando ordem de inicializacao nao respeitar saude dos componentes.
 
 - Criterio de aceite:
-  buffs-api depende de rabbitmq e buffs-etl-worker com condition service_healthy.
+  buffs-api depende de rabbitmq, buffs-etl-worker e buffs-ia com condition service_healthy.
 
 - Rastreabilidade para codigo e testes:
   infra/docker-compose.prod.yml

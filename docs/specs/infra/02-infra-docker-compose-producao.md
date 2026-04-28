@@ -6,7 +6,7 @@
   Producoes com recursos limitados precisam reduzir consumo de memoria e superficie de exposicao.
 
 - Regra principal:
-  RabbitMQ de producao deve usar imagem sem management UI e expor somente porta 5672.
+  RabbitMQ de producao deve usar imagem sem management UI e expor somente porta 5672 na rede interna.
 
 - Excecoes:
   Sem excecoes.
@@ -15,7 +15,7 @@
   Tentativa de acesso a management UI em producao nao funcionara por desenho.
 
 - Criterio de aceite:
-  compose de producao usa rabbitmq:3.13-alpine e remove publicacao da porta 15672.
+  compose de producao usa rabbitmq:3.13-alpine e nao publica porta 15672 no host.
 
 - Rastreabilidade para codigo e testes:
   infra/docker-compose.prod.yml
@@ -23,13 +23,86 @@
 - Status:
   implementada
 
-## INFRA-PRD-002 - API inicia apos dependencia saudavel de broker e ETL Worker
+## INFRA-PRD-008 - ETL Worker recebe chave interna e URL direta do banco
 
 - Contexto de negocio:
-  API depende de fila e ETL para fluxos assincronos e importacao/exportacao operacional.
+  ETL precisa autenticar chamadas internas e usar pgx COPY no banco sem pooler.
 
 - Regra principal:
-  buffs-api deve depender de rabbitmq e buffs-etl-worker com condition service_healthy.
+  Compose de producao deve injetar BUFFS_ETL_INTERNAL_KEY e BUFFS_ETL_DB_URL no serviço buffs-etl-worker.
+
+- Excecoes:
+  Sem excecoes.
+
+- Erros esperados:
+  Sem chave interna, requisoes inter-servico falham; sem URL direta, bulk insert pode falhar.
+
+- Criterio de aceite:
+  buffs-etl-worker recebe BUFFS_ETL_INTERNAL_KEY via ETL_INTERNAL_KEY e BUFFS_ETL_DB_URL via .env.
+
+- Rastreabilidade para codigo e testes:
+  infra/docker-compose.prod.yml
+  internal/config/config.go
+
+- Status:
+  implementada
+
+## INFRA-PRD-009 - IA roda no compose com treino no build e volume de modelos
+
+- Contexto de negocio:
+  A IA deve rodar internamente e persistir modelos treinados sem depender de processo externo.
+
+- Regra principal:
+  buffs-ia deve ser buildado em multi-stage, executar treino no build e persistir modelos via volume.
+
+- Excecoes:
+  Sem excecoes.
+
+- Erros esperados:
+  Sem treino no build ou volume, o modelo pode ficar ausente apos restart.
+
+- Criterio de aceite:
+  compose de producao define buffs-ia com build args, healthcheck em GET / e volume ia_models.
+
+- Rastreabilidade para codigo e testes:
+  infra/docker-compose.prod.yml
+  ../../buffs-ia/Dockerfile
+  ../../buffs-ia/treinar_ia.py
+
+- Status:
+  implementada
+
+## INFRA-PRD-010 - CORS da API e configurado via variavel de ambiente
+
+- Contexto de negocio:
+  API precisa aceitar frontend LAN e WAN sem alterar codigo em deploys.
+
+- Regra principal:
+  Compose de producao deve passar CORS_ORIGIN do .env para o container da API.
+
+- Excecoes:
+  Sem excecoes.
+
+- Erros esperados:
+  Sem CORS_ORIGIN, chamadas do frontend podem ser bloqueadas.
+
+- Criterio de aceite:
+  buffs-api recebe CORS_ORIGIN via environment e o bootstrap le a variavel.
+
+- Rastreabilidade para codigo e testes:
+  infra/docker-compose.prod.yml
+  src/main.ts
+
+- Status:
+  implementada
+
+## INFRA-PRD-002 - API inicia apos dependencia saudavel de broker, ETL Worker e IA
+
+- Contexto de negocio:
+  API depende de fila, ETL e IA para fluxos assincronos, ingestao e simulacoes.
+
+- Regra principal:
+  buffs-api deve depender de rabbitmq, buffs-etl-worker e buffs-ia com condition service_healthy.
 
 - Excecoes:
   Sem excecoes.
@@ -38,7 +111,7 @@
   Sem dependencia por saude, API pode iniciar sem backend pronto e falhar em bootstrap/primeiras requisicoes.
 
 - Criterio de aceite:
-  compose de producao declara depends_on com condition service_healthy para os dois servicos.
+  compose de producao declara depends_on com condition service_healthy para os tres servicos.
 
 - Rastreabilidade para codigo e testes:
   infra/docker-compose.prod.yml
@@ -75,16 +148,16 @@
   Comunicacao entre containers precisa usar hostnames de servico internos para estabilidade de deploy.
 
 - Regra principal:
-  API em producao deve usar RABBITMQ_URL apontando para servico rabbitmq e ETL_BASE_URL apontando para buffs-etl-worker.
+  API em producao deve usar RABBITMQ_URL, ETL_BASE_URL e IA_API_URL apontando para hostnames internos.
 
 - Excecoes:
-  IA_API_URL e resolvida via host.docker.internal para acesso a servico externo ao compose.
+  Sem excecoes.
 
 - Erros esperados:
   Uso de localhost para dependencia interna quebra comunicacao entre containers.
 
 - Criterio de aceite:
-  Variaveis de ambiente no servico buffs-api sobrescrevem URL de broker e ETL com hostnames internos.
+  Variaveis de ambiente no servico buffs-api sobrescrevem broker, ETL e IA com hostnames internos.
 
 - Rastreabilidade para codigo e testes:
   infra/docker-compose.prod.yml

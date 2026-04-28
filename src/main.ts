@@ -251,36 +251,9 @@ Authorization: Bearer <access_token>
     }),
   );
 
-  // 🌐 Configuração de CORS mais segura
-  const corsOrigin = process.env.CORS_ORIGIN;
-  const allowedOrigins =
-    corsOrigin === '*'
-      ? [] // Array vazio quando * é usado
-      : corsOrigin
-        ? corsOrigin.split(',').map((origin) => origin.trim())
-        : ['http://localhost:3000', 'http://localhost:3001', 'http://0.0.0.0:3001'];
-
   app.enableCors({
-    origin: (origin, callback) => {
-      // Se CORS_ORIGIN for '*', permitir qualquer origem
-      if (corsOrigin === '*') {
-        return callback(null, true);
-      }
-
-      // Permitir requisições sem origin (como mobile apps, Postman)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.error(`🚫 CORS bloqueou origem: ${origin}`);
-        console.log(`✅ Origens permitidas: ${allowedOrigins.join(', ')}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: corsOrigin !== '*', // Desabilitar credentials quando * é usado
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    origin: process.env.CORS_ORIGIN?.split(','),
+    credentials: true,
   });
 
   // Graceful shutdown para AWS App Runner
@@ -292,10 +265,10 @@ Authorization: Bearer <access_token>
   const port = process.env.PORT ?? 3001;
   await app.listen(port, '0.0.0.0');
 
-  console.log(`🚀 API rodando em: http://0.0.0.0:${port}`);
-  console.log(`📚 Documentação Swagger: http://localhost:${port}/api`);
-  console.log(`🌍 Ambiente: ${process.env.NODE_ENV ?? 'development'}`);
-  console.log(`🐰 RabbitMQ consumer ativo na queue: ${RabbitMQQueues.ALERTS}`);
+  console.log(` API rodando em: http://0.0.0.0:${port}`);
+  console.log(` Documentação Swagger: http://localhost:${port}/api`);
+  console.log(` Ambiente: ${process.env.NODE_ENV ?? 'development'}`);
+  console.log(` RabbitMQ consumer ativo na queue: ${RabbitMQQueues.ALERTS}`);
 }
 bootstrap().catch((error) => {
   console.error('Erro ao iniciar a aplicação', error);

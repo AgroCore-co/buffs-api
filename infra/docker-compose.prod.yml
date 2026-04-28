@@ -1,13 +1,11 @@
 # ========================================
-# BUFFS API - Infraestrutura de Produção (EC2)
+# BUFFS API - Producao (Servidor Dedicado)
 # ========================================
 # Uso:
 #   cd /home/ec2-user/buffs-api
 #   docker-compose -f infra/docker-compose.prod.yml up -d --build
 #
-# Variáveis de ambiente lidas do .env na raiz do projeto.
-# IMPORTANTE: RABBITMQ_URL deve ser amqp://admin:admin@rabbitmq:5672
-#             (hostname interno Docker, não localhost)
+# Variaveis de ambiente lidas do .env na raiz do projeto.
 # ========================================
 
 services:
@@ -15,19 +13,16 @@ services:
   # RabbitMQ - Message Broker
   # ========================================
   rabbitmq:
-    # OTIMIZAÇÃO: sem management plugin → economiza ~60-80 MB
     image: rabbitmq:3.13-alpine
     container_name: buffs-rabbitmq
     hostname: buffs-rabbitmq
     restart: unless-stopped
-    ports:
-      - "5672:5672"
-      # Porta 15672 removida: management UI desabilitado
+    expose:
+      - "5672"
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin
       RABBITMQ_DEFAULT_VHOST: /
-      # Limita uso de memória do RabbitMQ a 128 MB
       RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit vm_memory_high_watermark 0.15 -rabbit vm_memory_high_watermark_paging_ratio 0.75"
     deploy:
       resources:
@@ -47,9 +42,6 @@ services:
   # ========================================
   # Buffs ETL Worker - Go
   # ========================================
-  # Worker Go responsável pelo processamento de planilhas XLSX.
-  # Recebe chamadas da API via HTTP interno (porta 8081).
-  # ========================================
   buffs-etl-worker:
     build:
       context: ../../buffs-etl-worker
@@ -63,8 +55,9 @@ services:
       - ../.env
     environment:
       BUFFS_ETL_PORT: 8081
+      BUFFS_ETL_INTERNAL_KEY: ${ETL_INTERNAL_KEY}
+      BUFFS_ETL_DB_URL: ${BUFFS_ETL_DB_URL}
     volumes:
-      # Compartilha pasta de uploads com a API
       - ../temp/uploads:/app/temp/uploads
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
@@ -72,6 +65,37 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    networks:
+      - buffs-network
+
+  # ========================================
+  # Buffs IA - FastAPI
+  # ========================================
+  buffs-ia:
+    build:
+      context: ../../buffs-ia
+      dockerfile: Dockerfile
+      args:
+        SUPABASE_URL: ${SUPABASE_URL}
+        SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    image: buffs-ia:latest
+    container_name: buffs-ia
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - ../.env
+    environment:
+      MODEL_FILE: /app/models/modelo_producao_individual.joblib
+      MODEL_INFO_FILE: /app/models/modelo_producao_individual_info.json
+    volumes:
+      - ia_models:/app/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
     networks:
       - buffs-network
 
@@ -90,30 +114,24 @@ services:
     env_file:
       - ../.env
     environment:
-      # Sobrescreve RABBITMQ_URL para usar hostname interno Docker
       RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672
       NODE_ENV: production
-      # buffs-ia roda no host na porta 8000
-      IA_API_URL: http://host.docker.internal:8000
-      # ETL Worker roda no serviço interno
+      IA_API_URL: http://buffs-ia:8000
       ETL_BASE_URL: http://buffs-etl-worker:8081
-      # Limita heap do Node.js a 256 MB
+      CORS_ORIGIN: ${CORS_ORIGIN}
       NODE_OPTIONS: "--max-old-space-size=256"
     deploy:
       resources:
         limits:
           memory: 350m
-    extra_hosts:
-      # Permite acessar serviços do host (ex: buffs-ia na porta 8000)
-      - "host.docker.internal:host-gateway"
     depends_on:
       rabbitmq:
         condition: service_healthy
       buffs-etl-worker:
         condition: service_healthy
+      buffs-ia:
+        condition: service_healthy
     volumes:
-      # Bind mount: compartilha uploads com o Worker Go
-      # No container: /app/temp/uploads → No host: ./temp/uploads
       - ../temp/uploads:/app/temp/uploads
     networks:
       - buffs-network
@@ -123,6 +141,8 @@ services:
 # ========================================
 volumes:
   rabbitmq_data:
+    driver: local
+  ia_models:
     driver: local
 
 # ========================================

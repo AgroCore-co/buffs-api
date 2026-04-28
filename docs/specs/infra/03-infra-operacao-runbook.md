@@ -93,6 +93,29 @@
 - Status:
   implementada
 
+## INFRA-OPS-006 - Buffs IA e gerenciado exclusivamente via Docker em producao
+
+- Contexto de negocio:
+  A IA passou a rodar no compose de producao e nao deve concorrer com processos no host.
+
+- Regra principal:
+  Antes do deploy, o processo do PM2 para buffs-ia deve ser interrompido e removido.
+
+- Excecoes:
+  Sem excecoes.
+
+- Erros esperados:
+  Manter buffs-ia no PM2 causa conflito de porta e inconsistencias de runtime.
+
+- Criterio de aceite:
+  Runbook inclui comandos para stop/delete do processo no PM2 e persistencia com pm2 save.
+
+- Rastreabilidade para codigo e testes:
+  infra/docker-compose.prod.yml
+
+- Status:
+  implementada
+
 ## INFRA-OPS-005 - Operacao da infraestrutura ainda depende de execucao manual de comandos
 
 - Contexto de negocio:
