@@ -1,4 +1,4 @@
-name: Deploy BUFFS Stack — PI-53
+name: Deploy BUFFS Stack — Servidor Dedicado
 
 on:
   push:
@@ -144,7 +144,7 @@ jobs:
             docker images | grep -E "buffs-api|buffs-etl|buffs-ia"
 
             echo "─── Subindo stack ───"
-            docker compose -f infra/docker-compose.prod.yml up -d --no-build
+            docker compose -f infra/docker-compose.prod.yml --env-file .env up -d --no-build
 
             echo "─── Aguardando serviços inicializarem ───"
             sleep 20
@@ -160,7 +160,7 @@ jobs:
 
             echo ""
             echo "╔══════════════════════════════════════╗"
-            echo "║   ✅ DEPLOY CONCLUÍDO — PI-53         ║"
+            echo "║ DEPLOY CONCLUÍDO — Servidor Dedicado ║"
             echo "╠══════════════════════════════════════╣"
             echo "║  API  → http://187.95.52.86:9008     ║"
             echo "║  LAN  → http://10.37.56.252:3001     ║"
