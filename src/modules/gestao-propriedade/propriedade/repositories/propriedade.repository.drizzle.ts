@@ -1,8 +1,8 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/core/database/database.service';
 import { LoggerService } from 'src/core/logger/logger.service';
-import { eq, and, isNull } from 'drizzle-orm';
-import { propriedade, usuariopropriedade } from 'src/database/schema';
+import { and, count, eq, inArray, isNull } from 'drizzle-orm';
+import { alertas, propriedade, usuariopropriedade } from 'src/database/schema';
 import { CreatePropriedadeDto } from '../dto/create-propriedade.dto';
 import { UpdatePropriedadeDto } from '../dto/update-propriedade.dto';
 
@@ -191,5 +191,31 @@ export class PropriedadeRepositoryDrizzle {
       });
       throw new InternalServerErrorException(`Erro ao remover propriedade: ${error.message}`);
     }
+  }
+
+  async contarAlertasPendentesPorPropriedade(idPropriedade: string) {
+    const [result] = await this.databaseService.db
+      .select({
+        total: count(),
+      })
+      .from(alertas)
+      .where(and(eq(alertas.idPropriedade, idPropriedade), eq(alertas.visto, false), isNull(alertas.deletedAt)));
+
+    return Number(result?.total ?? 0);
+  }
+
+  async contarAlertasPendentesPorPropriedades(idPropriedades: string[]) {
+    if (idPropriedades.length === 0) {
+      return [];
+    }
+
+    return await this.databaseService.db
+      .select({
+        idPropriedade: alertas.idPropriedade,
+        total: count(),
+      })
+      .from(alertas)
+      .where(and(inArray(alertas.idPropriedade, idPropriedades), eq(alertas.visto, false), isNull(alertas.deletedAt)))
+      .groupBy(alertas.idPropriedade);
   }
 }

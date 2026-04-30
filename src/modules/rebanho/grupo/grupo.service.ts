@@ -83,13 +83,58 @@ export class GrupoService implements ISoftDelete {
     const { limit: limitValue } = calculatePaginationParams(page, limit);
 
     const { registros, total } = await this.grupoRepository.findByPropriedade(id_propriedade, page, limitValue);
+    const grupoIds = registros.map((grupo) => grupo.idGrupo).filter((id): id is string => Boolean(id));
+
+    const [contagens, piquetes, animais] = await Promise.all([
+      this.grupoRepository.countAnimaisByGrupoIds(grupoIds),
+      this.grupoRepository.findPiqueteAtualByGrupoIds(grupoIds),
+      this.grupoRepository.findAnimaisByGrupoIds(grupoIds),
+    ]);
+
+    const contagemPorGrupo = new Map<string, number>();
+    for (const item of contagens) {
+      if (item.idGrupo) {
+        contagemPorGrupo.set(item.idGrupo, item.totalAnimaisGrupo);
+      }
+    }
+
+    const piquetePorGrupo = new Map<string, { id: string | null; nome: string | null } | null>();
+    for (const item of piquetes) {
+      if (!item.idGrupo) {
+        continue;
+      }
+
+      if (!piquetePorGrupo.has(item.idGrupo)) {
+        piquetePorGrupo.set(item.idGrupo, item.idLote ? { id: item.idLote, nome: item.nomeLote ?? null } : null);
+      }
+    }
+
+    const animaisPorGrupo = new Map<string, { tag: string | null; nome: string | null }[]>();
+    for (const animal of animais) {
+      if (!animal.idGrupo) {
+        continue;
+      }
+
+      const lista = animaisPorGrupo.get(animal.idGrupo) ?? [];
+      lista.push({ tag: animal.tag ?? null, nome: animal.nome ?? null });
+      animaisPorGrupo.set(animal.idGrupo, lista);
+    }
 
     this.logger.log(`Busca concluída - ${registros.length} grupos encontrados (página ${page})`, {
       module: 'GrupoService',
       method: 'findByPropriedade',
     });
 
-    const formattedData = formatDateFieldsArray(registros);
+    const enrichedData = registros.map((grupo) => ({
+      ...grupo,
+      stats: {
+        totalAnimaisGrupo: contagemPorGrupo.get(grupo.idGrupo) ?? 0,
+        piqueteAtual: piquetePorGrupo.get(grupo.idGrupo) ?? null,
+      },
+      AnimaisDentroDoGrupo: animaisPorGrupo.get(grupo.idGrupo) ?? [],
+    }));
+
+    const formattedData = formatDateFieldsArray(enrichedData);
     return createPaginatedResponse(formattedData, total, page, limitValue);
   }
 

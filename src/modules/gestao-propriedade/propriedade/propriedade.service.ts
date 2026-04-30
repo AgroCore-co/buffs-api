@@ -53,7 +53,27 @@ export class PropriedadeService {
 
       this.logger.log(`[SUCESSO] ${propriedadesUnicas.length} propriedades encontradas para o usuário ${userId}`);
 
-      const formattedPropriedades = formatDateFieldsArray(propriedadesUnicas);
+      const propriedadeIds = propriedadesUnicas.map((item) => item.idPropriedade).filter((id): id is string => Boolean(id));
+      const alertasPendentes = await this.propriedadeRepo.contarAlertasPendentesPorPropriedades(propriedadeIds);
+      const alertasPorPropriedade = new Map<string, number>();
+      for (const item of alertasPendentes) {
+        if (item.idPropriedade) {
+          alertasPorPropriedade.set(item.idPropriedade, Number(item.total ?? 0));
+        }
+      }
+
+      const enrichedPropriedades = propriedadesUnicas.map((propriedade) => {
+        const totalPendentes = alertasPorPropriedade.get(propriedade.idPropriedade) ?? 0;
+        return {
+          ...propriedade,
+          notification: {
+            notificacaoPendente: totalPendentes > 0,
+            qtdNotificacao: totalPendentes,
+          },
+        };
+      });
+
+      const formattedPropriedades = formatDateFieldsArray(enrichedPropriedades);
       return {
         message: 'Propriedades recuperadas com sucesso',
         total: formattedPropriedades.length,
@@ -78,7 +98,14 @@ export class PropriedadeService {
       throw new NotFoundException(`Propriedade com ID ${id} não encontrada.`);
     }
 
-    return formatDateFields(propriedade);
+    const totalPendentes = await this.propriedadeRepo.contarAlertasPendentesPorPropriedade(id);
+    return formatDateFields({
+      ...propriedade,
+      notification: {
+        notificacaoPendente: totalPendentes > 0,
+        qtdNotificacao: totalPendentes,
+      },
+    });
   }
 
   /**

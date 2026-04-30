@@ -73,6 +73,31 @@
 - Status:
   implementada
 
+## GPROP-PROP-007 - Propriedade retorna notificacao de alertas pendentes
+
+- Contexto de negocio:
+  O app precisa saber se ha alertas pendentes por propriedade sem consultar modulo de alertas separadamente.
+
+- Regra principal:
+  GET /propriedades e GET /propriedades/:id devem retornar objeto notification com notificacaoPendente e qtdNotificacao.
+
+- Excecoes:
+  Propriedades sem alertas nao vistas retornam notificacaoPendente=false e qtdNotificacao=0.
+
+- Erros esperados:
+  Nao aplicavel.
+
+- Criterio de aceite:
+  Service agrega a contagem de alertas com visto=false por id_propriedade e inclui notification no payload.
+
+- Rastreabilidade para codigo e testes:
+  src/modules/gestao-propriedade/propriedade/propriedade.service.ts
+  src/modules/gestao-propriedade/propriedade/repositories/propriedade.repository.drizzle.ts
+  src/database/schema.ts
+
+- Status:
+  implementada
+
 ## GPROP-PROP-004 - Atualizacao e remocao restritas ao dono
 
 - Contexto de negocio:

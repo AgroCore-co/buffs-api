@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { count, desc, eq, getTableColumns, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, inArray, isNull, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../../core/database/database.service';
 import {
   alertas,
@@ -9,8 +9,10 @@ import {
   dadossanitarios,
   dadoszootecnicos,
   grupo,
+  lote,
   materialgenetico,
   medicacoes,
+  movlote,
   raca,
 } from '../../../database/schema';
 
@@ -89,8 +91,87 @@ export class SyncRepository {
         .where(eq(grupo.idPropriedade, idPropriedade)),
     ]);
 
+    if (data.length === 0) {
+      return {
+        data,
+        total: Number(totalResult[0]?.count ?? 0),
+        updatedAt: updatedAtResult[0]?.updatedAt ?? null,
+      };
+    }
+
+    const grupoIds = data.map((item) => item.idGrupo).filter((id): id is string => Boolean(id));
+
+    const [contagens, piquetes, animais] = await Promise.all([
+      db
+        .select({
+          idGrupo: bufalo.idGrupo,
+          totalAnimaisGrupo: sql<number>`count(*)::int`,
+        })
+        .from(bufalo)
+        .where(and(inArray(bufalo.idGrupo, grupoIds), isNull(bufalo.deletedAt)))
+        .groupBy(bufalo.idGrupo),
+      db
+        .select({
+          idGrupo: movlote.idGrupo,
+          idLote: lote.idLote,
+          nomeLote: lote.nomeLote,
+          dtEntrada: movlote.dtEntrada,
+        })
+        .from(movlote)
+        .leftJoin(lote, and(eq(movlote.idLoteAtual, lote.idLote), isNull(lote.deletedAt)))
+        .where(and(inArray(movlote.idGrupo, grupoIds), isNull(movlote.dtSaida), isNull(movlote.deletedAt)))
+        .orderBy(desc(movlote.dtEntrada)),
+      db
+        .select({
+          idGrupo: bufalo.idGrupo,
+          tag: bufalo.brinco,
+          nome: bufalo.nome,
+        })
+        .from(bufalo)
+        .where(and(inArray(bufalo.idGrupo, grupoIds), isNull(bufalo.deletedAt)))
+        .orderBy(desc(bufalo.updatedAt)),
+    ]);
+
+    const contagemPorGrupo = new Map<string, number>();
+    for (const item of contagens) {
+      if (item.idGrupo) {
+        contagemPorGrupo.set(item.idGrupo, item.totalAnimaisGrupo);
+      }
+    }
+
+    const piquetePorGrupo = new Map<string, { id: string | null; nome: string | null } | null>();
+    for (const item of piquetes) {
+      if (!item.idGrupo) {
+        continue;
+      }
+
+      if (!piquetePorGrupo.has(item.idGrupo)) {
+        piquetePorGrupo.set(item.idGrupo, item.idLote ? { id: item.idLote, nome: item.nomeLote ?? null } : null);
+      }
+    }
+
+    const animaisPorGrupo = new Map<string, { tag: string | null; nome: string | null }[]>();
+    for (const animal of animais) {
+      if (!animal.idGrupo) {
+        continue;
+      }
+
+      const lista = animaisPorGrupo.get(animal.idGrupo) ?? [];
+      lista.push({ tag: animal.tag ?? null, nome: animal.nome ?? null });
+      animaisPorGrupo.set(animal.idGrupo, lista);
+    }
+
+    const enrichedData = data.map((item) => ({
+      ...item,
+      stats: {
+        totalAnimaisGrupo: contagemPorGrupo.get(item.idGrupo) ?? 0,
+        piqueteAtual: piquetePorGrupo.get(item.idGrupo) ?? null,
+      },
+      AnimaisDentroDoGrupo: animaisPorGrupo.get(item.idGrupo) ?? [],
+    }));
+
     return {
-      data,
+      data: enrichedData,
       total: Number(totalResult[0]?.count ?? 0),
       updatedAt: updatedAtResult[0]?.updatedAt ?? null,
     };

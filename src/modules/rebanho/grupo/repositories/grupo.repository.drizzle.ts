@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../../../core/database/database.service';
 import { eq, and, isNull, desc, asc, sql, inArray } from 'drizzle-orm';
-import { grupo } from '../../../../database/schema';
+import { bufalo, grupo, lote, movlote } from '../../../../database/schema';
 import { CreateGrupoDto } from '../dto/create-grupo.dto';
 import { UpdateGrupoDto } from '../dto/update-grupo.dto';
 
@@ -86,6 +86,55 @@ export class GrupoRepositoryDrizzle {
     ]);
 
     return { registros, total: count };
+  }
+
+  async countAnimaisByGrupoIds(idGrupos: string[]) {
+    if (idGrupos.length === 0) {
+      return [];
+    }
+
+    return await this.databaseService.db
+      .select({
+        idGrupo: bufalo.idGrupo,
+        totalAnimaisGrupo: sql<number>`count(*)::int`,
+      })
+      .from(bufalo)
+      .where(and(inArray(bufalo.idGrupo, idGrupos), isNull(bufalo.deletedAt)))
+      .groupBy(bufalo.idGrupo);
+  }
+
+  async findPiqueteAtualByGrupoIds(idGrupos: string[]) {
+    if (idGrupos.length === 0) {
+      return [];
+    }
+
+    return await this.databaseService.db
+      .select({
+        idGrupo: movlote.idGrupo,
+        idLote: lote.idLote,
+        nomeLote: lote.nomeLote,
+        dtEntrada: movlote.dtEntrada,
+      })
+      .from(movlote)
+      .leftJoin(lote, and(eq(movlote.idLoteAtual, lote.idLote), isNull(lote.deletedAt)))
+      .where(and(inArray(movlote.idGrupo, idGrupos), isNull(movlote.dtSaida), isNull(movlote.deletedAt)))
+      .orderBy(desc(movlote.dtEntrada));
+  }
+
+  async findAnimaisByGrupoIds(idGrupos: string[]) {
+    if (idGrupos.length === 0) {
+      return [];
+    }
+
+    return await this.databaseService.db
+      .select({
+        idGrupo: bufalo.idGrupo,
+        tag: bufalo.brinco,
+        nome: bufalo.nome,
+      })
+      .from(bufalo)
+      .where(and(inArray(bufalo.idGrupo, idGrupos), isNull(bufalo.deletedAt)))
+      .orderBy(asc(bufalo.nome));
   }
 
   async findByIdWithDeleted(id: string) {
