@@ -37,10 +37,7 @@ API REST para gestão de rebanhos bubalinos. Cobre o ciclo completo de manejo: c
 
 ## Arquitetura
 
-<!-- Insira aqui a imagem da arquitetura -->
-<!-- ![Arquitetura BUFFS](./docs/architecture.png) -->
-
-> _Diagrama de arquitetura em breve._
+![Arquitetura BUFFS](./docs/architecture.drawio.png) 
 
 ---
 
@@ -181,7 +178,7 @@ docker compose -f infra/docker-compose.yml logs -f rabbitmq
 # Parar todos os serviços
 docker compose -f infra/docker-compose.yml down
 
-# Parar e remover volumes (⚠️ apaga dados persistidos)
+# Parar e remover volumes (apaga dados persistidos)
 docker compose -f infra/docker-compose.yml down -v
 ```
 
