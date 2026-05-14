@@ -1,157 +1,259 @@
 # BUFFS API
 
+<div align="center">
+
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white)](https://nestjs.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/)
 [![Drizzle](https://img.shields.io/badge/Drizzle_ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
 [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=flat-square&logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 
-API REST para gestão de rebanhos bubalinos. Cobre o ciclo completo de manejo: cadastro de animais, controle reprodutivo, produção leiteira, saúde, alimentação e alertas automáticos com classificação de prioridade por IA.
+API REST para gestão de rebanhos bubalinos. Cobre o ciclo completo de manejo: cadastro de animais, controle reprodutivo, produção leiteira, saúde, alimentação e alertas automáticos com classificação por IA.
+
+</div>
 
 ---
 
 ## Índice
 
+- [Arquitetura](#arquitetura)
 - [Stack](#stack)
 - [Pré-requisitos](#pré-requisitos)
-- [Setup](#setup)
+- [Configuração](#configuração)
+- [Rodando localmente](#rodando-localmente)
+- [Rodando com Docker](#rodando-com-docker)
 - [Variáveis de Ambiente](#variáveis-de-ambiente)
-- [Executando](#executando)
 - [Estrutura do Projeto](#estrutura-do-projeto)
 - [Módulos](#módulos)
 - [Alertas e RabbitMQ](#alertas-e-rabbitmq)
-- [Scheduled Jobs](#scheduled-jobs)
+- [Jobs Agendados](#jobs-agendados)
 - [Autenticação e Autorização](#autenticação-e-autorização)
 - [Health Checks](#health-checks)
 - [Testes](#testes)
 - [Deploy](#deploy)
-- [Scripts](#scripts)
+
+---
+
+## Arquitetura
+
+![Arquitetura BUFFS](./docs/architecture.drawio.png) 
 
 ---
 
 ## Stack
 
-| Camada | Tecnologia | Detalhes |
-|--------|-----------|----------|
+| Camada | Tecnologia | Versão |
+|--------|-----------|--------|
 | Runtime | Node.js | >= 20 |
 | Framework | NestJS | 11.x |
 | Linguagem | TypeScript | 5.x |
-| Banco de dados | PostgreSQL (Supabase) | Hospedado, com RLS |
+| Banco de Dados | PostgreSQL via Supabase | Hospedado + RLS |
 | ORM | Drizzle ORM | + PostGIS |
 | Autenticação | Supabase Auth | JWT + Passport |
-| IA | Google Gemini 2.5 Flash | Classificação de alertas, análise reprodutiva |
-| Mensageria | RabbitMQ 3.13 | Via `@nestjs/microservices` (transport RMQ nativo) |
+| IA | Google Gemini 2.5 Flash | Classificação de alertas |
+| Mensageria | RabbitMQ 3.13 | `@nestjs/microservices` |
 | Documentação | Swagger / OpenAPI | `@nestjs/swagger` 11.x |
-| Validação | class-validator + class-transformer | DTOs com whitelist |
-| Cache | @nestjs/cache-manager | In-memory |
+| Validação | class-validator + class-transformer | — |
+| Cache | `@nestjs/cache-manager` | In-memory |
 | Segurança | Helmet + CORS + Throttler | Rate limiting por IP |
-| Agendamento | @nestjs/schedule | Cron jobs para alertas |
-| HTTP Client | Axios | `@nestjs/axios` |
+| Agendamento | `@nestjs/schedule` | Cron jobs |
+| ETL | buffs-etl-worker (Go) | Importação/exportação XLSX |
 | Build | SWC | Compilação rápida |
-| Containerização | Docker | Multi-stage build, Node 20 Alpine |
-| Process Manager | PM2 | Produção (`ecosystem.config.js`) |
+| Containerização | Docker | Multi-stage, Node 20 Alpine |
 
 ---
 
 ## Pré-requisitos
 
 - **Node.js** >= 20 e **npm** >= 10
-- **Docker** (para RabbitMQ local)
-- Conta no **[Supabase](https://supabase.com/)** com projeto configurado
-- Chave de API do **[Google Gemini](https://ai.google.dev/)** (para IA nos alertas)
+- **Docker** e **Docker Compose**
+- Conta no [Supabase](https://supabase.com/) com projeto configurado
+- Chave de API do [Google Gemini](https://ai.google.dev/)
 
 ---
 
-## Setup
+## Configuração
+
+### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/AgroCore-co/dsm5-buffs-api.git
-cd dsm5-buffs-api
-npm install
-cp env.example .env
-# Edite .env com suas credenciais
+git clone https://github.com/AgroCore-co/buffs-api.git
+cd buffs-api
 ```
 
-Subir o RabbitMQ para desenvolvimento:
+### 2. Instale as dependências
+
+```bash
+npm install
+```
+
+### 3. Configure as variáveis de ambiente
+
+```bash
+cp .env.example .env
+```
+
+Edite o `.env` com suas credenciais. Consulte a seção [Variáveis de Ambiente](#variáveis-de-ambiente) para detalhes.
+
+---
+
+## Rodando localmente
+
+### Suba o RabbitMQ
+
+O projeto precisa do RabbitMQ para o sistema de alertas assíncrono. Suba-o com Docker:
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d rabbitmq
+```
+
+Verifique se está saudável:
+
+```bash
+docker compose -f infra/docker-compose.yml ps
+# ou acesse: http://localhost:15672 (admin/admin)
+```
+
+### Inicie a API em modo de desenvolvimento
+
+```bash
+npm run start:dev
+```
+
+A API estará disponível em `http://localhost:3001`.  
+A documentação Swagger estará em `http://localhost:3001/api`.
+
+### Outros comandos úteis
+
+```bash
+# Build para produção
+npm run build
+
+# Executar o build compilado
+npm run start:prod
+
+# Modo debug
+npm run start:debug
+
+# Lint
+npm run lint
+
+# Formatar código
+npm run format
+```
+
+---
+
+## Rodando com Docker
+
+### Ambiente completo (produção local)
+
+O `docker-compose.prod.yml` sobe toda a stack: RabbitMQ, API, ETL Worker (Go) e serviço de IA (FastAPI).
+
+```bash
+# Na raiz do projeto
+docker compose -f infra/docker-compose.prod.yml up -d
+```
+
+### Somente a API
+
+```bash
+docker build -t buffs-api .
+docker run -p 3001:3001 --env-file .env buffs-api
+```
+
+### Gerenciamento da stack local
+
+```bash
+# Ver status dos serviços
+docker compose -f infra/docker-compose.yml ps
+
+# Ver logs em tempo real
+docker compose -f infra/docker-compose.yml logs -f
+
+# Logs de um serviço específico
+docker compose -f infra/docker-compose.yml logs -f rabbitmq
+
+# Parar todos os serviços
+docker compose -f infra/docker-compose.yml down
+
+# Parar e remover volumes (apaga dados persistidos)
+docker compose -f infra/docker-compose.yml down -v
 ```
 
 ---
 
 ## Variáveis de Ambiente
 
-Veja [env.example](env.example) para a lista completa. As obrigatórias:
+Copie o `.env.example` e preencha as variáveis obrigatórias:
 
-| Variável | Descrição |
-|----------|-----------|
-| `SUPABASE_URL` | URL do projeto Supabase |
-| `SUPABASE_KEY` | Chave anon do Supabase |
-| `SUPABASE_JWT_SECRET` | JWT secret do Supabase (Settings > API) |
-| `GEMINI_API_KEY` | Chave da API Google Gemini |
-| `RABBITMQ_URL` | URL AMQP (padrão: `amqp://admin:admin@localhost:5672`) |
-| `IA_API_URL` | URL do serviço de predição de produção (buffs-ia) |
-| `ETL_BASE_URL` | URL do worker ETL Go (padrão: `http://localhost:8081`) |
-| `ETL_INTERNAL_KEY` | Chave interna (`X-Internal-Key`) para autenticar no ETL |
-| `PORT` | Porta da API (padrão: `3001`) |
-| `NODE_ENV` | `development` ou `production` |
-| `CORS_ORIGIN` | Origens permitidas, separadas por vírgula |
-
----
-
-## Executando
-
-```bash
-# Desenvolvimento (hot-reload)
-npm run start:dev
-
-# Build + produção
-npm run build
-npm run start:prod
-```
-
-Swagger UI disponível em `http://localhost:3001/api`.
+| Variável | Obrigatória | Descrição |
+|----------|:-----------:|-----------|
+| `SUPABASE_URL` | ✅ | URL do projeto Supabase |
+| `SUPABASE_KEY` | ✅ | Chave anon do Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Chave de service role do Supabase |
+| `SUPABASE_JWT_SECRET` | ✅ | JWT secret (Settings > API no Supabase) |
+| `DATABASE_URL` | ✅ | Connection string do PostgreSQL (pooler) |
+| `DIRECT_URL` | ✅ | Connection string direta (para migrações) |
+| `GEMINI_API_KEY` | ✅ | Chave da API Google Gemini |
+| `RABBITMQ_URL` | ✅ | URL AMQP — padrão: `amqp://admin:admin@localhost:5672` |
+| `ETL_BASE_URL` | ✅ | URL do worker ETL Go — padrão: `http://localhost:8081` |
+| `ETL_INTERNAL_KEY` | ✅ | Chave interna (`X-Internal-Key`) para o ETL |
+| `IA_API_URL` | ✅ | URL do serviço de predição (buffs-ia) |
+| `PORT` | — | Porta da API — padrão: `3001` |
+| `NODE_ENV` | — | `development` ou `production` |
+| `CORS_ORIGIN` | — | Origens permitidas, separadas por vírgula |
 
 ---
 
 ## Estrutura do Projeto
 
 ```
-src/
-├── core/                        # Infraestrutura compartilhada
-│   ├── cache/                   # Cache in-memory
-│   ├── database/                # Drizzle ORM setup
-│   ├── decorators/              # Decoradores customizados
-│   ├── dto/                     # DTOs base (paginação)
-│   ├── gemini/                  # Client Google Gemini
-│   ├── interfaces/              # Interfaces compartilhadas
-│   ├── logger/                  # Logger customizado
-│   ├── rabbitmq/                # RabbitMQ module (ClientProxy + bootstrap DLX)
-│   ├── services/                # Serviços auxiliares (auth-helper, user-mapping)
-│   ├── supabase/                # Client Supabase
-│   ├── utils/                   # Utilitários (paginação, formatação, similarity)
-│   └── validators/              # Validadores customizados
+buffs-api/
+├── src/
+│   ├── core/                        # Infraestrutura compartilhada
+│   │   ├── cache/                   # Cache in-memory + constantes de TTL
+│   │   ├── database/                # Drizzle ORM + pool de conexão
+│   │   ├── decorators/              # Decoradores customizados (ToBoolean, etc.)
+│   │   ├── dto/                     # DTOs base (paginação)
+│   │   ├── gemini/                  # Cliente Google Gemini
+│   │   ├── guards/                  # Guards compartilhados (PropertyExists)
+│   │   ├── interfaces/              # Interfaces transversais (ISoftDelete)
+│   │   ├── logger/                  # Logger customizado estruturado
+│   │   ├── rabbitmq/                # ClientProxy + bootstrap de DLX/DLQ
+│   │   ├── services/                # AuthHelperService, UserMappingService
+│   │   ├── supabase/                # Cliente Supabase (normal + admin)
+│   │   ├── utils/                   # Paginação, datas, erros, similaridade
+│   │   └── validators/              # Validadores de data, mensagens padronizadas
+│   │
+│   ├── database/                    # Schema Drizzle + relations
+│   │
+│   ├── modules/                     # Domínios de negócio
+│   │   ├── alerta/                  # Alertas + consumers RabbitMQ + schedulers
+│   │   ├── alimentacao/             # Definições e registros de alimentação
+│   │   ├── auth/                    # Autenticação JWT + guards + facade de cadastro
+│   │   ├── dashboard/               # Métricas e indicadores por propriedade
+│   │   ├── data-ingestion/          # Importação/exportação XLSX via ETL Worker
+│   │   ├── gestao-propriedade/      # Endereços, propriedades e lotes/piquetes
+│   │   ├── producao/                # Lactação, ordenhas, estoque, retiradas e IA
+│   │   ├── rebanho/                 # Búfalos, raças, grupos e movimentação de lote
+│   │   ├── reproducao/              # Coberturas, genealogia, material genético e simulação
+│   │   ├── saude-zootecnia/         # Vacinação, dados sanitários, zootécnicos e medicamentos
+│   │   ├── sync/                    # Sincronização offline-first para mobile
+│   │   └── usuario/                 # Gestão de usuários e funcionários
+│   │
+│   ├── health/                      # Health check endpoint
+│   ├── app.module.ts
+│   ├── app.consumer.module.ts       # Módulo isolado do consumer RabbitMQ
+│   └── main.ts                      # Bootstrap HTTP + microserviço RMQ (Hybrid App)
 │
-├── database/                    # Schema Drizzle + relations
-│
-├── modules/                     # Domínios de negócio
-│   ├── alerta/                  # Alertas inteligentes + consumers RabbitMQ
-│   ├── alimentacao/             # Definições e registros de alimentação
-│   ├── auth/                    # Autenticação (signup, signin, refresh, signout)
-│   ├── dashboard/               # Métricas e indicadores por propriedade
-│   ├── data-ingestion/          # Importação/exportação de dados via ETL Worker (Go)
-│   ├── gestao-propriedade/      # Endereços, propriedades, lotes/piquetes
-data-ingestion
-│   ├── producao/                # Lactação, ordenhas, produção diária, retiradas, laticínios
-│   ├── rebanho/                 # Búfalos, raças, grupos, movimentação de lotes
-│   ├── reproducao/              # Coberturas, material genético, genealogia, simulação
-│   ├── saude-zootecnia/         # Vacinação, dados sanitários, zootécnicos, medicamentos
-│   └── usuario/                 # Gestão de usuários e funcionários
-│
-├── health/                      # Health check + RabbitMQ health indicator
-├── app.module.ts
-└── main.ts                      # Bootstrap HTTP + RabbitMQ (Hybrid App)
+├── drizzle/                         # Migrações SQL
+├── infra/                           # Docker Compose (local e produção)
+├── test/                            # Testes e2e
+├── docs/specs/                      # Software Design Document (SDD) por módulo
+├── Dockerfile
+└── .env.example
 ```
 
 ---
@@ -162,341 +264,209 @@ data-ingestion
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| POST | `/auth/signup-proprietario` | Cadastro de proprietário |
-| POST | `/auth/signup-funcionario` | Cadastro de funcionário (requer PROPRIETARIO/GERENTE) |
-| POST | `/auth/signin` | Login |
-| POST | `/auth/refresh` | Renovar token |
-| POST | `/auth/signout` | Logout |
-
-### Usuários (`/usuarios`)
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/usuarios/me` | Perfil do usuário autenticado |
-| GET | `/usuarios` | Listar usuários |
-| PATCH | `/usuarios/:id` | Atualizar usuário |
-| PATCH | `/usuarios/:id/cargo` | Alterar cargo |
-| DELETE | `/usuarios/:id` | Remover usuário |
-| GET | `/usuarios/funcionarios` | Listar funcionários |
-| GET | `/usuarios/funcionarios/propriedade/:id` | Funcionários por propriedade |
-| DELETE | `/usuarios/funcionarios/:id/propriedade/:id` | Desvincular funcionário |
-
-### Gestão de Propriedade
-
-**Endereços** (`/enderecos`), **Propriedades** (`/propriedades`), **Lotes** (`/lotes`) — CRUD completo com suporte PostGIS nos lotes.
+| `POST` | `/auth/signup-proprietario` | Cadastro de proprietário |
+| `POST` | `/auth/signup-funcionario` | Cadastro de funcionário (PROPRIETARIO/GERENTE) |
+| `POST` | `/auth/signin` | Login |
+| `POST` | `/auth/refresh` | Renovar token |
+| `POST` | `/auth/signout` | Logout |
 
 ### Rebanho
 
-**Búfalos** (`/bufalos`) — CRUD com soft delete, filtros avançados (raça, sexo, status, maturidade, brinco), movimentação entre grupos, processamento automático de categoria ABCB.
+**Búfalos** (`/bufalos`) — CRUD com soft delete, filtros avançados (raça, sexo, status, maturidade, brinco), genealogia, movimentação em lote e atualização automática de maturidade via scheduler.
 
-**Raças** (`/racas`), **Grupos** (`/grupos`), **Movimentação de Lotes** (`/mov-lote`) — CRUD padrão.
-
-### Produção
-
-**Lactação** (`/lactacao`) — Ciclos de lactação com estatísticas por propriedade.
-
-**Ordenhas** (`/ordenhas`) — Registro individual de ordenhas, resumo de produção por búfala, listagem de fêmeas em lactação.
-
-**Produção Diária** (`/producao-diaria`) — Consolidação diária da produção.
-
-**Retiradas** (`/retiradas`) — Registro de coletas pelo laticínio.
-
-**Laticínios** (`/laticinios`) — Cadastro de compradores.
-
-**Predição** (`POST /producao/predicao`) — Predição de produção via serviço externo de IA.
+**Raças** (`/racas`), **Grupos** (`/grupos`), **Movimentação de Lote** (`/mov-lote`) — CRUD com soft delete e controle de ownership por propriedade.
 
 ### Reprodução
 
-**Coberturas** (`/cobertura`) — Registro de coberturas/inseminação, registro de parto (cria lactação automaticamente), fêmeas disponíveis, recomendações de cruzamento via IA.
+**Coberturas** (`/cobertura`) — Registro com validações zootécnicas, parto, recomendações de cruzamento (IAR para fêmeas / IVR com ajuste bayesiano para machos).
 
-**Material Genético** (`/material-genetico`) — CRUD completo.
+**Genealogia** (`/reproducao/genealogia`) — Árvore genealógica recursiva, análise de consanguinidade e machos compatíveis via IA.
 
-**Genealogia** (`/reproducao/genealogia`) — Árvore genealógica, análise de consanguinidade via IA, machos compatíveis.
+**Material Genético** (`/material-genetico`) — CRUD com validações cruzadas por origem (Coleta Própria / Compra).
 
-**Simulação** (`/reproducao/simulacao`) — Simulação de potencial reprodutivo.
+**Simulação** (`/reproducao/simulacao`) — Predição de potencial genético via IA externa.
+
+### Produção
+
+**Lactação** (`/lactacao`), **Ordenhas** (`/ordenhas`), **Produção Diária** (`/producao-diaria`), **Retiradas** (`/retiradas`), **Laticínios** (`/laticinios`) — Ciclo completo de produção leiteira com soft delete.
+
+**Predição** (`POST /producao/predicao`) — Predição de produção individual via serviço de IA com timeout de 30s.
 
 ### Saúde e Zootecnia
 
-**Vacinação** (`/vacinacao`), **Dados Zootécnicos** (`/dados-zootecnicos`), **Medicamentos** (`/medicamentos`), **Dados Sanitários** (`/dados-sanitarios`) — CRUD completo com soft delete. Dados sanitários incluem normalização automática de nomes de doenças e sugestões de autocompletar.
+**Vacinação** (`/vacinacao`), **Dados Zootécnicos** (`/dados-zootecnicos`), **Medicamentos** (`/medicamentos`), **Dados Sanitários** (`/dados-sanitarios`) — CRUD com normalização automática de nomes de doenças e geração de alertas clínicos para diagnósticos graves.
 
-### Alimentação
+### Data Ingestion (`/propriedades/:id/data-ingestion`)
 
-**Definições** (`/alimentacoes-def`) e **Registros** (`/alimentacao/registros`) — Definição de tipos de alimentação e registro de fornecimento.
+Importação e exportação de planilhas XLSX via ETL Worker (Go), com rate limit de 10 req/hora por propriedade.
 
-### Alertas (`/alertas`)
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| POST | `/alertas` | Criar alerta (emite evento no RabbitMQ) |
-| GET | `/alertas` | Listar com filtros |
-| GET | `/alertas/propriedade/:id` | Por propriedade (filtros: nichos, prioridade, incluirVistos) |
-| GET | `/alertas/:id` | Buscar por ID |
-| PATCH | `/alertas/:id/visto` | Marcar como visto/não visto |
-| DELETE | `/alertas/:id` | Remover |
-| POST | `/alertas/verificar/:id` | Verificação sob demanda (dispara domain services) |
-
-### Data Ingestion
-
-Importação e exportação de planilhas XLSX delegadas ao **buffs-etl-worker** (Go). Valida acesso à propriedade, tipo e tamanho do arquivo e aplica rate limit via Redis (10 req/hora por propriedade).
-
-**Importação** (`POST /propriedades/:propriedadeId/data-ingestion/{domínio}`)
-
-| Domínio | Rota | Descrição |
-|---------|------|-----------|
-| Leite | `POST /propriedades/:id/data-ingestion/leite` | Importar produção leiteira |
-| Pesagem | `POST /propriedades/:id/data-ingestion/pesagem` | Importar registros de pesagem |
-| Reprodução | `POST /propriedades/:id/data-ingestion/reproducao` | Importar eventos reprodutivos |
-
-**Exportação** (`GET /propriedades/:propriedadeId/data-ingestion/{domínio}/export`)
-
-| Domínio | Rota | Filtros disponíveis |
-|---------|------|---------------------|
-| Leite | `GET .../leite/export` | `de`, `ate` |
-| Pesagem | `GET .../pesagem/export` | `grupoId`, `maturidade`, `sexo`, `de`, `ate` |
-| Reprodução | `GET .../reproducao/export` | `tipo`, `de`, `ate` |
-
-**Status de job** (`GET /data-ingestion/jobs/:jobId`) — acompanha processamento assíncrono.
-
-> ⚠️ O módulo `importacao` está deprecado e será removido numa versão futura. Use `data-ingestion`.
+| Operação | Domínios disponíveis |
+|----------|---------------------|
+| `POST` (importar) | `leite`, `pesagem`, `reproducao` |
+| `GET` (exportar) | `leite`, `pesagem`, `reproducao` |
+| `GET /data-ingestion/jobs/:jobId` | Status de processamento assíncrono |
 
 ### Dashboard (`/dashboard`)
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/dashboard/:id` | Estatísticas gerais da propriedade |
-| GET | `/dashboard/lactacao/:id` | Métricas de lactação |
-| GET | `/dashboard/producao-mensal/:id` | Produção mensal |
-| GET | `/dashboard/reproducao/:id` | Métricas reprodutivas |
+Estatísticas gerais, métricas de lactação, produção mensal e reprodução por propriedade, com cache de leitura.
 
-> Documentação interativa completa de todos os endpoints: **`http://localhost:3001/api`** (Swagger UI)
+### Sync (`/sync/:id_propriedade`)
+
+Endpoints de sincronização offline-first para o app mobile, incluindo todos os domínios de negócio com payload padronizado (`data` + `meta`).
 
 ---
 
 ## Alertas e RabbitMQ
 
-O sistema de alertas usa RabbitMQ para processar eventos de forma assíncrona, desacoplando a criação do alerta (HTTP rápido) da classificação por IA (background).
-
-### Fluxo
+O sistema de alertas desacopla a criação (HTTP síncrono) da classificação por IA (processamento assíncrono).
 
 ```
-                                         Queue: buffs.alerts
-                                        ┌────────────────────┐
-  AlertasService.create()               │                    │     AlertasConsumer
-  ─────────────────────────             │  alerta_criado     │    ──────────────────
-  1. Salva no banco         emit()      │                    │     @EventPattern
-  2. Emite evento        ──────────────►│                    │────► 1. Log notificação
-  3. Retorna HTTP 201                   │                    │     2. Se prioridade=null
-                                        └─────────┬──────────┘        → Gemini IA classifica
-                                                  │                    → Atualiza banco
-                                                  │ nack (falha)    3. ack manual
-                                                  ▼
-                                        ┌────────────────────┐
-                                        │  buffs.alerts.dlq  │
-                                        │  (Dead Letter)     │
-                                        └────────────────────┘
+  AlertasService.create()
+  ────────────────────────      Queue: buffs.alerts
+  1. Salva no banco        ──►  alerta_criado  ──►  AlertasConsumer
+  2. Emite evento                                    1. Classifica via Gemini (timeout 10s)
+  3. Retorna HTTP 201                                2. Atualiza prioridade no banco
+                                                     3. ack / nack → DLQ (buffs.alerts.dlq)
 ```
 
-### Arquitetura técnica
-
-- **Transporte**: `@nestjs/microservices` com `Transport.RMQ` (Hybrid App — HTTP + microservice no mesmo processo)
-- **Queue principal**: `buffs.alerts` com DLX configurado
-- **Consumer**: `AlertasConsumer` com `@EventPattern('alerta_criado')` e ack/nack manual
-- **DLX/DLQ**: Exchange `buffs.dlx` (fanout) → queue `buffs.alerts.dlq`. Criados automaticamente no startup pelo `RabbitMQBootstrapService`
-- **Publicação**: `ClientProxy.emit()` injetado via token `RABBITMQ_SERVICE`
-- **Classificação IA**: Gemini 2.5 Flash com timeout de 10s. Se falhar, mensagem vai para DLQ (não perde)
-
-### RabbitMQ local
+**Configuração local do RabbitMQ:**
 
 ```bash
 # Subir
 docker compose -f infra/docker-compose.yml up -d rabbitmq
 
-# Management UI: http://localhost:15672 (admin/admin)
+# Management UI
+open http://localhost:15672  # admin / admin
 
-# Ver queues
+# Inspecionar filas
 docker exec buffs-rabbitmq rabbitmqctl list_queues name messages consumers
 
-# Ver exchanges
+# Inspecionar exchanges
 docker exec buffs-rabbitmq rabbitmqctl list_exchanges name type
 ```
 
 ---
 
-## Scheduled Jobs
+## Jobs Agendados
 
 Todos os jobs rodam via `@nestjs/schedule` e iteram sobre todas as propriedades ativas.
 
-| Horário | Job | Descrição |
-|---------|-----|-----------|
-| 00:00 | `verificarTratamentos` | Tratamentos sanitários com retorno agendado |
-| 00:00 | `handleMaturityUpdate` | Atualiza maturidade dos animais (Bezerro → Novilho → Vaca/Touro) |
-| 00:05 | `verificarNascimentos` | Nascimentos previstos nos próximos 30 dias |
-| 01:00 | `cleanTempUploads` | Remove arquivos de upload temporários com mais de 24h (`temp/uploads/`) |
-| 01:00 | `verificarCoberturaSemDiagnostico` | Coberturas sem diagnóstico há mais de 90 dias |
-| 02:00 | `verificarFemeasVazias` | Fêmeas vazias há mais de 180 dias |
-| 03:00 | `verificarVacinacoes` | Vacinações agendadas |
-| 04:00 | `verificarQuedaProducao` | Queda significativa na produção de leite |
-| 05:00 | `verificarSecagemPendente` | Vacas prenhas com secagem pendente |
-| 06:00 | `verificarSinaisClinicosPrecoces` | Sinais clínicos precoces (múltiplos tratamentos, ganho de peso insuficiente) |
-
-Os alertas gerados pelos schedulers usam `createIfNotExists()` para idempotência — não cria duplicatas se já existe alerta não visto para o mesmo evento.
+| Horário | Job | Nicho |
+|---------|-----|-------|
+| `00:00` | Tratamentos com retorno agendado | SANITÁRIO |
+| `00:00` | Atualização de maturidade dos animais | — |
+| `00:05` | Nascimentos previstos (próximos 30 dias) | REPRODUÇÃO |
+| `01:00` | Limpeza de uploads temporários (`temp/uploads/`) | — |
+| `01:00` | Coberturas sem diagnóstico há +90 dias | REPRODUÇÃO |
+| `02:00` | Fêmeas vazias há +180 dias | REPRODUÇÃO |
+| `03:00` | Vacinações agendadas | SANITÁRIO |
+| `04:00` | Queda de produção leiteira (≥20% em 7 dias) | PRODUÇÃO |
+| `05:00` | Secagem pendente em gestantes | MANEJO |
+| `06:00` | Sinais clínicos precoces (múltiplos tratamentos / ganho insuficiente) | CLÍNICO |
 
 ---
 
 ## Autenticação e Autorização
 
-Autenticação via **Supabase Auth** (JWT). Todas as rotas exceto `/health`, `/api` e auth público são protegidas.
+Autenticação via **Supabase Auth (JWT)**. Todas as rotas — exceto `/health`, `/api` e os endpoints públicos de auth — são protegidas.
 
-```
+```http
 Authorization: Bearer <access_token>
 ```
 
-### Cargos e permissões
+### Cargos
 
 | Cargo | Criar propriedade | Gerenciar funcionários | Alterar cargos | Operações gerais |
 |-------|:-:|:-:|:-:|:-:|
-| PROPRIETARIO | ✓ | ✓ | ✓ | ✓ |
-| GERENTE | — | ✓ | ✓ | ✓ |
-| FUNCIONARIO | — | — | — | ✓ |
-| VETERINARIO | — | — | — | ✓ (saúde) |
+| `PROPRIETARIO` | ✅ | ✅ | ✅ | ✅ |
+| `GERENTE` | — | ✅ | ✅ | ✅ |
+| `FUNCIONARIO` | — | — | — | ✅ |
+| `VETERINARIO` | — | — | — | ✅ (saúde) |
 
-### Guards
+### Guards disponíveis
 
-| Guard | Função |
-|-------|--------|
-| `SupabaseAuthGuard` | Valida JWT |
-| `RolesGuard` | Verifica cargo |
+| Guard | Responsabilidade |
+|-------|-----------------|
+| `SupabaseAuthGuard` | Valida JWT via Passport |
+| `RolesGuard` | Verifica cargo via metadata `@Roles` |
+| `PropertyExistsGuard` | Valida existência da propriedade no banco |
 | `OnboardingGuard` | Bloqueia proprietário sem propriedade cadastrada |
-| `EmailVerifiedGuard` | Exige email confirmado para operações críticas |
+| `EmailVerifiedGuard` | Exige confirmação de e-mail para operações críticas |
 
 ---
 
 ## Health Checks
 
-### `GET /health` (público)
+### `GET /health` — público
 
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-03-02T10:00:00.000Z",
+  "timestamp": "2025-01-01T00:00:00.000Z",
   "service": "BUFFS API",
   "version": "1.0.0",
   "uptime": 3600,
-  "environment": "development",
+  "environment": "production",
   "port": 3001
 }
 ```
 
-### `GET /health/detailed` (autenticado)
+### `GET /health/detailed` — autenticado
 
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-03-02T10:00:00.000Z",
-  "service": "BUFFS API",
-  "version": "1.0.0",
-  "uptime": 3600,
-  "environment": "development",
-  "services": {
-    "api": "running",
-    "database": "supabase_configured",
-    "gemini": "configured",
-    "rabbitmq": {
-      "status": "up",
-      "connected": true,
-      "message": "RabbitMQ operacional"
-    }
-  },
-  "system": {
-    "nodeVersion": "v20.x.x",
-    "platform": "linux",
-    "arch": "x64",
-    "memory": {
-      "rss": "85 MB",
-      "heapTotal": "45 MB",
-      "heapUsed": "32 MB",
-      "external": "3 MB"
-    }
-  }
-}
-```
+Retorna status detalhado de todos os serviços dependentes: banco, Gemini e RabbitMQ, além de métricas de memória e informações do processo Node.
 
 ---
 
 ## Testes
 
 ```bash
-npm run test          # Unitários
-npm run test:watch    # Watch mode
-npm run test:e2e      # End-to-end
-npm run test:cov      # Cobertura
+# Unitários
+npm run test
+
+# Watch mode
+npm run test:watch
+
+# End-to-end
+npm run test:e2e
+
+# Cobertura
+npm run test:cov
 ```
 
 ---
 
 ## Deploy
 
-### Docker
+O deploy é feito via **GitHub Actions** (`.github/workflows/deploy.yml`). A pipeline:
 
-```bash
-docker build -t buffs-api .
-docker run -p 3001:3001 --env-file .env buffs-api
-```
+1. Faz checkout de `buffs-api`, `buffs-etl-worker` e `buffs-ia`
+2. Builda as 3 imagens Docker
+3. Empacota e envia ao servidor via SCP
+4. Conecta via SSH, restaura o `.env`, carrega as imagens e sobe a stack com `docker compose`
+5. Executa health check na API antes de finalizar
 
-### Docker Compose (produção)
-
-```bash
-docker compose -f infra/docker-compose.prod.yml up -d
-```
-
-Sobe RabbitMQ + API com rede interna. A API usa `RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672`.
-
-### PM2
-
-```bash
-npm run build
-pm2 start ecosystem.config.js --env production
-```
-
-### Variáveis de produção
+### Variáveis de ambiente em produção
 
 ```env
-SUPABASE_URL=https://seu-projeto.supabase.co
-SUPABASE_KEY=...
-SUPABASE_JWT_SECRET=...
-GEMINI_API_KEY=...
-RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
-IA_API_URL=http://host.docker.internal:8000
-ETL_BASE_URL=http://buffs-etl-worker:8081
-ETL_INTERNAL_KEY=...
 NODE_ENV=production
-PORT=3001
+RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+ETL_BASE_URL=http://buffs-etl-worker:8081
+IA_API_URL=http://buffs-ia:8000
 CORS_ORIGIN=https://app.seudominio.com
+NODE_OPTIONS=--max-old-space-size=256
 ```
 
----
-
-## Scripts
-
-| Script | Descrição |
-|--------|-----------|
-| `npm run start:dev` | Desenvolvimento com hot-reload |
-| `npm run start:debug` | Desenvolvimento com debug |
-| `npm run build` | Build para produção |
-| `npm run start:prod` | Execução do build (`node dist/main`) |
-| `npm run lint` | ESLint |
-| `npm run format` | Prettier |
-| `npm run test` | Jest |
-| `npm run test:e2e` | Testes end-to-end |
-| `npm run test:cov` | Cobertura de testes |
+> Os hostnames usam a rede interna do Docker Compose em produção.
 
 ---
 
 ## Contato
 
-- **Email**: buffsapp@gmail.com
-- **Issues**: [GitHub Issues](https://github.com/AgroCore-co/dsm5-buffs-api/issues)
+- **Email:** buffsapp@gmail.com
+- **Issues:** [GitHub Issues](https://github.com/AgroCore-co/buffs-api/issues)
 
 ---
 
-Desenvolvido por [AgroCore](https://github.com/AgroCore-co)
+<div align="center">
+  Desenvolvido por <a href="https://github.com/AgroCore-co">AgroCore</a>
+</div>
