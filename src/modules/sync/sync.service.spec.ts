@@ -2,7 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { NotFoundException } from '@nestjs/common';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { AuthHelperService } from '../../core/services/auth-helper.service';
-import { SyncRepository } from './repositories/sync.repository';
+import {
+  SyncAlertasRepository,
+  SyncBufalosRepository,
+  SyncCiclosLactacaoRepository,
+  SyncEventosSanitariosRepository,
+  SyncGruposRepository,
+  SyncMedicacoesRepository,
+  SyncPesagensRepository,
+  SyncRacasRepository,
+  SyncRepository,
+  SyncReproducaoRepository,
+} from './repositories';
 import { SyncPaginationDto } from './dto';
 import { SyncService } from './sync.service';
 
@@ -11,6 +22,15 @@ describe('SyncService', () => {
   let repository: jest.Mocked<SyncRepository>;
   let authHelper: jest.Mocked<AuthHelperService>;
   let dashboardService: jest.Mocked<DashboardService>;
+  let syncBufalosRepository: jest.Mocked<SyncBufalosRepository>;
+  let syncCiclosLactacaoRepository: jest.Mocked<SyncCiclosLactacaoRepository>;
+  let syncEventosSanitariosRepository: jest.Mocked<SyncEventosSanitariosRepository>;
+  let syncReproducaoRepository: jest.Mocked<SyncReproducaoRepository>;
+  let syncPesagensRepository: jest.Mocked<SyncPesagensRepository>;
+  let syncGruposRepository: jest.Mocked<SyncGruposRepository>;
+  let syncAlertasRepository: jest.Mocked<SyncAlertasRepository>;
+  let syncRacasRepository: jest.Mocked<SyncRacasRepository>;
+  let syncMedicacoesRepository: jest.Mocked<SyncMedicacoesRepository>;
 
   const user = { email: 'sync@example.com' };
   const idPropriedade = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
@@ -41,7 +61,56 @@ describe('SyncService', () => {
       getStats: jest.fn(),
     } as unknown as jest.Mocked<DashboardService>;
 
-    service = new SyncService(repository, authHelper, dashboardService);
+    syncBufalosRepository = {
+      findByPropriedade: jest.fn(),
+    } as unknown as jest.Mocked<SyncBufalosRepository>;
+
+    syncCiclosLactacaoRepository = {
+      findByPropriedade: jest.fn(),
+    } as unknown as jest.Mocked<SyncCiclosLactacaoRepository>;
+
+    syncEventosSanitariosRepository = {
+      findByPropriedade: jest.fn(),
+    } as unknown as jest.Mocked<SyncEventosSanitariosRepository>;
+
+    syncReproducaoRepository = {
+      findByPropriedade: jest.fn(),
+    } as unknown as jest.Mocked<SyncReproducaoRepository>;
+
+    syncPesagensRepository = {
+      findByPropriedade: jest.fn(),
+    } as unknown as jest.Mocked<SyncPesagensRepository>;
+
+    syncGruposRepository = {
+      findByPropriedade: jest.fn(),
+    } as unknown as jest.Mocked<SyncGruposRepository>;
+
+    syncAlertasRepository = {
+      findByPropriedade: jest.fn(),
+    } as unknown as jest.Mocked<SyncAlertasRepository>;
+
+    syncRacasRepository = {
+      findAll: jest.fn(),
+    } as unknown as jest.Mocked<SyncRacasRepository>;
+
+    syncMedicacoesRepository = {
+      findByPropriedade: jest.fn(),
+    } as unknown as jest.Mocked<SyncMedicacoesRepository>;
+
+    service = new SyncService(
+      repository,
+      authHelper,
+      dashboardService,
+      syncBufalosRepository,
+      syncCiclosLactacaoRepository,
+      syncEventosSanitariosRepository,
+      syncReproducaoRepository,
+      syncPesagensRepository,
+      syncGruposRepository,
+      syncAlertasRepository,
+      syncRacasRepository,
+      syncMedicacoesRepository,
+    );
 
     authHelper.getUserId.mockResolvedValue('user-123');
     authHelper.validatePropriedadeAccess.mockResolvedValue();

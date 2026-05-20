@@ -1,48 +1,47 @@
 # SYNC - Visao Geral
 
-## SYNC-ARCH-001 - Rotas de sync usam escopo por propriedade e autenticacao obrigatoria
+## SYNC-ARCH-001 - Rotas de sync exigem autenticacao e validacao de acesso por propriedade
 
 - Contexto de negocio:
   O app mobile precisa baixar dados de forma eficiente e segura por propriedade.
 
 - Regra principal:
-  Endpoints de sync devem exigir autenticacao JWT, validar existencia da propriedade e validar acesso do usuario autenticado a propriedade solicitada.
+  Endpoints de sync exigem autenticacao JWT; propriedadeId e informado via query nas rotas offline-first e via parametro nas rotas legacy. O acesso e validado com AuthHelperService.validatePropriedadeAccess antes de executar a consulta.
 
 - Excecoes:
-  Sem excecoes no modulo atual.
+  /sync/racas nao exige propriedadeId.
 
 - Erros esperados:
-  401 para token ausente/invalido; 404 para propriedade inexistente; 404 para propriedade sem vinculo com o usuario.
+  401 para token ausente/invalido; 404 para propriedade inexistente ou sem vinculo com o usuario.
 
 - Criterio de aceite:
-  SyncController usa SupabaseAuthGuard e PropertyExistsGuard; SyncService usa AuthHelperService.validatePropriedadeAccess.
+  SyncController usa SupabaseAuthGuard e SyncService chama AuthHelperService.validatePropriedadeAccess nas rotas com propriedade.
 
 - Rastreabilidade para codigo e testes:
   src/modules/sync/sync.controller.ts
   src/modules/sync/sync.service.ts
   src/core/services/auth-helper.service.ts
-  src/core/guards/property-exists.guard.ts
   src/modules/sync/sync.service.spec.ts
 
 - Status:
   implementada
 
-## SYNC-ARCH-002 - Paginacao de sync possui limite maximo de 200
+## SYNC-ARCH-002 - Paginacao so se aplica as rotas legacy do sync
 
 - Contexto de negocio:
-  Sincronizacao mobile em redes instaveis precisa reduzir numero de chamadas, mas sem permitir payload excessivo.
+  Sincronizacao batch precisa limitar payload em rotas legadas sem quebrar clientes existentes.
 
 - Regra principal:
-  Query de sync deve aceitar page >= 1 e limit entre 1 e 200, com default de limit em 200.
+  Rotas legacy em /sync/:id_propriedade aceitam page >= 1 e limit entre 1 e 200 (default 200). Rotas offline-first em /sync/* nao usam paginacao.
 
 - Excecoes:
-  Sem excecoes no modulo atual.
+  Rotas /dashboard* em legacy retornam pacote unico, mas ainda aceitam page/limit.
 
 - Erros esperados:
   400 para page/limit fora da faixa valida.
 
 - Criterio de aceite:
-  DTO de sync valida page/limit e limita requests acima de 200.
+  SyncPaginationDto valida page/limit e SyncService aplica limites nas rotas legacy.
 
 - Rastreabilidade para codigo e testes:
   src/modules/sync/dto/sync-pagination.dto.ts
@@ -52,38 +51,13 @@
 - Status:
   implementada
 
-## SYNC-ARCH-003 - Contrato de resposta do sync e padronizado para mobile offline
+## SYNC-ARCH-003 - Contrato offline-first retorna array direto e inclui soft-delete
 
 - Contexto de negocio:
-  O cliente mobile precisa de um payload consistente para persistencia local e controle de janela de sincronizacao.
+  O cliente mobile precisa popular SQLite com todos os registros e remover itens deletados.
 
 - Regra principal:
-  Todas as respostas do modulo sync devem retornar data e meta com campos page, limit, total, updated_at e synced_at.
-
-- Excecoes:
-  Endpoints de dashboard retornam data com um unico item agregado, mas mantem o mesmo contrato de meta.
-
-- Erros esperados:
-  Nao aplicavel.
-
-- Criterio de aceite:
-  Todas as rotas do modulo sync seguem o mesmo envelope de resposta.
-
-- Rastreabilidade para codigo e testes:
-  src/modules/sync/dto/sync-response.dto.ts
-  src/modules/sync/sync.service.ts
-  src/modules/sync/sync.service.spec.ts
-
-- Status:
-  implementada
-
-## SYNC-ARCH-004 - Payload de sync inclui ativos e removidos logicamente
-
-- Contexto de negocio:
-  Mobile offline precisa detectar remocoes para refletir exclusoes no banco local.
-
-- Regra principal:
-  Consultas de sync devem incluir registros ativos e soft-deleted, com alias de id, updated_at e deleted_at em cada item.
+  Rotas offline-first em /sync retornam um array direto, sem envelope de paginacao. As consultas incluem registros ativos e removidos logicamente, preservando campos camelCase (incluindo deletedAt e updatedAt).
 
 - Excecoes:
   Sem excecoes no modulo atual.
@@ -92,9 +66,43 @@
   Nao aplicavel.
 
 - Criterio de aceite:
-  Repositorio de sync nao aplica filtro deletedAt IS NULL e service normaliza aliases id/updated_at/deleted_at.
+  Repositorios offline-first nao aplicam filtro deletedAt IS NULL e expoem os dados com os campos originais do schema.
 
 - Rastreabilidade para codigo e testes:
+  src/modules/sync/sync.controller.ts
+  src/modules/sync/sync.service.ts
+  src/modules/sync/repositories/sync-bufalos.repository.ts
+  src/modules/sync/repositories/sync-ciclos-lactacao.repository.ts
+  src/modules/sync/repositories/sync-eventos-sanitarios.repository.ts
+  src/modules/sync/repositories/sync-reproducao.repository.ts
+  src/modules/sync/repositories/sync-pesagens.repository.ts
+  src/modules/sync/repositories/sync-grupos.repository.ts
+  src/modules/sync/repositories/sync-alertas.repository.ts
+  src/modules/sync/repositories/sync-racas.repository.ts
+  src/modules/sync/repositories/sync-medicacoes.repository.ts
+
+- Status:
+  implementada
+
+## SYNC-ARCH-004 - Contrato legacy mantem envelope data/meta
+
+- Contexto de negocio:
+  Clientes antigos ainda dependem do envelope paginado do sync.
+
+- Regra principal:
+  Rotas legacy em /sync/:id_propriedade retornam data e meta com page, limit, total, updated_at e synced_at. Cada item recebe alias id, updated_at e deleted_at.
+
+- Excecoes:
+  Rotas /dashboard* em legacy retornam data com um unico item agregado e total igual a 1.
+
+- Erros esperados:
+  Nao aplicavel.
+
+- Criterio de aceite:
+  SyncService aplica buildCollectionResponse/buildDashboardResponse nas rotas legacy.
+
+- Rastreabilidade para codigo e testes:
+  src/modules/sync/dto/sync-response.dto.ts
   src/modules/sync/repositories/sync.repository.ts
   src/modules/sync/sync.service.ts
   src/modules/sync/sync.service.spec.ts
