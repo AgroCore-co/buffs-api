@@ -2,7 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { AuthHelperService } from '../../core/services/auth-helper.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { SyncPaginationDto, SyncResponse } from './dto';
-import { SyncQueryResult, SyncRepository } from './repositories/sync.repository';
+import {
+  SyncAlertasRepository,
+  SyncBufalosRepository,
+  SyncCiclosLactacaoRepository,
+  SyncEventosSanitariosRepository,
+  SyncGruposRepository,
+  SyncMedicacoesRepository,
+  SyncPesagensRepository,
+  SyncRacasRepository,
+  SyncRepository,
+  SyncReproducaoRepository,
+} from './repositories';
+import { SyncQueryResult } from './repositories/sync.repository';
 
 type SyncUser = {
   email?: string;
@@ -20,7 +32,60 @@ export class SyncService {
     private readonly syncRepository: SyncRepository,
     private readonly authHelper: AuthHelperService,
     private readonly dashboardService: DashboardService,
+    private readonly syncBufalosRepository: SyncBufalosRepository,
+    private readonly syncCiclosLactacaoRepository: SyncCiclosLactacaoRepository,
+    private readonly syncEventosSanitariosRepository: SyncEventosSanitariosRepository,
+    private readonly syncReproducaoRepository: SyncReproducaoRepository,
+    private readonly syncPesagensRepository: SyncPesagensRepository,
+    private readonly syncGruposRepository: SyncGruposRepository,
+    private readonly syncAlertasRepository: SyncAlertasRepository,
+    private readonly syncRacasRepository: SyncRacasRepository,
+    private readonly syncMedicacoesRepository: SyncMedicacoesRepository,
   ) {}
+
+  async getBufalos(idPropriedade: string, user: SyncUser, updatedAt?: string) {
+    await this.validatePropertyAccess(idPropriedade, user);
+    return this.syncBufalosRepository.findByPropriedade(idPropriedade, this.normalizeUpdatedAt(updatedAt));
+  }
+
+  async getCiclosLactacao(idPropriedade: string, user: SyncUser, updatedAt?: string) {
+    await this.validatePropertyAccess(idPropriedade, user);
+    return this.syncCiclosLactacaoRepository.findByPropriedade(idPropriedade, this.normalizeUpdatedAt(updatedAt));
+  }
+
+  async getEventosSanitarios(idPropriedade: string, user: SyncUser, updatedAt?: string) {
+    await this.validatePropertyAccess(idPropriedade, user);
+    return this.syncEventosSanitariosRepository.findByPropriedade(idPropriedade, this.normalizeUpdatedAt(updatedAt));
+  }
+
+  async getReproducao(idPropriedade: string, user: SyncUser, updatedAt?: string) {
+    await this.validatePropertyAccess(idPropriedade, user);
+    return this.syncReproducaoRepository.findByPropriedade(idPropriedade, this.normalizeUpdatedAt(updatedAt));
+  }
+
+  async getPesagens(idPropriedade: string, user: SyncUser, updatedAt?: string) {
+    await this.validatePropertyAccess(idPropriedade, user);
+    return this.syncPesagensRepository.findByPropriedade(idPropriedade, this.normalizeUpdatedAt(updatedAt));
+  }
+
+  async getGrupos(idPropriedade: string, user: SyncUser, updatedAt?: string) {
+    await this.validatePropertyAccess(idPropriedade, user);
+    return this.syncGruposRepository.findByPropriedade(idPropriedade, this.normalizeUpdatedAt(updatedAt));
+  }
+
+  async getAlertas(idPropriedade: string, user: SyncUser, updatedAt?: string) {
+    await this.validatePropertyAccess(idPropriedade, user);
+    return this.syncAlertasRepository.findByPropriedade(idPropriedade, this.normalizeUpdatedAt(updatedAt));
+  }
+
+  async getRacas(updatedAt?: string) {
+    return this.syncRacasRepository.findAll(this.normalizeUpdatedAt(updatedAt));
+  }
+
+  async getMedicacoes(idPropriedade: string, user: SyncUser, updatedAt?: string) {
+    await this.validatePropertyAccess(idPropriedade, user);
+    return this.syncMedicacoesRepository.findByPropriedade(idPropriedade, this.normalizeUpdatedAt(updatedAt));
+  }
 
   async syncBufalos(id_propriedade: string, user: SyncUser, paginationDto: SyncPaginationDto): Promise<SyncResponse<Record<string, unknown>>> {
     await this.validatePropertyAccess(id_propriedade, user);
@@ -171,6 +236,11 @@ export class SyncService {
     const offset = (page - 1) * limit;
 
     return { page, limit, offset };
+  }
+
+  private normalizeUpdatedAt(updatedAt?: string): string | undefined {
+    const value = updatedAt?.trim();
+    return value ? value : undefined;
   }
 
   private buildCollectionResponse(result: SyncQueryResult, pagination: PaginationInfo, idField: string): SyncResponse<Record<string, unknown>> {

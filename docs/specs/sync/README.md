@@ -7,7 +7,8 @@ Documentos:
 - 01-sync-rotas-contrato.md
 
 Escopo coberto:
-- Rotas de sincronizacao por propriedade para mobile.
+- Rotas offline-first em /sync com retorno em array direto.
+- Rotas legacy em /sync/:id_propriedade com envelope data/meta e paginacao.
 - Regras de autorizacao por vinculo do usuario com a propriedade.
-- Contrato de resposta padronizado com metadados de sync.
-- Paginacao dedicada para sincronizacao em lote.
+- Suporte a sincronizacao incremental via updated_at.
+- Inclusao de registros soft-deleted para limpeza do SQLite local.
